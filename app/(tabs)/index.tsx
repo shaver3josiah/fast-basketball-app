@@ -79,7 +79,7 @@ function ThreadRow({
   onPress: () => void;
 }) {
   const { role, user } = useSession();
-  const names = useNames();
+  const names = useNames(thread.athleteId);
   const [last, setLast] = useState<Message | null>(null);
 
   // One extra listener per thread. With two threads that is nothing; if a roster ever

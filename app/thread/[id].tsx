@@ -15,18 +15,21 @@ import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../src/firebase';
 import { useSession, useNames } from '../../src/session';
 import { canPostIn, sendMessage, subscribeMessages } from '../../src/data';
-import type { Message, Thread } from '../../src/types';
+import type { Athlete, Message, Thread } from '../../src/types';
 import { Banner } from '../../src/ui';
 import { color, radius, semantic, type } from '../../src/theme';
 
 export default function ThreadScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { user, role, athlete, consent } = useSession();
-  const names = useNames();
+  const { user, role, athlete, athletesById, consent } = useSession();
+  const [thread, setThread] = useState<Thread | null>(null);
+  const names = useNames(thread?.athleteId);
   const insets = useSafeAreaInsets();
   const listRef = useRef<FlatList<Message>>(null);
 
-  const [thread, setThread] = useState<Thread | null>(null);
+  // The athlete this THREAD is about, which for a coach with more than one on the
+  // roster is not the same as "the" athlete on the session.
+  const threadAthlete = (thread && athletesById[thread.athleteId]) ?? athlete;
   const [messages, setMessages] = useState<Message[]>([]);
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
@@ -45,7 +48,7 @@ export default function ThreadScreen() {
   }, [id]);
 
   const monitoring = !!thread && !!user && !thread.participants.includes(user.uid);
-  const canPost = !!thread && !!user && canPostIn(thread, user.uid, athlete);
+  const canPost = !!thread && !!user && canPostIn(thread, user.uid, threadAthlete);
   const title = monitoring
     ? `Coach ↔ ${names.player.split(' ')[0]}`
     : role === 'coach'
@@ -107,6 +110,8 @@ export default function ThreadScreen() {
               previous={messages[index - 1]}
               mine={item.senderUid === user?.uid}
               showAuthor={monitoring || role === 'coach'}
+              athlete={threadAthlete}
+              names={names}
             />
           )}
         />
@@ -163,14 +168,16 @@ function Bubble({
   previous,
   mine,
   showAuthor,
+  athlete,
+  names,
 }: {
   message: Message;
   previous?: Message;
   mine: boolean;
   showAuthor: boolean;
+  athlete: Athlete | null;
+  names: { coach: string; parent: string; player: string };
 }) {
-  const { athlete } = useSession();
-  const names = useNames();
   const d = message.createdAt?.toDate?.();
   const prevD = previous?.createdAt?.toDate?.();
   const newDay = d && (!prevD || prevD.toDateString() !== d.toDateString());

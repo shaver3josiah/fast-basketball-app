@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useSession, useNames } from '../../src/session';
-import { setConsent, setMuted, subscribeThreads } from '../../src/data';
+import { hasConsent, setConsent, setMuted, subscribeThreads } from '../../src/data';
 import type { Thread } from '../../src/types';
 import { Avatar, Body, Button, Card, CardTitle, Screen, Setting, Tag } from '../../src/ui';
 import { color, semantic, type } from '../../src/theme';
 
 export default function You() {
-  const { user, role, athlete, consent, prefs } = useSession();
+  const { user, role, athlete, athletesById, consent, prefs } = useSession();
   const names = useNames();
   const [threads, setThreads] = useState<Thread[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -143,21 +143,28 @@ export default function You() {
         <>
           <Card>
             <CardTitle>Roster</CardTitle>
-            {athlete ? (
-              <View style={s.rosterRow}>
-                <View style={{ flex: 1 }}>
-                  <Text style={s.rosterName}>
-                    {athlete.playerName}
-                    {athlete.age ? ` · ${athlete.age}` : ''}
-                  </Text>
-                  <Text style={type.meta}>
-                    Guardian: {athlete.guardianName} · consent {consent ? 'granted' : 'pending'}
-                  </Text>
-                </View>
-                <Tag tone={consent ? 'mon' : 'ro'}>{consent ? 'Active' : 'Pending'}</Tag>
-              </View>
-            ) : (
+            {Object.values(athletesById).length === 0 ? (
               <Body>No athletes on the roster yet.</Body>
+            ) : (
+              Object.values(athletesById).map((a) => {
+                // Consent is per athlete, so it is read off each row rather than off
+                // the session — otherwise every athlete would inherit the first one's.
+                const granted = hasConsent(a);
+                return (
+                  <View key={a.id} style={s.rosterRow}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.rosterName}>
+                        {a.playerName}
+                        {a.age ? ` · ${a.age}` : ''}
+                      </Text>
+                      <Text style={type.meta}>
+                        Guardian: {a.guardianName} · consent {granted ? 'granted' : 'pending'}
+                      </Text>
+                    </View>
+                    <Tag tone={granted ? 'mon' : 'ro'}>{granted ? 'Active' : 'Pending'}</Tag>
+                  </View>
+                );
+              })
             )}
           </Card>
           <Card>
@@ -213,7 +220,7 @@ const s = StyleSheet.create({
   },
   name: { fontSize: 18, fontWeight: '800', color: color.chalk },
   role: { ...type.meta, marginTop: 2 },
-  rosterRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  rosterRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6 },
   rosterName: { fontSize: 14, fontWeight: '700', color: color.chalk, marginBottom: 2 },
   error: { color: color.redHot, fontSize: 13.5, lineHeight: 19, marginBottom: 12 },
 });

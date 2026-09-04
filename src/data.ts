@@ -79,6 +79,35 @@ export function subscribeAthlete(athleteId: string, cb: (a: Athlete | null) => v
   );
 }
 
+/**
+ * Every athlete this account can see, keyed by id — the coach's whole roster, or the
+ * one athlete a family is attached to. Screens label a thread from the athlete named on
+ * that thread rather than from "the" athlete, so a second athlete does not inherit the
+ * first one's name everywhere.
+ */
+export function subscribeAthletes(
+  role: Role,
+  uid: string,
+  cb: (byId: Record<string, Athlete>) => void
+): Unsubscribe {
+  const base = collection(db, 'athletes');
+  // Same shape as resolveRole: unconstrained for the coach, matched on the caller's uid
+  // otherwise, because rules reject any query that could return a doc they cannot read.
+  const q =
+    role === 'coach'
+      ? query(base)
+      : query(base, where(role === 'parent' ? 'guardianUid' : 'playerUid', '==', uid));
+  return onSnapshot(
+    q,
+    (snap) => {
+      const byId: Record<string, Athlete> = {};
+      snap.docs.forEach((d) => (byId[d.id] = { id: d.id, ...d.data() } as Athlete));
+      cb(byId);
+    },
+    err('athletes')
+  );
+}
+
 export const hasConsent = (a: Athlete | null | undefined): boolean =>
   Boolean(a && a.consentGrantedAt);
 

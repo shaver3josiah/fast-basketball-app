@@ -6,13 +6,17 @@ import {
   type User,
 } from 'firebase/auth';
 import { auth } from './firebase';
-import { resolveRole, subscribeAthlete, subscribePrefs, hasConsent } from './data';
+import { resolveRole, subscribeAthlete, subscribeAthletes, subscribePrefs, hasConsent } from './data';
 import type { Athlete, Role, UserPrefs } from './types';
 
 interface Session {
   user: User | null;
   role: Role;
+  /** The athlete this account is attached to. For the coach, whoever is first on the
+   *  roster — use `athletesById` when the athlete a screen means is a specific one. */
   athlete: Athlete | null;
+  /** Every athlete this account can see. One entry for a family, the roster for the coach. */
+  athletesById: Record<string, Athlete>;
   prefs: UserPrefs;
   /** False until auth has reported in and the role lookup has finished. */
   ready: boolean;
@@ -27,6 +31,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [role, setRole] = useState<Role>('player');
   const [athlete, setAthlete] = useState<Athlete | null>(null);
+  const [athletesById, setAthletesById] = useState<Record<string, Athlete>>({});
   const [prefs, setPrefs] = useState<UserPrefs>({ mutedThreads: [] });
   const [ready, setReady] = useState(false);
 
@@ -39,6 +44,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     if (!user) {
       setRole('player');
       setAthlete(null);
+      setAthletesById({});
       setPrefs({ mutedThreads: [] });
       setReady(true);
       return;
@@ -66,6 +72,11 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!user) return;
+    return subscribeAthletes(role, user.uid, setAthletesById);
+  }, [user?.uid, role]);
+
+  useEffect(() => {
+    if (!user) return;
     return subscribePrefs(user.uid, setPrefs);
   }, [user?.uid]);
 
@@ -74,6 +85,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       user,
       role,
       athlete,
+      athletesById,
       prefs,
       ready,
       consent: hasConsent(athlete),
@@ -82,7 +94,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       },
       signOut: () => fbSignOut(auth),
     }),
-    [user, role, athlete, prefs, ready]
+    [user, role, athlete, athletesById, prefs, ready]
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
@@ -94,13 +106,18 @@ export function useSession(): Session {
   return s;
 }
 
-/** Display names for the three people, drawn from the athlete record the coach owns. */
-export function useNames() {
-  const { athlete } = useSession();
+/**
+ * Display names for the three people on a given athlete's threads. Pass the athleteId
+ * the screen is actually about — a coach with two athletes must not label both threads
+ * with whichever athlete happened to load first.
+ */
+export function useNames(athleteId?: string) {
+  const { athlete, athletesById } = useSession();
+  const a = (athleteId ? athletesById[athleteId] : null) ?? athlete;
   return {
     coach: 'Coach Kingsley',
-    parent: athlete?.guardianName ?? 'Parent',
-    player: athlete?.playerName ?? 'Athlete',
+    parent: a?.guardianName ?? 'Parent',
+    player: a?.playerName ?? 'Athlete',
   };
 }
 
