@@ -50,6 +50,41 @@ jobs:
           EXPO_NO_GIT_STATUS: '1'
         run: npx expo prebuild --platform android --no-clean
 
+      # app.json pins android.versionCode to 1, so prebuild stamps every build as
+      # versionCode 1. Android refuses to install an APK over an installed one with the
+      # same versionCode, and Play rejects a duplicate outright -- so the second .apk is
+      # uninstallable on any phone that already has the first. Use the run number, which
+      # is monotonic and is exactly what the iOS job stamps into CFBundleVersion.
+      #
+      # This has to patch the GENERATED file: prebuild rewrites android/ on every run, so
+      # a committed edit to android/app/build.gradle would be destroyed. Same reasoning as
+      # the iOS job's PlistBuddy stamp. Both substitutions are verified below -- a silent
+      # no-op here would recreate the exact bug this step fixes.
+      - name: Stamp the version code
+        env:
+          RUN_NUMBER: ${{ github.run_number }}
+        run: |
+          set -euo pipefail
+          G=android/app/build.gradle
+
+          sed -i -E "s|^([[:space:]]*)versionCode [0-9]+\$|\1versionCode $RUN_NUMBER|" "$G"
+          grep -qE "^[[:space:]]*versionCode $RUN_NUMBER\$" "$G" || {
+            echo "::error::no versionCode line matched in $G"; exit 1; }
+
+          # On a tag, show testers a versionName that matches the release they are
+          # installing (v1.2.0 -> 1.2.0). A workflow_dispatch run has no tag to take a
+          # name from, so leave whatever expo.version in app.json produced.
+          case "$GITHUB_REF" in
+            refs/tags/v*)
+              NAME="${GITHUB_REF_NAME#v}"
+              sed -i -E "s|^([[:space:]]*)versionName \".*\"\$|\1versionName \"$NAME\"|" "$G"
+              grep -qF "versionName \"$NAME\"" "$G" || {
+                echo "::error::no versionName line matched in $G"; exit 1; }
+              ;;
+          esac
+
+          grep -nE "^[[:space:]]*version(Code|Name) " "$G"
+
       # Gradle's assembleRelease runs Metro itself -- do NOT `expo export` first.
       - name: Assemble release
         working-directory: android

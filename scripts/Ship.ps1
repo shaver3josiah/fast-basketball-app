@@ -50,6 +50,96 @@ function Invoke-Step {
     }
 }
 
+function Write-PreflightSkipped {
+    param([string] $Why)
+    Write-Host "Preflight skipped: $Why." -ForegroundColor Yellow
+    Write-Host "Carrying on anyway. If a secret really is missing, the workflow" -ForegroundColor Yellow
+    Write-Host "will say so instead - see docs/SHIPPING.md." -ForegroundColor Yellow
+}
+
+# Asks GitHub which secrets this repo has. Only NAMES are readable, and only names
+# are wanted - no secret value is ever printed or fetched. Returns $true to carry on.
+function Test-ReleaseSecrets {
+    # gh writes to stderr even when it succeeds, and under 'Stop' PowerShell 5.1
+    # turns that into a terminating NativeCommandError. Exit codes are the real
+    # signal here, so read those instead.
+    $ErrorActionPreference = 'Continue'
+
+    $appleNeeded = @('APPLE_TEAM_ID', 'ASC_KEY_ID', 'ASC_ISSUER_ID', 'ASC_KEY_P8')
+    $androidNeeded = @('ANDROID_KEYSTORE_BASE64', 'ANDROID_KEYSTORE_PASSWORD', 'ANDROID_KEY_ALIAS', 'ANDROID_KEY_PASSWORD')
+
+    Write-Host ""
+    Write-Host "==> Preflight: checking the repository secrets" -ForegroundColor Cyan
+
+    # A missing or logged-out local CLI is not a reason to block a release.
+    if ($null -eq (Get-Command gh -ErrorAction SilentlyContinue)) {
+        Write-PreflightSkipped "the GitHub CLI ('gh') is not installed"
+        return $true
+    }
+
+    $null = gh auth status 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        Write-PreflightSkipped "'gh auth status' reports you are not logged in"
+        return $true
+    }
+
+    # --json prints one name per line and makes gh validate the field name, so this
+    # does not depend on the human-readable table layout, which differs between a
+    # terminal and a captured pipe. An older gh without --json exits non-zero here
+    # and the preflight skips, which is the right way to fail.
+    $listed = gh secret list --json name -q '.[].name' 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        Write-PreflightSkipped "'gh secret list' failed, so the secrets could not be read"
+        return $true
+    }
+    $names = @($listed | ForEach-Object { ([string] $_).Trim() } | Where-Object { $_ })
+
+    # Android keystore secrets are optional on purpose: android-apk.yml falls back
+    # to a debug-signed APK, and getting an .apk onto a phone must never be blocked
+    # on keystore setup.
+    $androidMissing = @($androidNeeded | Where-Object { $names -notcontains $_ })
+    if ($names -notcontains 'ANDROID_KEYSTORE_BASE64') {
+        Write-Host "Note: no Android keystore secrets, so the APK will be debug-signed." -ForegroundColor Yellow
+        Write-Host "      It still installs on any phone. Only Play Store uploads need" -ForegroundColor Yellow
+        Write-Host "      a real keystore." -ForegroundColor Yellow
+    } elseif ($androidMissing.Count -gt 0) {
+        # android-apk.yml branches on ANDROID_KEYSTORE_BASE64 alone. With that set and
+        # any of the other three missing it takes the signing path anyway and dies at
+        # apksigner, so a half-set of secrets is worse than none at all.
+        Write-Host "Android keystore secrets are INCOMPLETE: missing $($androidMissing -join ', ')." -ForegroundColor Red
+        Write-Host "      android-apk.yml signs whenever ANDROID_KEYSTORE_BASE64 is set, so" -ForegroundColor Red
+        Write-Host "      the Android job will fail at apksigner. Set the rest, or remove" -ForegroundColor Red
+        Write-Host "      ANDROID_KEYSTORE_BASE64 to get a debug-signed APK instead." -ForegroundColor Red
+        Write-Host "      See docs/SHIPPING.md." -ForegroundColor Red
+    } else {
+        Write-Host "Android keystore secrets present, the APK will be release-signed." -ForegroundColor Green
+    }
+
+    $appleMissing = @($appleNeeded | Where-Object { $names -notcontains $_ })
+    if ($appleMissing.Count -eq 0) {
+        Write-Host "All four Apple secrets present, the TestFlight upload will run." -ForegroundColor Green
+        return $true
+    }
+
+    Write-Host ""
+    Write-Host "Missing Apple secrets: $($appleMissing -join ', ')" -ForegroundColor Red
+    Write-Host "If you tag now:" -ForegroundColor Yellow
+    Write-Host "  - the iOS job stops at its own preflight, so there is no TestFlight build"
+    Write-Host "  - the Android job still runs and still attaches an installable .apk"
+    Write-Host "Setting the Apple secrets up is documented in docs/SHIPPING.md." -ForegroundColor Yellow
+    Write-Host ""
+
+    # Android-only is a legitimate release, so offer it rather than hard-blocking.
+    $answer = Read-Host "Tag anyway and ship the Android APK only? [y/N]"
+    if ($answer -match '^(y|yes)$') {
+        return $true
+    }
+
+    Write-Host ""
+    Write-Host "Stopped before tagging. No tag was created or pushed." -ForegroundColor Red
+    return $false
+}
+
 # Nothing below works without a remote, and the failure messages if one is missing
 # are confusing, so say it plainly up front.
 $remotes = git remote
@@ -100,6 +190,12 @@ $existing = git tag --list $Version
 if (-not [string]::IsNullOrWhiteSpace($existing)) {
     Write-Host ""
     Write-Host "Tag $Version already exists. Pick a different -Version." -ForegroundColor Red
+    exit 1
+}
+
+# Last chance to bail: check the secrets before the tag exists, because after the
+# push the only way out is deleting a tag from a running workflow.
+if (-not (Test-ReleaseSecrets)) {
     exit 1
 }
 
