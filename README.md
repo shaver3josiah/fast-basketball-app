@@ -132,9 +132,13 @@ Both run in CI on every push.
 
 ## Shipping
 
-`docs/SHIPPING.md` is the runbook. The short version: this repo is public, so
-GitHub-hosted runners — including macOS — are free, and a pushed `v*` tag builds both
-binaries with no Mac and no EAS subscription.
+**New here? [`docs/START-HERE.md`](docs/START-HERE.md) is the ordered list of what still
+needs the owner** — Firebase, the Android keystore, and the Apple account, in the order
+they unblock each other. `docs/SHIPPING.md` is the deeper reference behind it.
+
+The short version: this repo is public, so GitHub-hosted runners — including macOS —
+are free, and a pushed `v*` tag builds both binaries with no Mac and no EAS
+subscription.
 
 - **Android `.apk`** — an Ubuntu runner prebuilds and runs `assembleRelease`, then
   re-signs with your upload keystore. The APK is attached to the GitHub Release. If the

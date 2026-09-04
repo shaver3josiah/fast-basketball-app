@@ -142,6 +142,24 @@ jobs:
       - name: Install fastlane
         run: bundle install
 
+      # No Gemfile.lock is committed, because Ruby is not installed on the Windows
+      # machine this repo is developed on and a hand-written lock would be a
+      # fabricated dependency graph. Bundler therefore re-resolves fastlane on every
+      # release, so a bad 2.x patch release can break a build that changed nothing.
+      #
+      # This uploads the lock bundler just resolved. Download it from the run, commit
+      # it, and releases become reproducible. The step then disables itself --
+      # hashFiles() returns an empty string when the file is not in the checkout, so
+      # once Gemfile.lock is committed this never runs again and nobody has to
+      # remember to delete it.
+      - name: Upload the resolved Gemfile.lock (until one is committed)
+        if: hashFiles('Gemfile.lock') == ''
+        uses: actions/upload-artifact@v5
+        with:
+          name: Gemfile.lock
+          path: Gemfile.lock
+          if-no-files-found: error
+
       - name: Archive
         run: |
           set -euo pipefail
