@@ -218,6 +218,26 @@ This builds without creating a tag or a release.
 
 ---
 
+## 5b. The 90-day TestFlight clock
+
+A TestFlight build stops being installable **90 days after upload**. Nobody is
+warned — the app just disappears from a tester's phone one day, and the first you
+hear about it is a parent saying it is gone.
+
+`ios-testflight.yml` re-uploads on the 1st of every month to keep that from
+happening. You do not have to do anything, but two things are worth knowing:
+
+- The monthly run uploads the **same code** with a new build number. That is all
+  App Store Connect requires, and it resets the 90-day clock for every tester.
+- Each scheduled run also commits `.github/last-keepalive.txt`. That is not
+  decoration: GitHub disables a scheduled workflow after 60 days with no
+  repository activity, which would kill the keep-alive about a month before the
+  build it renews expires. The commit keeps the clock reset, and the file is a
+  plain-text record of the last upload.
+
+If you ever see the keep-alive failing, fix it rather than muting it — the
+consequence is silent, and it lands on the families, not on you.
+
 ## 6. When something breaks
 
 | Symptom | Cause | Fix |

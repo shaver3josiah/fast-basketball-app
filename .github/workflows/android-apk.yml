@@ -12,6 +12,7 @@ permissions:
 jobs:
   apk:
     runs-on: ubuntu-24.04
+    timeout-minutes: 45   # fail rather than sit in a hung job
     steps:
       - uses: actions/checkout@v5
 

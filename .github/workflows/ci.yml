@@ -17,6 +17,7 @@ concurrency:
 jobs:
   check:
     runs-on: ubuntu-24.04
+    timeout-minutes: 15   # fail rather than sit in a hung job
     steps:
       - uses: actions/checkout@v5
 

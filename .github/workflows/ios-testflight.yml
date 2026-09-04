@@ -1,13 +1,28 @@
 name: iOS TestFlight
 
+# Three ways in: push a v* tag, run it by hand, or the monthly keep-alive.
+#
+# The keep-alive is not optional maintenance. A TestFlight build STOPS BEING
+# INSTALLABLE 90 days after upload, and nothing warns anyone -- the app simply
+# vanishes from a parent's phone one day. Blake's families will sit on TestFlight
+# for months before this ever reaches the App Store, so a monthly re-upload of the
+# same code keeps them working. App Store Connect only requires the build number
+# to increase, and that is github.run_number.
+# (Learned the hard way on the Bloom/Hannah's Calculator pipeline.)
 on:
   workflow_dispatch:
   push:
     tags: ['v*']
+  schedule:
+    - cron: '0 7 1 * *'
+
+permissions:
+  contents: write   # the keep-alive stamps a commit; see the last step
 
 jobs:
   testflight:
     runs-on: macos-26
+    timeout-minutes: 60   # a hung macOS job otherwise burns six hours of runner time
     env:
       # Cloud signing: Xcode talks to App Store Connect itself and mints the
       # certificate and profile on the runner. No .p12 / .mobileprovision to create,
@@ -27,14 +42,20 @@ jobs:
           cache: npm
 
       # SDK 57 needs Xcode 26.4+. Runners ship several Xcodes and the default is not
-      # always the newest, so select it explicitly instead of hoping.
+      # always the newest, so select it explicitly instead of hoping. Betas and
+      # release candidates are excluded: a plain "newest" pick can land on a beta
+      # Xcode whose SDK App Store Connect then refuses to accept.
       - name: Select newest Xcode
         run: |
           set -euo pipefail
-          XC=$(ls -d /Applications/Xcode*.app | sort -V | tail -1)
+          XC=$(ls -d /Applications/Xcode*.app 2>/dev/null \
+               | grep -viE 'beta|rc|release[_ ]candidate' \
+               | sort -V | tail -1)
+          if [ -z "$XC" ]; then echo "::error::No non-beta Xcode found"; exit 1; fi
           echo "Using $XC"
           sudo xcode-select -s "$XC"
           xcodebuild -version
+          xcodebuild -showsdks | grep -i iphoneos || true
 
       - run: npm ci
 
@@ -108,6 +129,26 @@ jobs:
             -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
             DEVELOPMENT_TEAM="$APPLE_TEAM_ID"
 
+      # Apple rejects an upload with "Missing CFBundleIconName" AFTER the export and
+      # the upload have both run. Expo's prebuild generates the icon catalog, so this
+      # should always pass -- but checking here turns a ~20-minute round trip and a
+      # rejection email into a failure a few seconds after the archive.
+      - name: Verify the archive carries an icon
+        run: |
+          set -euo pipefail
+          APP=$(ls -d "$RUNNER_TEMP/app.xcarchive/Products/Applications/"*.app | head -1)
+          echo "Archived app: $APP"
+          if [ ! -f "$APP/Assets.car" ]; then
+            echo "::error::No Assets.car in the archive -- the asset catalog was not compiled."
+            exit 1
+          fi
+          NAME=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIconName" "$APP/Info.plist" 2>/dev/null || true)
+          if [ -z "$NAME" ]; then
+            echo "::error::CFBundleIconName is missing; App Store Connect will reject this build."
+            exit 1
+          fi
+          echo "CFBundleIconName=$NAME, Assets.car present."
+
       - name: Export IPA
         run: |
           set -euo pipefail
@@ -149,3 +190,21 @@ jobs:
       - name: Remove App Store Connect API key
         if: always()
         run: rm -f "$RUNNER_TEMP/asc.p8"
+
+      # GitHub disables a scheduled workflow after 60 days without repository
+      # activity -- which would quietly kill the keep-alive about a month before the
+      # build it exists to renew expires. A commit per scheduled run resets that
+      # clock and doubles as a plain-text record of the last upload. [skip ci] so it
+      # does not also trigger the CI workflow.
+      - name: Stamp the keep-alive
+        if: github.event_name == 'schedule'
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          mkdir -p .github
+          echo "last keep-alive upload: $(date -u +'%Y-%m-%d %H:%M UTC')  (build ${{ github.run_number }})" > .github/last-keepalive.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/last-keepalive.txt
+          git commit -m "chore: TestFlight keep-alive, build ${{ github.run_number }} [skip ci]"
+          git push origin HEAD:${{ github.event.repository.default_branch }}
