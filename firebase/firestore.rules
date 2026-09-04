@@ -1,0 +1,212 @@
+rules_version = '2';
+
+// Fast Basketball — consent + monitoring enforcement.
+// This file IS the security model. The app UI mirrors it; it does not implement it.
+// Cloud Functions need the Blaze plan, so there is no server-side code to fall back on.
+//
+// Governing principle: the coach is the MONITORED party. He is trusted with content
+// and scheduling, and deliberately not trusted with consent or with deciding who
+// watches him. Those two powers belong to the guardian and to no one else.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ponytail: one trainer, one UID. Storing a role field on /users would create
+    // something a client could try to escalate; a constant cannot be escalated.
+    // A UID (not an email) is used deliberately — it carries no verification caveat.
+    // Swap in Blake's real Auth UID before deploying.
+    function coachUid() { return 'coach_demo_uid'; }
+
+    function isSignedIn() { return request.auth != null; }
+    function isCoach()    { return isSignedIn() && request.auth.uid == coachUid(); }
+
+    function athleteDoc(aid) {
+      return get(/databases/$(database)/documents/athletes/$(aid)).data;
+    }
+    function isGuardian(aid) { return isSignedIn() && athleteDoc(aid).guardianUid == request.auth.uid; }
+    function isPlayer(aid)   { return isSignedIn() && athleteDoc(aid).playerUid   == request.auth.uid; }
+
+    // Absent field and explicit null both mean "no consent". Reading a missing key
+    // errors out in rules, so the `in` check has to come first.
+    function consentOn(a) { return 'consentGrantedAt' in a && a.consentGrantedAt != null; }
+
+    function changed() { return request.resource.data.diff(resource.data).affectedKeys(); }
+
+    // ---------------------------------------------------------------
+    // Athletes — the consent record itself
+    // ---------------------------------------------------------------
+    match /athletes/{aid} {
+      allow read: if isCoach()
+                  || resource.data.guardianUid == request.auth.uid
+                  || resource.data.playerUid   == request.auth.uid;
+
+      // AUDIT FIX (major): create previously had no validation, so the coach could
+      // create an athlete with consentGrantedAt already set — pre-granting the
+      // parent's consent at the one moment the update rule wasn't watching.
+      // create and update now agree: consent is never coach-writable, ever.
+      allow create: if isCoach()
+        && request.resource.data.guardianUid is string
+        && request.resource.data.playerUid is string
+        && !('consentGrantedAt' in request.resource.data);
+
+      allow delete: if isCoach();
+
+      // The guardian owns consent and touches nothing else.
+      // The coach owns everything else and can never grant consent on a parent's
+      // behalf — that separation is the whole point, so it is enforced both ways.
+      // AUDIT FIX (minor, found by firebase/test/rules.test.mjs): reading
+      // request.resource.data.consentGrantedAt threw when the guardian revoked by
+      // DELETING the field rather than nulling it — rules error out on a missing key,
+      // so a perfectly ordinary deleteField() revoke came back as an opaque
+      // PERMISSION_DENIED. The read side (consentOn) already treated absent and null
+      // alike; now the write side agrees. This narrows nothing: hasOnly still pins
+      // which key moved, and an absent field means no consent, which is the safe
+      // direction.
+      allow update: if
+        (resource.data.guardianUid == request.auth.uid
+          && changed().hasOnly(['consentGrantedAt'])
+          && (!('consentGrantedAt' in request.resource.data)
+              || request.resource.data.consentGrantedAt == null
+              || request.resource.data.consentGrantedAt is timestamp))
+        ||
+        (isCoach()
+          && !changed().hasAny(['consentGrantedAt', 'guardianUid', 'playerUid']));
+    }
+
+    // ---------------------------------------------------------------
+    // Threads + messages
+    // ---------------------------------------------------------------
+    match /threads/{tid} {
+
+      function guardianOf(aid) { return athleteDoc(aid).guardianUid; }
+
+      // participants may post. readers may only read.
+      // The parent sits in `readers` on the coach<->player thread: full visibility,
+      // no ability to post as or into it. This is the monitoring guarantee.
+      allow read: if isCoach()
+                  || request.auth.uid in resource.data.readers
+                  || request.auth.uid in resource.data.participants;
+
+      // AUDIT FIX (major): the coach previously controlled `readers` freely, which
+      // let the monitored party quietly write the guardian out of the audience —
+      // and delete the thread outright. The guardian is now structurally
+      // unremovable, and threads are permanent.
+      allow create: if isCoach()
+        && request.resource.data.athleteId is string
+        && request.resource.data.participants is list
+        && request.resource.data.readers is list
+        && (guardianOf(request.resource.data.athleteId) in request.resource.data.readers
+            || guardianOf(request.resource.data.athleteId) in request.resource.data.participants);
+
+      // ponytail: threads are created once and never edited. Add an update rule
+      // the day a real need appears, not before.
+      allow update, delete: if false;
+
+      match /messages/{mid} {
+
+        function thread() { return get(/databases/$(database)/documents/threads/$(tid)).data; }
+
+        function canRead() {
+          let t = thread();
+          return isCoach()
+              || request.auth.uid in t.readers
+              || request.auth.uid in t.participants;
+        }
+
+        // AUDIT FIX (major, broken business logic): the consent gate used to apply
+        // to every non-coach sender, which locked the PARENT out of messaging the
+        // coach until she had granted consent — but talking to him is how she
+        // decides. Consent gates the athlete's messaging and nothing else.
+        function canSend() {
+          let t = thread();
+          let a = athleteDoc(t.athleteId);
+          return request.auth.uid in t.participants
+              && (request.auth.uid != a.playerUid || consentOn(a));
+        }
+
+        allow read: if isSignedIn() && canRead();
+
+        allow create: if isSignedIn()
+          && canSend()
+          && request.resource.data.keys().hasOnly(['senderUid', 'text', 'createdAt'])
+          && request.resource.data.senderUid == request.auth.uid
+          && request.resource.data.text is string
+          && request.resource.data.text.size() > 0
+          && request.resource.data.text.size() <= 4000
+          && request.resource.data.createdAt == request.time;
+
+        // Messages are the monitoring record. If a player could delete one, the
+        // parent-visibility guarantee would be worth nothing. This binds the coach
+        // too — he does not get to edit the record of what he said to a minor.
+        allow update, delete: if false;
+      }
+    }
+
+    // ---------------------------------------------------------------
+    // Calendar
+    // ---------------------------------------------------------------
+    // NOTE: `read` covers list queries, and rules never filter — the client must
+    // query with where('athleteId','==',aid) or the whole query is denied.
+    match /events/{eid} {
+      allow read: if isCoach()
+                  || isGuardian(resource.data.athleteId)
+                  || isPlayer(resource.data.athleteId);
+      allow create, update, delete: if isCoach();
+    }
+
+    // ---------------------------------------------------------------
+    // The Locker — coach-published HTML workflows
+    // ---------------------------------------------------------------
+    match /workflows/{wid} {
+      // OPEN ITEM (see audit finding #4): any signed-in account can read every
+      // workflow. That is training content, not PII or child-safety data, but it
+      // is Blake's paid material. Closing it needs a membership record, which is a
+      // signup-flow decision — flagged rather than guessed at.
+      allow read: if isSignedIn();
+
+      // ponytail: Firestore's hard document ceiling is 1 MiB and the existing Locker
+      // templates file is already 983 KB. Reject at 900 KB so the failure is a clear
+      // rule denial rather than an opaque write error. Chunk it the day that bites.
+      allow create, update: if isCoach()
+        && request.resource.data.html is string
+        && request.resource.data.html.size() <= 900000;
+      allow delete: if isCoach();
+    }
+
+    // An athlete's own filled-in answers — never a second copy of the coach's HTML.
+    match /athletes/{aid}/savedWorkflows/{wid} {
+      allow read: if isCoach() || isGuardian(aid) || isPlayer(aid);
+
+      // The coach reads progress but does not author it. Answers stay the athlete's.
+      // Bounded so a client cannot use its own progress doc as free storage.
+      allow create, update: if (isGuardian(aid) || isPlayer(aid))
+        && request.resource.data.keys().hasOnly(['answers', 'updatedAt'])
+        && request.resource.data.answers is map
+        && request.resource.data.answers.size() <= 200;
+      allow delete: if isGuardian(aid) || isPlayer(aid);
+    }
+
+    // ---------------------------------------------------------------
+    // Private per-user preferences (notification mutes)
+    // ---------------------------------------------------------------
+    // The spec gives the guardian a per-thread mute the player cannot override.
+    // Threads are immutable (`allow update: if false`) and the guardian's write on
+    // /athletes is narrowed to consentGrantedAt, so there was nowhere to put it.
+    // A mute is a preference, not a shared record, so it belongs to the one account
+    // it affects: a player cannot clear a mute his guardian set because it does not
+    // live in any document he can write.
+    match /users/{uid} {
+      allow read, delete: if isSignedIn() && request.auth.uid == uid;
+      allow create, update: if isSignedIn() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['mutedThreads', 'displayName'])
+        && request.resource.data.mutedThreads is list
+        && request.resource.data.mutedThreads.size() <= 200;
+    }
+
+    // Deny-by-default is already Firestore's behaviour; this is documentation, not a
+    // backstop. Rules OR together, so this can never revoke an allow written above.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

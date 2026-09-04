@@ -1,0 +1,151 @@
+name: iOS TestFlight
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+jobs:
+  testflight:
+    runs-on: macos-26
+    env:
+      # Cloud signing: Xcode talks to App Store Connect itself and mints the
+      # certificate and profile on the runner. No .p12 / .mobileprovision to create,
+      # which matters because the owner has no Mac to create them on.
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      # Bundler cannot write to the system gem dir on the runner; keep gems in-tree.
+      BUNDLE_PATH: vendor/bundle
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22.13'
+          cache: npm
+
+      # SDK 57 needs Xcode 26.4+. Runners ship several Xcodes and the default is not
+      # always the newest, so select it explicitly instead of hoping.
+      - name: Select newest Xcode
+        run: |
+          set -euo pipefail
+          XC=$(ls -d /Applications/Xcode*.app | sort -V | tail -1)
+          echo "Using $XC"
+          sudo xcode-select -s "$XC"
+          xcodebuild -version
+
+      - run: npm ci
+
+      # Regenerates ios/. Hard-fails unless ios.bundleIdentifier is set in app.json
+      # ("Project must have a `ios.bundleIdentifier` set in the Expo config").
+      # prebuild runs pod install itself -- there is no separate pod step.
+      - name: Prebuild ios
+        env:
+          CI: '1'
+          EXPO_NO_GIT_STATUS: '1'
+        run: npx expo prebuild --platform ios --no-clean
+
+      # TestFlight rejects a build whose CFBundleVersion it has already seen, and the
+      # bare template writes that key as a LITERAL "1" -- not $(CURRENT_PROJECT_VERSION).
+      # So passing CURRENT_PROJECT_VERSION to xcodebuild does nothing, and the second
+      # release of the same marketing version would be refused as a duplicate. Stamp
+      # the plist that prebuild just generated instead. Safe to do here precisely
+      # because prebuild regenerates ios/ on every run.
+      - name: Stamp the build number
+        run: |
+          set -euo pipefail
+          WS=$(ls -d ios/*.xcworkspace | head -1)
+          PLIST="ios/$(basename "$WS" .xcworkspace)/Info.plist"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${{ github.run_number }}" "$PLIST"
+          echo "CFBundleVersion is now $(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$PLIST")"
+
+      - name: Write App Store Connect API key
+        env:
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+        run: |
+          set -euo pipefail
+          # All four are used unquoted by xcodebuild below. An empty one there fails
+          # ~20 minutes later with an Apple error that names none of them, so check
+          # every one here rather than only the .p8.
+          for k in ASC_KEY_P8 ASC_KEY_ID ASC_ISSUER_ID APPLE_TEAM_ID; do
+            if [ -z "${!k:-}" ]; then
+              echo "::error::$k is not set. See docs/SHIPPING.md section 4."
+              exit 1
+            fi
+          done
+          # RAW .p8, plain echo. Do NOT base64-decode: a mangled PEM makes CryptoKit
+          # fail with invalidPEMDocument at export time.
+          echo "$ASC_KEY_P8" > "$RUNNER_TEMP/asc.p8"
+
+      # Resolving gems takes ~1 minute and can fail on its own. Doing it here rather
+      # than in the upload step means a broken Gemfile costs a minute, not a 20-minute
+      # archive followed by a failure at the very last step.
+      - name: Install fastlane
+        run: bundle install
+
+      - name: Archive
+        run: |
+          set -euo pipefail
+          # Build the WORKSPACE, never the .xcodeproj -- against the project the Pods
+          # do not link. The scheme is the workspace basename (app.json expo.name with
+          # every non-alphanumeric character stripped), so read it off disk.
+          WS=$(ls -d ios/*.xcworkspace | head -1)
+          SCHEME=$(basename "$WS" .xcworkspace)
+          echo "workspace=$WS scheme=$SCHEME"
+
+          # Xcode's Release build phase runs Metro itself -- do NOT `expo export` first.
+          xcodebuild archive \
+            -workspace "$WS" \
+            -scheme "$SCHEME" \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/app.xcarchive" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/asc.p8" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID"
+
+      - name: Export IPA
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>signingStyle</key><string>automatic</string>
+            <key>teamID</key><string>$APPLE_TEAM_ID</string>
+            <key>uploadSymbols</key><true/>
+          </dict>
+          </plist>
+          PLIST
+
+          # The same four cloud-signing arguments are required AGAIN here. This is the
+          # step that fails with "Cloud signing permission error" if the App Store
+          # Connect API key has the Developer role instead of App Manager or Admin --
+          # the archive above succeeds either way, so the role trap only shows up here.
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/app.xcarchive" \
+            -exportPath "$RUNNER_TEMP/export" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/asc.p8" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID"
+
+      - name: Upload to TestFlight
+        run: |
+          set -euo pipefail
+          IPA=$(ls "$RUNNER_TEMP/export"/*.ipa | head -1)
+          echo "Uploading $IPA"
+          IPA_PATH="$IPA" ASC_KEY_PATH="$RUNNER_TEMP/asc.p8" \
+            bundle exec fastlane ios upload_testflight
+
+      # Runs even when an earlier step failed: the private key must not outlive the job.
+      - name: Remove App Store Connect API key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/asc.p8"

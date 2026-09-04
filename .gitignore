@@ -17,6 +17,9 @@ expo-env.d.ts
 *.p12
 *.key
 *.mobileprovision
+# docs/SHIPPING.md offers writing the keystore to keystore.base64.txt instead of the
+# clipboard, and Ship.ps1 does `git add -A` -- that is the signing key in a public repo.
+*.base64.txt
 
 # Metro
 .metro-health-check*
@@ -39,3 +42,16 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+.env
+
+# emulator logs (Ship.ps1 does `git add -A`, so keep these out of commits)
+*-debug.log
+.firebase/
+
+# scratch: an extracted dependency tarball, 13 MB, not source. Safe to delete.
+erchk/
+
+# fastlane / bundler (iOS workflow installs gems in-tree)
+vendor/bundle/
+fastlane/report.xml
+fastlane/Preview.html

@@ -1,22 +1,42 @@
 {
   "name": "fast-basketball-app",
   "version": "1.0.0",
-  "main": "index.ts",
+  "main": "expo-router/entry",
   "dependencies": {
+    "@expo/vector-icons": "^15.0.2",
+    "@react-native-async-storage/async-storage": "2.2.0",
     "expo": "~57.0.11",
+    "expo-constants": "~57.0.9",
+    "expo-linking": "~57.0.5",
+    "expo-router": "~57.0.11",
+    "expo-splash-screen": "~57.0.8",
     "expo-status-bar": "~57.0.1",
+    "firebase": "^12.17.1",
     "react": "19.2.3",
-    "react-native": "0.86.2"
+    "react-dom": "19.2.3",
+    "react-native": "0.86.2",
+    "react-native-safe-area-context": "~5.7.0",
+    "react-native-screens": "~4.26.0",
+    "react-native-web": "^0.21.2",
+    "react-native-webview": "13.16.1"
   },
   "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.2",
     "@types/react": "~19.2.2",
+    "@types/react-dom": "^19.2.7",
+    "firebase-tools": "^15.29.0",
     "typescript": "~6.0.3"
   },
   "scripts": {
     "start": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
-    "web": "expo start --web"
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "web": "expo start --web",
+    "test:rules": "firebase emulators:exec --project fast-basketball-rules-test --only firestore --config firebase/firebase.json \"node --test firebase/test/rules.test.mjs\"",
+    "emulators": "firebase emulators:start --project fast-basketball-dev --config firebase/firebase.json",
+    "typecheck": "tsc --noEmit",
+    "seed": "node scripts/seed.mjs",
+    "set-coach-uid": "node scripts/set-coach-uid.mjs"
   },
   "private": true
 }

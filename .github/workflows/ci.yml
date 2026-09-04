@@ -1,0 +1,49 @@
+name: CI
+
+# Fast feedback on every push and PR. Nothing here signs or ships anything.
+on:
+  push:
+    # The repo is currently on 'master'; 'main' is listed too so a later rename
+    # does not silently stop CI from running.
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+concurrency:
+  # A new push to the same branch makes the in-flight run pointless.
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          # Expo SDK 57 requires Node >= 22.13.
+          node-version: '22.13'
+          cache: npm
+
+      # firebase-tools refuses to boot the emulators on anything older than JDK 21
+      # ("firebase-tools no longer supports Java version before 21"). This is a
+      # DIFFERENT JDK from the 17 that the Android Gradle build wants in
+      # android-apk.yml -- do not unify them.
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      # npm ci needs package-lock.json committed, and firebase-tools is a devDependency,
+      # so this also provides the `firebase` binary used by npm run test:rules.
+      - run: npm ci
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      # emulators:exec starts Firestore, runs node --test against the rules, and
+      # tears the emulator down again. The security rules are the whole authorization
+      # model here, so this is the test suite that matters.
+      - name: Firestore rules tests
+        run: npm run test:rules
