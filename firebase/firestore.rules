@@ -15,7 +15,7 @@ service cloud.firestore {
     // something a client could try to escalate; a constant cannot be escalated.
     // A UID (not an email) is used deliberately — it carries no verification caveat.
     // Swap in Blake's real Auth UID before deploying.
-    function coachUid() { return 'coach_demo_uid'; }
+    function coachUid() { return 'Opf92IwWv5Q8GLv8MFmwcc6HqAU2'; }
 
     function isSignedIn() { return request.auth != null; }
     function isCoach()    { return isSignedIn() && request.auth.uid == coachUid(); }
