@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { Link, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { createUserWithEmailAndPassword, sendEmailVerification } from 'firebase/auth';
+import { createUserWithEmailAndPassword, sendEmailVerification, signOut } from 'firebase/auth';
 import { auth } from '../src/firebase';
 import { Button } from '../src/ui';
 import { color, radius, semantic, type } from '../src/theme';
@@ -45,6 +45,11 @@ export default function SignUp() {
     try {
       const cred = await createUserWithEmailAndPassword(auth, email.trim().toLowerCase(), password);
       await sendEmailVerification(cred.user);
+      // Firebase signs you in the instant the account exists, which is wrong here: the
+      // account cannot reach anything until the address is confirmed, and staying
+      // signed in meant "Back to sign in" bounced straight off the auth gate into the
+      // pending screen. You are not in until you have clicked the link.
+      await signOut(auth);
       setSent(true);
     } catch (e: unknown) {
       const code = (e as { code?: string })?.code ?? '';

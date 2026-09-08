@@ -127,10 +127,17 @@ service cloud.firestore {
       // let the monitored party quietly write the guardian out of the audience —
       // and delete the thread outright. The guardian is now structurally
       // unremovable, and threads are permanent.
+      // AUDIT FIX (major, found by firebase/test/rules.test.mjs): the guardian check was
+      // satisfied vacuously by the empty string. Before a family signs up, guardianUid
+      // is '', so creating a thread with '' in readers PASSED — and because threads are
+      // immutable, the real guardian could then never be added. Opening threads early
+      // was a complete bypass of the monitoring guarantee. A guardian who has not
+      // claimed her account cannot yet be a reader, so the thread has to wait.
       allow create: if isCoach()
         && request.resource.data.athleteId is string
         && request.resource.data.participants is list
         && request.resource.data.readers is list
+        && guardianOf(request.resource.data.athleteId) != ''
         && (guardianOf(request.resource.data.athleteId) in request.resource.data.readers
             || guardianOf(request.resource.data.athleteId) in request.resource.data.participants);
 

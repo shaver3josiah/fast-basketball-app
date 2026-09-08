@@ -160,6 +160,72 @@ export function setConsent(athleteId: string, granted: boolean) {
   });
 }
 
+/**
+ * Invite a family. Both uid slots start EMPTY: the parent and athlete fill their own in
+ * by signing up with the address named here, which is the only way a non-coach ever
+ * writes a uid onto this record.
+ *
+ * Leave playerEmail blank for an athlete under 13 — they get no login of their own and
+ * the family shares the parent's account. That is the cheap COPPA-compliant path, and
+ * it is a decision the coach makes per family rather than something the app guesses.
+ */
+export function inviteAthlete(input: {
+  playerName: string;
+  guardianName: string;
+  guardianEmail: string;
+  playerEmail?: string;
+  age?: number;
+}) {
+  return addDoc(collection(db, 'athletes'), {
+    playerName: input.playerName.trim(),
+    guardianName: input.guardianName.trim(),
+    guardianEmail: input.guardianEmail.trim().toLowerCase(),
+    ...(input.playerEmail?.trim() ? { playerEmail: input.playerEmail.trim().toLowerCase() } : {}),
+    ...(input.age ? { age: input.age } : {}),
+    guardianUid: '',
+    playerUid: '',
+    joinedAt: serverTimestamp(),
+    // consentGrantedAt is deliberately absent. The rules reject a coach who sets it.
+  });
+}
+
+/**
+ * Open the threads for an athlete whose family has signed up.
+ *
+ * Cannot run earlier: the create rule demands the guardian's uid be among the readers,
+ * and until she claims her slot that uid is the empty string. The athlete's thread is
+ * skipped entirely when there is no athlete login, which is the under-13 shape.
+ */
+export async function createThreadsFor(athlete: Athlete, coachUid: string) {
+  const writes: Promise<unknown>[] = [];
+
+  writes.push(
+    setDoc(doc(db, 'threads', `${athlete.id}_parent`), {
+      athleteId: athlete.id,
+      kind: 'coach-parent',
+      title: `Coach Kingsley ↔ ${athlete.guardianName}`,
+      participants: [coachUid, athlete.guardianUid],
+      readers: [coachUid, athlete.guardianUid],
+    })
+  );
+
+  if (athlete.playerUid) {
+    writes.push(
+      setDoc(doc(db, 'threads', `${athlete.id}_player`), {
+        athleteId: athlete.id,
+        kind: 'coach-player',
+        title: `Coach Kingsley ↔ ${athlete.playerName}`,
+        participants: [coachUid, athlete.playerUid],
+        // The guardian reads but never posts. This array IS the monitoring guarantee,
+        // and the rules refuse to create the thread without her in it.
+        readers: [coachUid, athlete.playerUid, athlete.guardianUid],
+      })
+    );
+  }
+
+  await Promise.all(writes);
+}
+
 // --- threads and messages --------------------------------------------------
 
 /**

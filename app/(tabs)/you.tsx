@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import { useRouter } from 'expo-router';
 import { useSession, useNames } from '../../src/session';
 import { hasConsent, setConsent, setMuted, subscribeThreads } from '../../src/data';
 import type { Thread } from '../../src/types';
@@ -9,6 +10,7 @@ import { color, semantic, type } from '../../src/theme';
 export default function You() {
   const { user, role, athlete, athletesById, consent, prefs } = useSession();
   const names = useNames();
+  const router = useRouter();
   const [threads, setThreads] = useState<Thread[]>([]);
   const [error, setError] = useState<string | null>(null);
 
@@ -166,6 +168,8 @@ export default function You() {
                 );
               })
             )}
+            <View style={{ height: 12 }} />
+            <Button label="Add or manage athletes" onPress={() => router.push('/roster')} />
           </Card>
           <Card>
             <CardTitle>What parents see</CardTitle>

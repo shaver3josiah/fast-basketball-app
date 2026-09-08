@@ -676,6 +676,76 @@ describe('claiming an invited slot', () => {
   });
 });
 
+describe('the coach inviting a family', () => {
+  test('the coach creates an athlete with empty slots and invited emails', async () => {
+    await seed();
+    await assertSucceeds(
+      setDoc(doc(as(COACH), 'athletes', 'invited1'), {
+        playerName: 'New Player',
+        guardianName: 'New Parent',
+        guardianEmail: 'p@example.com',
+        playerEmail: 'a@example.com',
+        guardianUid: '',
+        playerUid: '',
+      })
+    );
+  });
+
+  test('threads cannot be opened before the guardian has signed up', async () => {
+    await seed();
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'athletes', 'invited2'), {
+        guardianEmail: 'p2@example.com',
+        guardianUid: '',
+        playerUid: '',
+        guardianName: 'Waiting Parent',
+        playerName: 'Waiting Player',
+      });
+    });
+    // guardianUid is '' so the guardian cannot be among the readers, and the rule
+    // requires her there. This is why the roster waits rather than offering the button.
+    await assertFails(
+      setDoc(doc(as(COACH), 'threads', 'invited2_parent'), {
+        athleteId: 'invited2',
+        kind: 'coach-parent',
+        title: 'early',
+        participants: [COACH, ''],
+        readers: [COACH, ''],
+      })
+    );
+  });
+
+  test('once claimed, the coach opens both threads with the guardian in readers', async () => {
+    await seed();
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'athletes', 'joined'), {
+        guardianUid: 'g_uid',
+        playerUid: 'p_uid',
+        guardianName: 'Joined Parent',
+        playerName: 'Joined Player',
+      });
+    });
+    await assertSucceeds(
+      setDoc(doc(as(COACH), 'threads', 'joined_parent'), {
+        athleteId: 'joined',
+        kind: 'coach-parent',
+        title: 'Coach ↔ Parent',
+        participants: [COACH, 'g_uid'],
+        readers: [COACH, 'g_uid'],
+      })
+    );
+    await assertSucceeds(
+      setDoc(doc(as(COACH), 'threads', 'joined_player'), {
+        athleteId: 'joined',
+        kind: 'coach-player',
+        title: 'Coach ↔ Player',
+        participants: [COACH, 'p_uid'],
+        readers: [COACH, 'p_uid', 'g_uid'],
+      })
+    );
+  });
+});
+
 describe('notification mutes', () => {
   test('a mute lives under its owner’s uid and nobody else can reach it', async () => {
     await seed();

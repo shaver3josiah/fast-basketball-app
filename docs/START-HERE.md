@@ -111,57 +111,24 @@ hand-edit.
 
 ### A8. Invite the first family
 
-Families create their own accounts now — Blake invites them by email, and signing up
-claims the slot he set aside. He still creates the athlete record, because that record
-is what the security rules use to decide who anyone is.
+Do this **in the app**, not in the Firebase console. Sign in as Blake, go to the
+**You** tab, and tap **Add or manage athletes**.
 
-**Firestore Database → Start collection** → ID `athletes` → auto-ID document:
+Fill in the athlete's name and age, the parent's name and email, and the athlete's
+email. Tap **Add athlete**.
 
-| Field | Type | Value |
-| --- | --- | --- |
-| `guardianEmail` | string | the parent's email, **lowercase** |
-| `playerEmail` | string | the athlete's email, **lowercase** |
-| `guardianUid` | string | leave **empty** — the parent's signup fills it |
-| `playerUid` | string | leave **empty** — the athlete's signup fills it |
-| `guardianName` | string | e.g. `Denise Alvarez` |
-| `playerName` | string | e.g. `Marcus Alvarez` |
-| `age` | number | e.g. `15` |
+> **Under 13:** leave the athlete's email blank. They get no login and the family shares
+> the parent's account. COPPA attaches below 13, and this is the cheapest compliant
+> path.
 
-Leave `consentGrantedAt` out entirely. The parent grants it in the app, and the rules
-reject the coach setting it.
+The roster then shows each person as **Invited** until they sign up, and **Signed up**
+once they have. When the parent has an account, an **Open threads** button appears —
+tap it and the conversations are created with the right people in them.
 
-> **Under 13:** do not give the athlete a login. Put the parent's address in
-> `guardianEmail` and leave `playerEmail` out. COPPA attaches below 13, and the
-> cheapest compliant path is that younger families share the parent's account.
-
-Then the two threads. Copy the athlete document's auto-ID first.
-
-Collection `threads`, document ID `t_player`:
-
-| Field | Type | Value |
-| --- | --- | --- |
-| `athleteId` | string | the athlete doc ID |
-| `kind` | string | `coach-player` |
-| `title` | string | `Coach Kingsley ↔ Marcus` |
-| `participants` | array | Blake's UID, the athlete's UID |
-| `readers` | array | Blake's UID, the athlete's UID, **the parent's UID** |
-
-Document `t_parent`:
-
-| Field | Type | Value |
-| --- | --- | --- |
-| `athleteId` | string | the athlete doc ID |
-| `kind` | string | `coach-parent` |
-| `title` | string | `Coach Kingsley ↔ Denise` |
-| `participants` | array | Blake's UID, the parent's UID |
-| `readers` | array | Blake's UID, the parent's UID |
-
-The parent's UID **must** be in `readers` on `t_player`. That is the monitoring
-guarantee, and the rules reject a thread without it.
-
-> Threads need real UIDs, so create them **after** the family has signed up and claimed
-> their slots — the UIDs appear on the athlete record once they do. A roster screen that
-> does all of this for Blake is not built.
+That button waits on purpose. Threads are permanent once created, and the parent's
+account has to exist before she can be written into the readers list that makes the
+coach↔athlete conversation visible to her. Opening them early would produce a thread
+she could never be added to.
 
 ### A9. What the family does
 
