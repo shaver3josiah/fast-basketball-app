@@ -39,7 +39,9 @@
     "set-coach-uid": "node scripts/set-coach-uid.mjs",
     "test:period": "node --experimental-strip-types scripts/check-period.mjs",
     "test:messages": "firebase emulators:exec --project fast-basketball-messages-test --only firestore --config firebase/firebase.json \"node --test firebase/test/messages.test.mjs\"",
-    "use-cloud": "node scripts/use-cloud.mjs"
+    "use-cloud": "node scripts/use-cloud.mjs",
+    "web:coach": "expo start --web --port 8081",
+    "web:player": "expo start --web --port 8082"
   },
   "private": true
 }

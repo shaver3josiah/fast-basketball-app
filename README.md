@@ -75,6 +75,28 @@ Sign in as the parent, flip *Training consent* on the You tab, and the athlete's
 composer unlocks — live, without either client restarting. That is the whole product in
 thirty seconds.
 
+### Two sessions at once, for testing
+
+Firebase Auth keeps its session per ORIGIN, so two tabs on the same port are one login —
+signing in as the coach in one signs you in as the coach in both. Two ports are two
+origins, and therefore two independent sessions.
+
+Terminal 1 — the coach:
+
+```bash
+npm run web:coach
+```
+
+Terminal 2 — the parent or athlete:
+
+```bash
+npm run web:player
+```
+
+Then `http://localhost:8081` and `http://localhost:8082`. Both talk to the same backend,
+so a message sent in one appears in the other with no refresh. (An incognito window
+against a single server works too, and needs no second terminal.)
+
 ### Proving the two platforms really do talk
 
 Run the app twice against the same emulator — an iOS simulator and an Android emulator,
