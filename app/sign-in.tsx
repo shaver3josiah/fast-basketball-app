@@ -2,13 +2,14 @@ import { useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
-import { Redirect } from 'expo-router';
+import { Link, Redirect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSession } from '../src/session';
 import { isConfigured } from '../src/firebase';
@@ -111,6 +112,12 @@ export default function SignIn() {
         <View style={{ height: 18 }} />
         <Button label="Sign in" onPress={submit} busy={busy} disabled={!email || !password} />
 
+        <Link href="/sign-up" asChild>
+          <Pressable accessibilityRole="link" style={s.linkRow}>
+            <Text style={s.link}>New here? Create your account</Text>
+          </Pressable>
+        </Link>
+
         <Text style={s.foot}>
           Trouble getting in? Text Coach Kingsley at (503) 686-8371.
         </Text>
@@ -168,5 +175,7 @@ const s = StyleSheet.create({
     marginBottom: 8,
   },
   noticeText: { color: color.textBody, fontSize: 12.5, lineHeight: 18 },
-  foot: { ...type.meta, marginTop: 26, textAlign: 'center' },
+  linkRow: { minHeight: 44, justifyContent: 'center', alignItems: 'center', marginTop: 18 },
+  link: { color: color.redHot, fontSize: 14, fontWeight: '700' },
+  foot: { ...type.meta, marginTop: 14, textAlign: 'center' },
 });

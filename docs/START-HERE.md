@@ -109,19 +109,72 @@ once more so the rules pick up the change.
 sees no threads and no roster. That is exactly why there is a script instead of a
 hand-edit.
 
-### A8. Add the first family
+### A8. Invite the first family
 
-The app does not have a signup flow — Blake creates accounts. For each family:
+Families create their own accounts now — Blake invites them by email, and signing up
+claims the slot he set aside. He still creates the athlete record, because that record
+is what the security rules use to decide who anyone is.
 
-1. **Authentication → Users → Add user** for the parent, and again for the athlete.
-2. **Firestore → Start collection `athletes`** → add a document with fields
-   `guardianUid`, `playerUid`, `playerName`, `guardianName`, `age`.
-   Leave `consentGrantedAt` **out** — the parent grants it in the app.
-3. Create the two threads in `threads` following the shape in
-   [`scripts/seed.mjs`](../scripts/seed.mjs). The guardian's UID **must** be in the
-   `readers` array of the coach↔athlete thread; the rules reject a thread without it.
+**Firestore Database → Start collection** → ID `athletes` → auto-ID document:
 
-> A roster screen for the coach would replace this hand-entry. It is not built.
+| Field | Type | Value |
+| --- | --- | --- |
+| `guardianEmail` | string | the parent's email, **lowercase** |
+| `playerEmail` | string | the athlete's email, **lowercase** |
+| `guardianUid` | string | leave **empty** — the parent's signup fills it |
+| `playerUid` | string | leave **empty** — the athlete's signup fills it |
+| `guardianName` | string | e.g. `Denise Alvarez` |
+| `playerName` | string | e.g. `Marcus Alvarez` |
+| `age` | number | e.g. `15` |
+
+Leave `consentGrantedAt` out entirely. The parent grants it in the app, and the rules
+reject the coach setting it.
+
+> **Under 13:** do not give the athlete a login. Put the parent's address in
+> `guardianEmail` and leave `playerEmail` out. COPPA attaches below 13, and the
+> cheapest compliant path is that younger families share the parent's account.
+
+Then the two threads. Copy the athlete document's auto-ID first.
+
+Collection `threads`, document ID `t_player`:
+
+| Field | Type | Value |
+| --- | --- | --- |
+| `athleteId` | string | the athlete doc ID |
+| `kind` | string | `coach-player` |
+| `title` | string | `Coach Kingsley ↔ Marcus` |
+| `participants` | array | Blake's UID, the athlete's UID |
+| `readers` | array | Blake's UID, the athlete's UID, **the parent's UID** |
+
+Document `t_parent`:
+
+| Field | Type | Value |
+| --- | --- | --- |
+| `athleteId` | string | the athlete doc ID |
+| `kind` | string | `coach-parent` |
+| `title` | string | `Coach Kingsley ↔ Denise` |
+| `participants` | array | Blake's UID, the parent's UID |
+| `readers` | array | Blake's UID, the parent's UID |
+
+The parent's UID **must** be in `readers` on `t_player`. That is the monitoring
+guarantee, and the rules reject a thread without it.
+
+> Threads need real UIDs, so create them **after** the family has signed up and claimed
+> their slots — the UIDs appear on the athlete record once they do. A roster screen that
+> does all of this for Blake is not built.
+
+### A9. What the family does
+
+1. Open the app, tap **New here? Create your account**.
+2. Sign up with **the same address Blake put on the athlete record**. A different
+   address creates an account that matches no invitation, and the app says so plainly
+   rather than showing an empty screen.
+3. Open the confirmation email and click the link.
+4. Sign in. The app attaches them to their athlete automatically.
+
+Confirming the address is not optional politeness — it is the security of the whole
+step. Without it, anyone who knew a client's email could claim their place and read a
+minor's conversation.
 
 ---
 

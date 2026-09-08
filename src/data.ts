@@ -109,6 +109,47 @@ export function subscribeAthletes(
   );
 }
 
+/**
+ * The athlete record this email was invited to, if any slot is still unclaimed.
+ *
+ * A brand-new account matches none of the uid fields yet, so it cannot be found the
+ * usual way. The rules let a VERIFIED account read the one record naming its own
+ * address, which is exactly what these two queries ask for.
+ */
+export async function findInvite(
+  email: string
+): Promise<{ athleteId: string; field: 'guardianUid' | 'playerUid' } | null> {
+  for (const [emailField, uidField] of [
+    ['guardianEmail', 'guardianUid'],
+    ['playerEmail', 'playerUid'],
+  ] as const) {
+    try {
+      const snap = await getDocs(
+        query(collection(db, 'athletes'), where(emailField, '==', email.toLowerCase()))
+      );
+      const open = snap.docs.find((d) => (d.data() as Athlete)[uidField] === '');
+      if (open) return { athleteId: open.id, field: uidField };
+    } catch (e) {
+      // A denial here is normal: an address with no invitation matches nothing.
+      console.warn(`[fastbb] invite lookup on ${emailField} failed:`, e);
+    }
+  }
+  return null;
+}
+
+/**
+ * Attach this account to the slot it was invited to. The rules allow it only when the
+ * caller's email is verified, matches the invitation, the slot is still empty, and the
+ * uid written is the caller's own — so this can be called optimistically.
+ */
+export function claimInvite(
+  athleteId: string,
+  field: 'guardianUid' | 'playerUid',
+  uid: string
+) {
+  return updateDoc(doc(db, 'athletes', athleteId), { [field]: uid });
+}
+
 export const hasConsent = (a: Athlete | null | undefined): boolean =>
   Boolean(a && a.consentGrantedAt);
 

@@ -10,8 +10,16 @@ export type Role = 'coach' | 'parent' | 'player';
 
 export interface Athlete {
   id: string;
+  /**
+   * '' until the invited person signs up and claims the slot. The coach sets the
+   * matching *Email field; the rules let exactly one verified account with that
+   * address write its own uid here, exactly once.
+   */
   guardianUid: string;
   playerUid: string;
+  /** Who the coach invited. Claiming requires a VERIFIED account at this address. */
+  guardianEmail?: string;
+  playerEmail?: string;
   /** Absent OR null both mean "no consent". Only the guardian can write it. */
   consentGrantedAt?: Timestamp | null;
   playerName: string;

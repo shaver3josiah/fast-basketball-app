@@ -30,15 +30,40 @@ service cloud.firestore {
     // errors out in rules, so the `in` check has to come first.
     function consentOn(a) { return 'consentGrantedAt' in a && a.consentGrantedAt != null; }
 
+    // A family member attaching their own account to the slot the coach invited by
+    // email. Used by /athletes update; see the comment there for why each term exists.
+    function claimsSlot(uidField, emailField) {
+      return isSignedIn()
+        && request.auth.token.email_verified == true
+        && changed().hasOnly([uidField])
+        && emailField in resource.data
+        && resource.data[emailField] == request.auth.token.email
+        && resource.data[uidField] == ''
+        && request.resource.data[uidField] == request.auth.uid;
+    }
+
     function changed() { return request.resource.data.diff(resource.data).affectedKeys(); }
 
     // ---------------------------------------------------------------
     // Athletes — the consent record itself
     // ---------------------------------------------------------------
     match /athletes/{aid} {
+      // An invited family member has no uid on the record yet, so they cannot be
+      // recognised the usual way. They may read the ONE record that names their own
+      // verified email address, which is how the app finds the slot to claim.
+      // `in` first: reading a key that is not there is an error, not a false.
+      function invitedHere() {
+        return isSignedIn() && request.auth.token.email_verified == true
+          && (('guardianEmail' in resource.data
+                && resource.data.guardianEmail == request.auth.token.email)
+              || ('playerEmail' in resource.data
+                && resource.data.playerEmail == request.auth.token.email));
+      }
+
       allow read: if isCoach()
                   || resource.data.guardianUid == request.auth.uid
-                  || resource.data.playerUid   == request.auth.uid;
+                  || resource.data.playerUid   == request.auth.uid
+                  || invitedHere();
 
       // AUDIT FIX (major): create previously had no validation, so the coach could
       // create an athlete with consentGrantedAt already set — pre-granting the
@@ -70,7 +95,18 @@ service cloud.firestore {
               || request.resource.data.consentGrantedAt is timestamp))
         ||
         (isCoach()
-          && !changed().hasAny(['consentGrantedAt', 'guardianUid', 'playerUid']));
+          && !changed().hasAny(['consentGrantedAt', 'guardianUid', 'playerUid']))
+        ||
+        // Claiming an invited slot. This is the ONLY path by which a non-coach writes
+        // a uid onto an athlete record, and it is deliberately narrow:
+        //   - the email must be VERIFIED. Without that, anyone who knows a client's
+        //     address could claim their slot before they do and read a minor's
+        //     messages. Verification is the whole security of this branch.
+        //   - the slot must be empty. A claimed slot can never be reassigned by a
+        //     client, only by the coach clearing it first, so a claim cannot be stolen.
+        //   - the uid written must be the caller's own.
+        //   - nothing else may change in the same write.
+        (claimsSlot('guardianUid', 'guardianEmail') || claimsSlot('playerUid', 'playerEmail'));
     }
 
     // ---------------------------------------------------------------

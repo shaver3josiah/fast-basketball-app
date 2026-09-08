@@ -1,12 +1,21 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import {
   onAuthStateChanged,
+  sendEmailVerification,
   signInWithEmailAndPassword,
   signOut as fbSignOut,
   type User,
 } from 'firebase/auth';
 import { auth } from './firebase';
-import { resolveRole, subscribeAthlete, subscribeAthletes, subscribePrefs, hasConsent } from './data';
+import {
+  resolveRole,
+  subscribeAthlete,
+  subscribeAthletes,
+  subscribePrefs,
+  hasConsent,
+  findInvite,
+  claimInvite,
+} from './data';
 import type { Athlete, Role, UserPrefs } from './types';
 
 interface Session {
@@ -21,6 +30,11 @@ interface Session {
   /** False until auth has reported in and the role lookup has finished. */
   ready: boolean;
   consent: boolean;
+  /** Signed in, but the address has not been confirmed yet — nothing will resolve. */
+  needsVerification: boolean;
+  /** Signed in and verified, but no athlete record names this address. */
+  notInvited: boolean;
+  resendVerification: () => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
 }
@@ -51,8 +65,25 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     }
     setReady(false);
     resolveRole(user.uid)
-      .then(({ role: r, athlete: a }) => {
+      .then(async ({ role: r, athlete: a }) => {
         if (cancelled) return;
+        // A freshly verified account still holds a token minted before verification,
+        // and the rules read email_verified off that token — so without refreshing it
+        // the claim is denied for a user who has genuinely just clicked the link.
+        if (!a && r !== 'coach' && user.emailVerified) {
+          await user.getIdToken(true).catch(() => {});
+          const invite = await findInvite(user.email ?? '');
+          if (invite && !cancelled) {
+            await claimInvite(invite.athleteId, invite.field, user.uid).catch((e) =>
+              console.warn('[fastbb] claim failed:', e)
+            );
+            const again = await resolveRole(user.uid);
+            if (cancelled) return;
+            setRole(again.role);
+            setAthlete(again.athlete);
+            return;
+          }
+        }
         setRole(r);
         setAthlete(a);
       })
@@ -89,6 +120,11 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       prefs,
       ready,
       consent: hasConsent(athlete),
+      needsVerification: Boolean(user && !user.emailVerified),
+      notInvited: Boolean(user && user.emailVerified && role !== 'coach' && !athlete),
+      resendVerification: async () => {
+        if (auth.currentUser) await sendEmailVerification(auth.currentUser);
+      },
       signIn: async (email, password) => {
         await signInWithEmailAndPassword(auth, email.trim(), password);
       },

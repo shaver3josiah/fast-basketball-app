@@ -262,6 +262,11 @@ await commit([
     {
       guardianUid: PARENT,
       playerUid: PLAYER,
+      // The addresses the coach invited. A signup only attaches to an athlete when a
+      // VERIFIED account with the matching address claims an empty uid slot — these two
+      // are already claimed here, so the demo can sign straight in.
+      guardianEmail: 'parent@fastbasketball.test',
+      playerEmail: 'player@fastbasketball.test',
       playerName: 'Marcus Alvarez',
       guardianName: 'Denise Alvarez',
       age: 15,

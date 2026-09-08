@@ -85,6 +85,8 @@ async function seed({ consent = false } = {}) {
   await env.withSecurityRulesDisabled(async (ctx) => {
     const db = ctx.firestore();
     await setDoc(doc(db, 'athletes', ATHLETE), {
+      guardianEmail: 'denise@example.com',
+      playerEmail: 'marcus@example.com',
       guardianUid: PARENT,
       playerUid: PLAYER,
       playerName: 'Marcus Alvarez',
@@ -552,6 +554,125 @@ describe('submissions on a cadence', () => {
     // The guardian can, and that is deliberate — she files for a minor who cannot.
     // Pinned so removing it is a decision, not an accident.
     await assertSucceeds(sub(PARENT, W36, week));
+  });
+});
+
+describe('claiming an invited slot', () => {
+  const INVITED = 'athlete_unclaimed';
+  const G_MAIL = 'newparent@example.com';
+  const P_MAIL = 'newplayer@example.com';
+
+  /** The coach invites a family by email; both uid slots start empty. */
+  async function invite() {
+    await env.clearFirestore();
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'athletes', INVITED), {
+        guardianEmail: G_MAIL,
+        playerEmail: P_MAIL,
+        guardianUid: '',
+        playerUid: '',
+        guardianName: 'New Parent',
+        playerName: 'New Player',
+      });
+    });
+  }
+
+  /** A signed-in context carrying an email token, as a password account does. */
+  const asEmail = (uid, email, verified = true) =>
+    env.authenticatedContext(uid, { email, email_verified: verified }).firestore();
+
+  test('an invited guardian finds the record naming their email', async () => {
+    await invite();
+    await assertSucceeds(
+      getDocs(
+        query(collection(asEmail('new_p', G_MAIL), 'athletes'), where('guardianEmail', '==', G_MAIL))
+      )
+    );
+  });
+
+  test('an invited guardian claims the empty slot', async () => {
+    await invite();
+    await assertSucceeds(
+      updateDoc(doc(asEmail('new_p', G_MAIL), 'athletes', INVITED), { guardianUid: 'new_p' })
+    );
+  });
+
+  test('an unverified email cannot claim — this is the whole security of the branch', async () => {
+    await invite();
+    await assertFails(
+      updateDoc(
+        doc(asEmail('imposter', G_MAIL, false), 'athletes', INVITED),
+        { guardianUid: 'imposter' }
+      )
+    );
+  });
+
+  test('a stranger cannot claim a slot invited to someone else', async () => {
+    await invite();
+    await assertFails(
+      updateDoc(
+        doc(asEmail('stranger', 'someone@else.com'), 'athletes', INVITED),
+        { guardianUid: 'stranger' }
+      )
+    );
+    await assertFails(getDoc(doc(asEmail('stranger', 'someone@else.com'), 'athletes', INVITED)));
+  });
+
+  test('a claimed slot cannot be stolen', async () => {
+    await invite();
+    await assertSucceeds(
+      updateDoc(doc(asEmail('new_p', G_MAIL), 'athletes', INVITED), { guardianUid: 'new_p' })
+    );
+    // Same invited address, different account: the slot is no longer empty.
+    await assertFails(
+      updateDoc(doc(asEmail('thief', G_MAIL), 'athletes', INVITED), { guardianUid: 'thief' })
+    );
+  });
+
+  test('a claimer cannot write a uid that is not their own', async () => {
+    await invite();
+    await assertFails(
+      updateDoc(doc(asEmail('new_p', G_MAIL), 'athletes', INVITED), { guardianUid: 'somebody_else' })
+    );
+  });
+
+  test('the guardian email cannot claim the PLAYER slot', async () => {
+    await invite();
+    await assertFails(
+      updateDoc(doc(asEmail('new_p', G_MAIL), 'athletes', INVITED), { playerUid: 'new_p' })
+    );
+  });
+
+  test('a claim cannot smuggle anything else through', async () => {
+    await invite();
+    await assertFails(
+      updateDoc(doc(asEmail('new_p', G_MAIL), 'athletes', INVITED), {
+        guardianUid: 'new_p',
+        consentGrantedAt: new Date(),
+      })
+    );
+    await assertFails(
+      updateDoc(doc(asEmail('new_p', G_MAIL), 'athletes', INVITED), {
+        guardianUid: 'new_p',
+        playerName: 'Renamed',
+      })
+    );
+  });
+
+  test('the player claims their own slot independently', async () => {
+    await invite();
+    await assertSucceeds(
+      updateDoc(doc(asEmail('new_a', P_MAIL), 'athletes', INVITED), { playerUid: 'new_a' })
+    );
+  });
+
+  test('claiming does not grant consent — the gate still starts closed', async () => {
+    await invite();
+    await assertSucceeds(
+      updateDoc(doc(asEmail('new_a', P_MAIL), 'athletes', INVITED), { playerUid: 'new_a' })
+    );
+    const a = await getDoc(doc(asEmail('new_a', P_MAIL), 'athletes', INVITED));
+    assert.equal(a.data().consentGrantedAt, undefined, 'a claimed athlete must start unconsented');
   });
 });
 

@@ -7,6 +7,7 @@ import { useSession } from '../../src/session';
 import { subscribeThreads } from '../../src/data';
 import { color, semantic } from '../../src/theme';
 import { Loading } from '../../src/ui';
+import { Pending } from '../../src/Pending';
 
 /** Unread is approximated by "threads you can see" until read receipts exist.
  *  ponytail: a real per-thread lastRead pointer is a schema change and a rules change.
@@ -22,11 +23,14 @@ function useThreadCount() {
 }
 
 export default function TabsLayout() {
-  const { user, ready } = useSession();
+  const { user, ready, needsVerification, notInvited } = useSession();
   const threads = useThreadCount();
 
   if (!ready) return <Loading />;
   if (!user) return <Redirect href="/sign-in" />;
+  // Signed in, but nothing will resolve: the address is unconfirmed, or the coach has
+  // not invited it. Showing empty tabs here reads as a broken app.
+  if (needsVerification || notInvited) return <Pending />;
 
   return (
     <Tabs
