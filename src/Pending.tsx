@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Platform, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSession } from './session';
+import { COACH_UID, backend } from './firebase';
 import { Button } from './ui';
 import { color, semantic, type } from './theme';
 
@@ -72,6 +73,30 @@ export function Pending() {
       )}
 
       <View style={{ flex: 1 }} />
+
+      {/* The account's own id. This screen is where someone lands when the app cannot
+          work out who they are, and that is exactly when the id is worth showing: the
+          coach pastes it into set-coach-uid, and a parent can read it out for support.
+          Without it the only way to find a uid is the Firebase console. */}
+      <View style={s.diag}>
+        <Text style={s.diagLabel}>Your account id</Text>
+        <Text selectable style={s.diagValue}>
+          {user?.uid ?? '—'}
+        </Text>
+        {COACH_UID && user?.uid && user.uid !== COACH_UID ? (
+          <Text style={s.diagNote}>
+            This app is set up with a different account as the coach. If this is meant to be
+            Coach Kingsley's login, that id needs to be the one in the app's configuration.
+          </Text>
+        ) : null}
+        {!COACH_UID ? (
+          <Text style={s.diagNote}>
+            No coach account is configured at all, so nobody can be recognised as the coach.
+          </Text>
+        ) : null}
+        <Text style={s.diagNote}>Backend: {backend.label}</Text>
+      </View>
+
       <Button label="Sign out" onPress={signOut} />
     </View>
   );
@@ -83,4 +108,24 @@ const s = StyleSheet.create({
   h1: { fontSize: 30, fontWeight: '900', color: color.bone, letterSpacing: -0.5, marginBottom: 12 },
   body: { ...type.body, fontSize: 16, lineHeight: 23, marginBottom: 16 },
   small: { ...type.meta, lineHeight: 18 },
+  diag: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: semantic.border,
+    paddingTop: 14,
+    marginBottom: 16,
+  },
+  diagLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+    color: color.textLabel,
+    marginBottom: 4,
+  },
+  diagValue: {
+    fontSize: 12.5,
+    color: color.textDim,
+    fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' }),
+  },
+  diagNote: { ...type.meta, fontSize: 11.5, lineHeight: 16, marginTop: 8 },
 });
