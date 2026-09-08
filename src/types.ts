@@ -60,12 +60,27 @@ export interface Workflow {
   publishedBy: string;
   publishedAt: Timestamp | null;
   sizeBytes: number;
+  /**
+   * How often the athlete fills this in. Absent means 'once', so every workflow
+   * published before cadences existed keeps its single saved document.
+   * The agreement asks for a weekly game evaluation, a quarterly report and a
+   * per-session journal — each needs its own submission, not an overwrite.
+   */
+  cadence?: import('./period').Cadence;
 }
 
-/** The athlete's answers — never a second copy of the coach's HTML. */
+/**
+ * One submission: the athlete's answers, never a second copy of the coach's HTML.
+ * Document id is `{workflowId}` for a one-off and `{workflowId}__{periodKey}` for a
+ * repeating one — see src/period.ts.
+ */
 export interface SavedWorkflow {
   answers: Record<string, string | boolean | number>;
   updatedAt: Timestamp | null;
+  /** Denormalised from the document id so a submission can be listed without parsing it. */
+  workflowId?: string;
+  /** '' for a one-off. '2026-W36', '2026-Q3', '2026-09-05' otherwise. */
+  periodKey?: string;
 }
 
 /**

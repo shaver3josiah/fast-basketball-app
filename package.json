@@ -36,7 +36,8 @@
     "emulators": "firebase emulators:start --project fast-basketball-dev --config firebase/firebase.json",
     "typecheck": "tsc --noEmit",
     "seed": "node scripts/seed.mjs",
-    "set-coach-uid": "node scripts/set-coach-uid.mjs"
+    "set-coach-uid": "node scripts/set-coach-uid.mjs",
+    "test:period": "node --experimental-strip-types scripts/check-period.mjs"
   },
   "private": true
 }

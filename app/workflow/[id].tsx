@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Platform, StyleSheet, Text, View } from 'react-native';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -6,23 +6,35 @@ import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 import * as Linking from 'expo-linking';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../src/firebase';
-import { useSession } from '../../src/session';
-import { saveWorkflowAnswers, subscribeSavedWorkflows } from '../../src/data';
+import { useSession, useNames } from '../../src/session';
+import { saveWorkflowAnswers, subscribeSubmissions } from '../../src/data';
+import { periodLabel, submissionId } from '../../src/period';
 import { COLLECT_SCRIPT, bridgeScript } from '../../src/workflowBridge';
 import type { SavedWorkflow, Workflow } from '../../src/types';
 import { Button, Loading } from '../../src/ui';
 import { color, semantic, type } from '../../src/theme';
 
 export default function WorkflowScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
-  const { athlete, role } = useSession();
+  const { id, athlete: athleteParam, sid } = useLocalSearchParams<{
+    id: string;
+    athlete?: string;
+    sid?: string;
+  }>();
+  const { role, athlete, athletesById } = useSession();
+  const names = useNames();
   const insets = useSafeAreaInsets();
   const webRef = useRef<WebView>(null);
 
   const [workflow, setWorkflow] = useState<Workflow | null | undefined>(undefined);
-  const [saved, setSaved] = useState<SavedWorkflow | undefined>();
+  const [submissions, setSubmissions] = useState<Record<string, SavedWorkflow> | null>(null);
+  const [seed, setSeed] = useState<Record<string, unknown> | undefined>();
   const [seeded, setSeeded] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
+
+  // Whose submission are we looking at? The coach arrives with an explicit athlete;
+  // a family only ever has its own.
+  const targetAthleteId = athleteParam || athlete?.id || '';
+  const targetAthlete = athletesById[targetAthleteId] ?? athlete;
 
   useEffect(() => {
     if (!id) return;
@@ -32,17 +44,41 @@ export default function WorkflowScreen() {
   }, [id]);
 
   useEffect(() => {
-    if (!athlete?.id) {
-      setSeeded(true);
+    if (!targetAthleteId) {
+      setSubmissions({});
       return;
     }
-    return subscribeSavedWorkflows(athlete.id, (all) => {
-      // Seed the WebView from the saved answers exactly once. Re-injecting on every
-      // snapshot would stomp on whatever the athlete is typing right now.
-      setSaved((prev) => prev ?? all[id!]);
-      setSeeded(true);
-    });
-  }, [athlete?.id, id]);
+    return subscribeSubmissions(targetAthleteId, setSubmissions);
+  }, [targetAthleteId]);
+
+  const cadence = workflow?.cadence ?? 'once';
+
+  // With no sid, open the CURRENT period — that is what "fill in this week's evaluation"
+  // means. With one, open exactly that submission, which may be a past period.
+  const openId = useMemo(
+    () => sid || (workflow ? submissionId(workflow.id, cadence, new Date()) : ''),
+    [sid, workflow?.id, cadence]
+  );
+
+  useEffect(() => {
+    if (!submissions || !openId) return;
+    // Seed the WebView once. Re-injecting on every snapshot would stomp on whatever the
+    // athlete is typing right now.
+    setSeed((prev) => prev ?? submissions[openId]?.answers ?? {});
+    setSeeded(true);
+  }, [submissions, openId]);
+
+  const current = submissions?.[openId];
+  const isCurrentPeriod = !sid || (workflow ? openId === submissionId(workflow.id, cadence, new Date()) : false);
+
+  /**
+   * The coach reads submissions; he never authors them. A family may write its own
+   * athlete's answers — the parent as well as the athlete, because under-13s are meant
+   * to use the guardian's account rather than have a login of their own.
+   * Past periods are read-only: last week's evaluation is a record, not a draft.
+   */
+  const mayWrite =
+    role !== 'coach' && targetAthleteId === athlete?.id && !!targetAthleteId && isCurrentPeriod;
 
   function onMessage(e: WebViewMessageEvent) {
     let payload: { type?: string; answers?: Record<string, string | boolean | number> };
@@ -51,9 +87,9 @@ export default function WorkflowScreen() {
     } catch {
       return; // Not ours. The page is the coach's HTML and may post anything.
     }
-    if (payload.type !== 'wfstate' || !athlete?.id || !id) return;
-    saveWorkflowAnswers(athlete.id, id, payload.answers ?? {})
-      .then(() => setStatus('Saved to your workflows'))
+    if (payload.type !== 'wfstate' || !targetAthleteId || !workflow) return;
+    saveWorkflowAnswers(targetAthleteId, workflow, payload.answers ?? {}, new Date())
+      .then(() => setStatus('Saved'))
       .catch(() => setStatus('Could not save. Check your connection.'));
   }
 
@@ -67,13 +103,22 @@ export default function WorkflowScreen() {
     );
   }
 
+  const period = periodLabel(cadence, current?.periodKey ?? (sid ? '' : ''));
+  const heading = period ? `${workflow.name} · ${period}` : workflow.name;
+
   return (
     <View style={s.page}>
       <Stack.Screen options={{ title: workflow.name }} />
 
       <View style={s.bar}>
         <View style={s.live} />
-        <Text style={s.barText}>Rendered in-app · sandboxed · no download</Text>
+        <Text style={s.barText} numberOfLines={1}>
+          {role === 'coach' && targetAthlete
+            ? `${targetAthlete.playerName} · read only`
+            : mayWrite
+              ? 'Rendered in-app · sandboxed · no download'
+              : 'Read only'}
+        </Text>
       </View>
 
       <WebView
@@ -93,11 +138,11 @@ export default function WorkflowScreen() {
         allowFileAccessFromFileURLs={false}
         allowUniversalAccessFromFileURLs={false}
         setSupportMultipleWindows={false}
-        injectedJavaScript={bridgeScript(saved?.answers)}
+        injectedJavaScript={bridgeScript(seed)}
         onMessage={onMessage}
         onShouldStartLoadWithRequest={(req) => {
           // The initial render is about:blank / the baseUrl. Anything else is a link
-          // the athlete tapped: hand it to the system browser and stay put.
+          // someone tapped: hand it to the system browser and stay put.
           if (req.url === 'about:blank' || req.url.startsWith('https://localhost/')) return true;
           Linking.openURL(req.url).catch(() => {});
           return false;
@@ -107,14 +152,9 @@ export default function WorkflowScreen() {
 
       <View style={[s.saveBar, { paddingBottom: Math.max(insets.bottom, 12) }]}>
         <Text style={s.hint} accessibilityLiveRegion="polite">
-          {status ??
-            (role === 'coach'
-              ? 'Athletes fill this in; their answers save to their own account.'
-              : saved
-                ? 'Saved earlier — pick up where you left off.'
-                : 'Your answers save to your account, not the coach’s file.')}
+          {status ?? hintFor({ role, mayWrite, isCurrentPeriod, saved: !!current, heading, names })}
         </Text>
-        {role !== 'coach' && (
+        {mayWrite && (
           <Button
             label="Save"
             onPress={() => {
@@ -126,6 +166,27 @@ export default function WorkflowScreen() {
       </View>
     </View>
   );
+}
+
+function hintFor({
+  role,
+  mayWrite,
+  isCurrentPeriod,
+  saved,
+  heading,
+  names,
+}: {
+  role: string;
+  mayWrite: boolean;
+  isCurrentPeriod: boolean;
+  saved: boolean;
+  heading: string;
+  names: { player: string };
+}): string {
+  if (role === 'coach') return `${heading} — the athlete's own answers.`;
+  if (!isCurrentPeriod) return `${heading}. Past entries are a record, not a draft.`;
+  if (!mayWrite) return `${names.player.split(' ')[0]}’s answers. You can read them, not change them.`;
+  return saved ? 'Saved earlier — pick up where you left off.' : 'Your answers save to your account, not the coach’s file.';
 }
 
 const s = StyleSheet.create({
@@ -141,6 +202,7 @@ const s = StyleSheet.create({
   },
   live: { width: 7, height: 7, borderRadius: 4, backgroundColor: color.miamiTeal },
   barText: {
+    flex: 1,
     fontSize: 10.5,
     fontWeight: '700',
     letterSpacing: 0.9,

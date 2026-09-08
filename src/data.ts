@@ -15,6 +15,7 @@ import {
   type Unsubscribe,
 } from 'firebase/firestore';
 import { db, COACH_UID } from './firebase';
+import { parseSubmissionId, periodKey, submissionId } from './period';
 import type {
   Athlete,
   Message,
@@ -214,7 +215,13 @@ export function subscribeWorkflows(cb: (w: Workflow[]) => void): Unsubscribe {
   );
 }
 
-export function subscribeSavedWorkflows(
+/**
+ * Every submission this athlete has made, keyed by SUBMISSION id — which is the
+ * workflow id for a one-off and `{workflowId}__{periodKey}` for a repeating one.
+ * Callers that want "the submissions for workflow X" should filter on `workflowId`
+ * rather than look up by workflow id, or they will miss every repeat.
+ */
+export function subscribeSubmissions(
   athleteId: string,
   cb: (s: Record<string, SavedWorkflow>) => void
 ): Unsubscribe {
@@ -222,24 +229,61 @@ export function subscribeSavedWorkflows(
     collection(db, 'athletes', athleteId, 'savedWorkflows'),
     (snap) => {
       const out: Record<string, SavedWorkflow> = {};
-      snap.docs.forEach((d) => (out[d.id] = d.data() as SavedWorkflow));
+      snap.docs.forEach((d) => {
+        const data = d.data() as SavedWorkflow;
+        // Submissions written before workflowId existed as a field carry it in the id.
+        out[d.id] = { ...data, ...(data.workflowId ? {} : parseSubmissionId(d.id)) };
+      });
       cb(out);
     },
     err('savedWorkflows')
   );
 }
 
-/** The athlete's answers, never a second copy of the coach's HTML. */
+/**
+ * The coach's view across the roster. One listener per athlete rather than a
+ * collection-group query, which would need its own rules block and a composite index.
+ * ponytail: fine for one trainer. If the roster reaches the dozens, denormalise a
+ * lastSubmissionAt onto the athlete doc and open submissions on demand.
+ */
+export function subscribeRosterSubmissions(
+  athleteIds: string[],
+  cb: (byAthlete: Record<string, Record<string, SavedWorkflow>>) => void
+): Unsubscribe {
+  const acc: Record<string, Record<string, SavedWorkflow>> = {};
+  const unsubs = athleteIds.map((aid) =>
+    subscribeSubmissions(aid, (subs) => {
+      acc[aid] = subs;
+      cb({ ...acc });
+    })
+  );
+  return () => unsubs.forEach((u) => u());
+}
+
+/**
+ * Save one submission. The answers are the athlete's; the coach's HTML is never copied.
+ *
+ * The cadence decides whether this overwrites or files a new document: a weekly game
+ * evaluation saved on two different weeks must not collide, and the same evaluation
+ * saved twice in one week must.
+ */
 export function saveWorkflowAnswers(
   athleteId: string,
-  workflowId: string,
-  answers: Record<string, string | boolean | number>
+  workflow: Pick<Workflow, 'id' | 'cadence'>,
+  answers: Record<string, string | boolean | number>,
+  now: Date
 ) {
-  return setDoc(doc(db, 'athletes', athleteId, 'savedWorkflows', workflowId), {
+  const cadence = workflow.cadence ?? 'once';
+  const sid = submissionId(workflow.id, cadence, now);
+  return setDoc(doc(db, 'athletes', athleteId, 'savedWorkflows', sid), {
     // The rule caps this at 200 keys; truncating here turns a would-be permission
     // error into a save that works, on a document nobody will ever fill that far.
     answers: Object.fromEntries(Object.entries(answers).slice(0, 200)),
     updatedAt: serverTimestamp(),
+    // Both are required together: the rule pins the id to these, so a client cannot
+    // file this week's evaluation under a different week.
+    workflowId: workflow.id,
+    periodKey: periodKey(cadence, now),
   });
 }
 

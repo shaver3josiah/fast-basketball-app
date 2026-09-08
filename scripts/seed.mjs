@@ -307,11 +307,16 @@ await commit([
       publishedBy: 'Coach Kingsley',
       publishedAt: daysAgo(5, 11, 0),
       sizeBytes: w.sizeBytes,
+      // Decides whether a save overwrites or files a new submission. The weekly game
+      // evaluation and the quarterly report are obligations in the signed agreement,
+      // and each needs its own document or it destroys the previous one.
+      cadence: w.cadence,
     },
   ]),
 ]);
 console.log(
-  `  wrote    1 athlete, 2 threads, ${MESSAGES.length} messages, ${events.length} events, 3 workflows`
+  `  wrote    1 athlete, 2 threads, ${MESSAGES.length} messages, ${events.length} events, ` +
+    `${workflowDocs().length} workflows`
 );
 
 // --- read back -------------------------------------------------------------
@@ -332,12 +337,30 @@ for (const [path, want] of [
   [`threads/${T_PLAYER}/messages`, 4],
   [`threads/${T_PARENT}/messages`, 5],
   ['events', events.length],
-  ['workflows', 3],
+  ['workflows', workflowDocs().length],
 ]) {
   const got = await count(path);
   if (got !== want) fail(`${path}: expected ${want} docs, read back ${got}`);
 }
 if ('consentGrantedAt' in athlete.fields) fail('consent is NOT off on the athlete doc');
+
+// Every workflow must carry a cadence. Without one the app treats it as 'once', so a
+// weekly game evaluation would overwrite last week's instead of filing a new one — the
+// exact data loss the submission work exists to prevent, and silent if unchecked.
+const published = (await call(`${DOCS}/workflows?pageSize=100`)).documents ?? [];
+for (const d of published) {
+  const id = d.name.split('/').pop();
+  const cadence = d.fields?.cadence?.stringValue;
+  if (!cadence) fail(`workflow ${id} has no cadence`);
+  else if (!['once', 'daily', 'weekly', 'quarterly'].includes(cadence))
+    fail(`workflow ${id} has an unknown cadence "${cadence}"`);
+}
+console.log(
+  `  cadences ${published
+    .map((d) => `${d.name.split('/').pop()}:${d.fields?.cadence?.stringValue ?? '??'}`)
+    .sort()
+    .join('  ')}`
+);
 const readers = (await call(`${DOCS}/threads/${T_PLAYER}`)).fields.readers.arrayValue.values.map(
   (v) => v.stringValue
 );

@@ -29,6 +29,34 @@ const field = (k, label, type) => {
   return `<section><h2>${esc(label)}</h2>${input}</section>`;
 };
 
+const textInput = (k, label, placeholder) =>
+  `<section><h2>${esc(label)}</h2><input type="text" data-k="${k}" placeholder="${esc(placeholder)}"></section>`;
+
+const dateInput = (k, label) =>
+  `<section><h2>${esc(label)}</h2><input type="date" data-k="${k}"></section>`;
+
+const numInput = (k, label, min, max, placeholder) =>
+  `<section><h2>${esc(label)}</h2>` +
+  `<input type="number" data-k="${k}" min="${min}" max="${max}" placeholder="${esc(placeholder)}"></section>`;
+
+/** The one number Blake's whole promise turns on, so it gets its own box. */
+const headline = (k, label, hint) =>
+  `<div class="big"><h2>${esc(label)}</h2>` +
+  `<input type="number" data-k="${k}" min="0" max="48" placeholder="0">` +
+  `<p style="font-size:.8rem;color:#5a3438;margin-top:8px">${esc(hint)}</p></div>`;
+
+/** Several 0-10 rows under one heading. */
+const ratings = (title, items) =>
+  `<section><h2>${esc(title)}</h2>` +
+  items
+    .map(
+      ([k, labelText]) =>
+        `<label class="rr"><span>${esc(labelText)}</span>` +
+        `<input type="number" data-k="${k}" min="0" max="10" placeholder="0–10"></label>`
+    )
+    .join('') +
+  '</section>';
+
 const spotTable = () => {
   const spots = [
     'Left corner',
@@ -64,7 +92,7 @@ const CSS = [
   '.chk{display:flex;gap:10px;align-items:flex-start;padding:9px 0;cursor:pointer;font-size:.9rem}',
   '.chk input{width:19px;height:19px;flex:none;margin-top:1px;accent-color:#E60C20;cursor:pointer}',
   '.chk input:checked+span{color:#8a8a95;text-decoration:line-through}',
-  'textarea,input[type=number]{width:100%;font:inherit;font-size:.88rem;padding:9px 11px;border:1px solid #d8d4cd;border-radius:7px;background:#FAFAF8;color:#1a1a20}',
+  'textarea,input[type=number],input[type=text],input[type=date]{width:100%;font:inherit;font-size:.88rem;padding:9px 11px;border:1px solid #d8d4cd;border-radius:7px;background:#FAFAF8;color:#1a1a20}',
   'textarea:focus,input:focus{outline:2px solid #E60C20;outline-offset:1px;border-color:#E60C20}',
   'table{width:100%;border-collapse:collapse}',
   'th{text-align:left;font-size:.68rem;text-transform:uppercase;letter-spacing:.1em;color:#6C6C78;padding:0 0 7px}',
@@ -72,6 +100,12 @@ const CSS = [
   'td{padding:4px 0;font-size:.86rem;border-top:1px solid #F0EDE8}',
   'td:not(:first-child){padding-left:8px}',
   'td input{padding:7px 9px;text-align:center}',
+  '.rr{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid #F0EDE8}',
+  '.rr span{flex:1;font-size:.88rem}',
+  '.rr input{width:78px;flex:none;text-align:center;padding:7px 9px}',
+  '.big{background:#FDF1F2;border:1px solid #E60C20;border-radius:8px;padding:12px;margin-bottom:20px}',
+  '.big h2{border:0;padding:0;margin-bottom:8px;color:#E60C20}',
+  '.big input{font-size:1.3rem;font-weight:700;text-align:center;width:110px}',
   '.tot{margin-top:12px;font-size:.85rem;font-weight:700;color:#E60C20}',
   '.foot{margin-top:26px;padding-top:14px;border-top:1px solid #E7E3DC;font-size:.72rem;color:#9C9CA9;text-align:center}',
 ].join('');
@@ -141,6 +175,72 @@ const BODIES = {
       field('rpe', 'How did the body feel today? (1 dead — 10 fresh)', 'number'),
     script: '',
   },
+  w4: {
+    name: 'Weekly Game Evaluation',
+    cadence: 'weekly',
+    body:
+      '<h1>Weekly Game Evaluation</h1><p class="by">Fast Basketball · Blake Kingsley</p>' +
+      '<p class="note">Fill this in after the game, not on Sunday night from memory. ' +
+      'Honest numbers or it is worth nothing to either of us.</p>' +
+      headline(
+        'minutes',
+        'Minutes played',
+        'This is the number we are moving. Bench to rotation is 8 minutes becoming 15.'
+      ) +
+      textInput('opponent', 'Who did you play?', 'Opponent') +
+      dateInput('gamedate', 'What day was the game?') +
+      ratings('The box score', [
+        ['pts', 'Points'],
+        ['reb', 'Rebounds'],
+        ['ast', 'Assists'],
+        ['tov', 'Turnovers'],
+      ]) +
+      ratings('Rate yourself, 0 to 10', [
+        ['r_effort', 'Effort — did you empty the tank?'],
+        ['r_decisions', 'Decisions — right read, right time?'],
+        ['r_defense', 'Defence — on the ball and off it'],
+        ['r_composure', 'Composure after a mistake'],
+      ]) +
+      field('coachsaid', 'What did your team coach tell you?', 'textarea') +
+      field('onething', 'One thing you would do differently', 'textarea'),
+    script: '',
+  },
+  w5: {
+    name: 'Quarterly Progress Report',
+    cadence: 'quarterly',
+    body:
+      '<h1>Quarterly Progress Report</h1><p class="by">Fast Basketball · Blake Kingsley</p>' +
+      '<p class="note">Three months of work, looked at straight. Write what happened, ' +
+      'not what you meant to happen.</p>' +
+      ratings('Minutes per game', [
+        ['min_start', 'Where you started this quarter'],
+        ['min_now', 'Where you are now'],
+      ]) +
+      field('goalset', 'What did we set out to fix this quarter?', 'textarea') +
+      field('goalmet', 'Did you fix it? Say how you know.', 'textarea') +
+      field('improved', 'What got better that you can point to', 'textarea') +
+      field('stuck', 'What is still stuck', 'textarea') +
+      block('The standards, honestly', [
+        'I was on time, 15 minutes early, every session',
+        'I brought my journal and filled it in',
+        'I did the work between sessions, not just at sessions',
+        'I was coachable when the correction was hard to hear',
+      ]) +
+      field('nextgoal', 'What are we fixing next quarter?', 'textarea'),
+    script: '',
+  },
+  w6: {
+    name: 'Session Journal',
+    cadence: 'daily',
+    body:
+      '<h1>Session Journal</h1><p class="by">Fast Basketball · Blake Kingsley</p>' +
+      '<p class="note">Two minutes, before you leave the court. While it is still fresh.</p>' +
+      textInput('worked', 'What did we work on?', 'Ball handling, finishing…') +
+      field('clicked', 'What clicked?', 'textarea') +
+      field('didnt', 'What did not?', 'textarea') +
+      numInput('effort', 'Your effort today, 1 to 10', 1, 10, '1–10'),
+    script: '',
+  },
   w3: {
     name: 'Shooting Log — 200 Makes',
     body:
@@ -153,7 +253,7 @@ const BODIES = {
 };
 
 export function workflowDocs() {
-  return Object.entries(BODIES).map(([id, { name, body, script }]) => {
+  return Object.entries(BODIES).map(([id, { name, body, script, cadence }]) => {
     const html =
       '<!doctype html><meta charset="utf-8">' +
       '<meta name="viewport" content="width=device-width,initial-scale=1">' +
@@ -162,11 +262,13 @@ export function workflowDocs() {
       '<p class="foot">Uploaded by Coach Kingsley · rendered inside Fast Basketball</p>' +
       (script ? '<script>' + script + '</scr' + 'ipt>' : '') +
       '</body>';
-    return { id, name, html, sizeBytes: Buffer.byteLength(html, 'utf8') };
+    // Absent cadence means 'once' — the three original documents keep one saved copy.
+    return { id, name, html, cadence: cadence ?? 'once', sizeBytes: Buffer.byteLength(html, 'utf8') };
   });
 }
 
 // Run directly (`node scripts/workflow-docs.mjs`) to print a size report.
 if (process.argv[1] && process.argv[1].replace(/\\/g, '/').endsWith('workflow-docs.mjs')) {
-  for (const d of workflowDocs()) console.log(`${d.id}  ${d.name}  —  ${d.sizeBytes} bytes`);
+  for (const d of workflowDocs())
+    console.log(`${d.id}  ${d.name.padEnd(30)} ${d.cadence.padEnd(10)} ${d.sizeBytes} bytes`);
 }

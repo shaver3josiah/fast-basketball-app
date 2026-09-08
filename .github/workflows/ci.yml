@@ -40,6 +40,13 @@ jobs:
       # so this also provides the `firebase` binary used by npm run test:rules.
       - run: npm ci
 
+      # src/period.ts decides which document a submission saves to. Its ISO-week edge
+      # cases (a Sunday and the Monday after are different weeks; 1 Jan can belong to
+      # last year's week 53) are exactly the kind of thing that silently merges two
+      # weeks of game evaluations into one.
+      - name: Period key self-check
+        run: npm run test:period
+
       - name: Typecheck
         run: npx tsc --noEmit
 

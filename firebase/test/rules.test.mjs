@@ -393,6 +393,168 @@ describe('the Locker', () => {
   });
 });
 
+describe('submissions on a cadence', () => {
+  // Ids are written out as literals on purpose: this suite tests the RULES, so it must
+  // not borrow src/period.ts to build the very ids the rules are supposed to pin.
+  const W36 = 'w4__2026-W36';
+  const W37 = 'w4__2026-W37';
+  const sub = (uid, sid, data) =>
+    setDoc(doc(as(uid), 'athletes', ATHLETE, 'savedWorkflows', sid), data);
+  const submissions = (uid) => getDocs(collection(as(uid), 'athletes', ATHLETE, 'savedWorkflows'));
+
+  test('a one-off still saves under the bare workflow id', async () => {
+    await seed();
+    // Written before cadences existed: no workflowId, no periodKey.
+    await assertSucceeds(sub(PLAYER, 'w1', { answers: { 'Week 10': true }, updatedAt: new Date() }));
+    // And the new client's one-off, which carries an empty period.
+    await assertSucceeds(
+      sub(PLAYER, 'w1', {
+        answers: { 'Week 10': true },
+        updatedAt: new Date(),
+        workflowId: 'w1',
+        periodKey: '',
+      })
+    );
+  });
+
+  test('a repeating submission saves under {workflowId}__{periodKey}', async () => {
+    await seed();
+    await assertSucceeds(
+      sub(PLAYER, W36, {
+        answers: { shooting: '7' },
+        updatedAt: new Date(),
+        workflowId: 'w4',
+        periodKey: '2026-W36',
+      })
+    );
+  });
+
+  test('two weeks of the same evaluation coexist — this is the bug', async () => {
+    await seed();
+    await assertSucceeds(
+      sub(PLAYER, W36, {
+        answers: { shooting: '7' },
+        updatedAt: new Date(),
+        workflowId: 'w4',
+        periodKey: '2026-W36',
+      })
+    );
+    await assertSucceeds(
+      sub(PLAYER, W37, {
+        answers: { shooting: '9' },
+        updatedAt: new Date(),
+        workflowId: 'w4',
+        periodKey: '2026-W37',
+      })
+    );
+    const snap = await assertSucceeds(submissions(PLAYER));
+    const byId = Object.fromEntries(snap.docs.map((d) => [d.id, d.data()]));
+    assert.deepEqual(Object.keys(byId).sort(), [W36, W37]);
+    assert.equal(byId[W36].answers.shooting, '7');
+    assert.equal(byId[W37].answers.shooting, '9');
+  });
+
+  test('re-saving the same week overwrites it rather than piling up', async () => {
+    await seed();
+    const week = (shooting) => ({
+      answers: { shooting },
+      updatedAt: new Date(),
+      workflowId: 'w4',
+      periodKey: '2026-W36',
+    });
+    await assertSucceeds(sub(PLAYER, W36, week('7')));
+    await assertSucceeds(sub(PLAYER, W36, week('8')));
+    const snap = await assertSucceeds(submissions(PLAYER));
+    assert.equal(snap.size, 1);
+    assert.equal(snap.docs[0].data().answers.shooting, '8');
+  });
+
+  test('the id is pinned — a week cannot be refiled as another week', async () => {
+    await seed();
+    await assertFails(
+      sub(PLAYER, W37, {
+        answers: { shooting: '2' },
+        updatedAt: new Date(),
+        workflowId: 'w4',
+        periodKey: '2026-W36',
+      })
+    );
+    await assertFails(
+      sub(PLAYER, W37, {
+        answers: { shooting: '2' },
+        updatedAt: new Date(),
+        workflowId: 'w9',
+        periodKey: '2026-W37',
+      })
+    );
+  });
+
+  test('a workflowId with no periodKey cannot claim a suffixed id', async () => {
+    await seed();
+    // Looks like an odd case, and is: the rule builds workflowId + '__' + periodKey, and
+    // reading a key that is not there errors out in rules — which denies. The deny is the
+    // point, so it is pinned here rather than left to luck.
+    await assertFails(
+      sub(PLAYER, W36, { answers: { shooting: '7' }, updatedAt: new Date(), workflowId: 'w4' })
+    );
+  });
+
+  test('extra fields are rejected on a submission too', async () => {
+    await seed();
+    await assertFails(
+      sub(PLAYER, W36, {
+        answers: { shooting: '7' },
+        updatedAt: new Date(),
+        workflowId: 'w4',
+        periodKey: '2026-W36',
+        gradedBy: COACH,
+      })
+    );
+  });
+
+  test('the 200-key cap survives the new shape', async () => {
+    await seed();
+    const tooMany = Object.fromEntries(Array.from({ length: 201 }, (_, i) => [`k${i}`, true]));
+    await assertFails(
+      sub(PLAYER, W36, {
+        answers: tooMany,
+        updatedAt: new Date(),
+        workflowId: 'w4',
+        periodKey: '2026-W36',
+      })
+    );
+  });
+
+  test('the guardian reads a submission — monitoring extends to assigned forms', async () => {
+    await seed();
+    const week = {
+      answers: { shooting: '7' },
+      updatedAt: new Date(),
+      workflowId: 'w4',
+      periodKey: '2026-W36',
+    };
+    await assertSucceeds(sub(PLAYER, W36, week));
+    await assertSucceeds(getDoc(doc(as(PARENT), 'athletes', ATHLETE, 'savedWorkflows', W36)));
+    await assertSucceeds(getDoc(doc(as(COACH), 'athletes', ATHLETE, 'savedWorkflows', W36)));
+    await assertFails(getDoc(doc(as(STRANGER), 'athletes', ATHLETE, 'savedWorkflows', W36)));
+  });
+
+  test('the coach cannot author a submission, and the guardian still can', async () => {
+    await seed();
+    const week = {
+      answers: { shooting: '7' },
+      updatedAt: new Date(),
+      workflowId: 'w4',
+      periodKey: '2026-W36',
+    };
+    // The coach is the monitored party: he reads answers, he never writes them.
+    await assertFails(sub(COACH, W36, week));
+    // The guardian can, and that is deliberate — she files for a minor who cannot.
+    // Pinned so removing it is a decision, not an accident.
+    await assertSucceeds(sub(PARENT, W36, week));
+  });
+});
+
 describe('notification mutes', () => {
   test('a mute lives under its owner’s uid and nobody else can reach it', async () => {
     await seed();

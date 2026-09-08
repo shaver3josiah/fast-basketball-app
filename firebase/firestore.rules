@@ -174,15 +174,30 @@ service cloud.firestore {
     }
 
     // An athlete's own filled-in answers — never a second copy of the coach's HTML.
-    match /athletes/{aid}/savedWorkflows/{wid} {
+    //
+    // The document id is `{workflowId}` for a one-off and `{workflowId}__{periodKey}`
+    // for anything the agreement asks for on a cadence (weekly game evaluations,
+    // quarterly reports, the per-session journal). One document per workflow would make
+    // each week's evaluation overwrite the last, destroying the record it exists to
+    // create. workflowId and periodKey are carried as fields too so a submission can be
+    // listed without parsing its id.
+    match /athletes/{aid}/savedWorkflows/{sid} {
+      // The guardian reads these for the same reason she reads every message in the
+      // coach<->athlete thread: without it, a form the coach assigns a minor and reads
+      // back is an unmonitored channel. The athlete is told this in the UI.
       allow read: if isCoach() || isGuardian(aid) || isPlayer(aid);
 
       // The coach reads progress but does not author it. Answers stay the athlete's.
       // Bounded so a client cannot use its own progress doc as free storage.
       allow create, update: if (isGuardian(aid) || isPlayer(aid))
-        && request.resource.data.keys().hasOnly(['answers', 'updatedAt'])
+        && request.resource.data.keys().hasOnly(['answers', 'updatedAt', 'workflowId', 'periodKey'])
         && request.resource.data.answers is map
-        && request.resource.data.answers.size() <= 200;
+        && request.resource.data.answers.size() <= 200
+        // Pin the submission to the document it claims to be, so a client cannot file a
+        // week's evaluation under another week and rewrite history.
+        && (!('workflowId' in request.resource.data)
+            || sid == request.resource.data.workflowId
+            || sid == request.resource.data.workflowId + '__' + request.resource.data.periodKey);
       allow delete: if isGuardian(aid) || isPlayer(aid);
     }
 
