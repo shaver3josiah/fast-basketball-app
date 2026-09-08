@@ -120,7 +120,11 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       prefs,
       ready,
       consent: hasConsent(athlete),
-      needsVerification: Boolean(user && !user.emailVerified),
+      // The coach is exempt. His identity is the uid constant inside firestore.rules,
+      // not his address, so verification proves nothing about him — and an account the
+      // owner created in the Firebase console is unverified by default, which would
+      // have locked Blake out of his own app on first sign-in.
+      needsVerification: Boolean(user && !user.emailVerified && role !== 'coach'),
       notInvited: Boolean(user && user.emailVerified && role !== 'coach' && !athlete),
       resendVerification: async () => {
         if (auth.currentUser) await sendEmailVerification(auth.currentUser);
