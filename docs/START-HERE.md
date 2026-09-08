@@ -30,6 +30,9 @@ that. This gives it a real backend.
 [console.firebase.google.com](https://console.firebase.google.com) → **Add project** →
 name it `fast-basketball`. Analytics can be off.
 
+> Already done — the project is **`fast-basketball-b3ebe`** (Firebase appends a suffix
+> to make the id globally unique). That full id is what the deploy commands below use.
+
 ### A2. Turn on email sign-in
 
 **Build → Authentication → Get started → Email/Password → Enable → Save.**
@@ -58,6 +61,17 @@ Copy-Item "C:\Users\shave\Documents\Claude\Projects\Fast Basketball\fast-basketb
 Open that `.env`, comment out the two emulator lines at the top, and paste your six
 values into the `EXPO_PUBLIC_FIREBASE_*` slots.
 
+**Then delete `.env.local` if it exists.** `npm run seed` writes that file to point the
+app at the local emulator, and Expo loads `.env.local` at a HIGHER precedence than
+`.env` — so leaving it in place means your real project is read, ignored, and the app
+quietly keeps talking to an emulator that is not even running:
+
+```powershell
+Remove-Item "C:\Users\shave\Documents\Claude\Projects\Fast Basketball\fast-basketball-app\.env.local" -ErrorAction SilentlyContinue
+```
+
+Going back to the emulator later is just `npm run seed`, which recreates it.
+
 `.env` is gitignored. None of it is secret anyway — a Firebase web config is public by
 design, and the security rules are what actually protect the data.
 
@@ -76,7 +90,7 @@ npx firebase login
 ```
 
 ```powershell
-npx firebase deploy --only firestore:rules --project fast-basketball --config firebase/firebase.json
+npx firebase deploy --only firestore:rules --project fast-basketball-b3ebe --config firebase/firebase.json
 ```
 
 ### A7. Create Blake's account and point the rules at it
