@@ -70,7 +70,18 @@ quietly keeps talking to an emulator that is not even running:
 Remove-Item "C:\Users\shave\Documents\Claude\Projects\Fast Basketball\fast-basketball-app\.env.local" -ErrorAction SilentlyContinue
 ```
 
-Going back to the emulator later is just `npm run seed`, which recreates it.
+Going back to the emulator later is just `npm run seed`, which recreates it — and to
+come back to your real project afterwards:
+
+```powershell
+npm run use-cloud
+```
+
+Worth knowing, because it is the most likely thing to confuse you later: `npm run seed`
+always writes `.env.local`, and `.env.local` outlives the emulator it points at. Seed
+once, stop the emulator, and the app fails to connect on every launch after that. The
+seed now says so in red when it shadows a real project, and the sign-in screen says
+which backend it is using.
 
 `.env` is gitignored. None of it is secret anyway — a Firebase web config is public by
 design, and the security rules are what actually protect the data.

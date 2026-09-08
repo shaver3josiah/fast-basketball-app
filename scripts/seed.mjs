@@ -387,11 +387,32 @@ const envBody =
 const envIsOurs = !existsSync(ENV) || readFileSync(ENV, 'utf8').startsWith(MARK);
 if (envIsOurs) writeFileSync(ENV, envBody, 'utf8');
 
+// That guard watches .env.local and misses the case that actually bites: a real .env
+// exists, and the .env.local just written SHADOWS it, because Expo loads .env.local
+// first. The app then points at an emulator that stops when this script does, and the
+// only symptom is a connection failure that names nothing. Say so, loudly.
+const REAL_ENV = join(ROOT, '.env');
+const realProject = existsSync(REAL_ENV)
+  ? (readFileSync(REAL_ENV, 'utf8').match(/^EXPO_PUBLIC_FIREBASE_PROJECT_ID=(.+)$/m)?.[1] ?? '').trim()
+  : '';
+const shadowed = envIsOurs && realProject;
+
 const L = (s = '') => console.log(s);
 L('\n' + '-'.repeat(72));
 L('  SIGN IN — same password for all three');
 L();
 for (const u of USERS) L(`    ${u.email.padEnd(28)} ${PASSWORD}   ${u.displayName}`);
+L();
+if (shadowed) {
+  L();
+  L('  ' + '!'.repeat(68));
+  L(`  THE APP NOW POINTS AT THE EMULATOR, NOT ${realProject}.`);
+  L('  .env.local shadows .env, and it outlives this emulator. When the emulator');
+  L('  stops, the app fails to connect and nothing on screen says why.');
+  L();
+  L('      npm run use-cloud     <- switch back when you are done demoing');
+  L('  ' + '!'.repeat(68));
+}
 L();
 L(`  COACH UID: ${COACH}`);
 L('    - firebase/firestore.rules  coachUid()   <- set by this script');

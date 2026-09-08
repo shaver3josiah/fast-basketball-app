@@ -12,7 +12,7 @@ import {
 import { Link, Redirect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSession } from '../src/session';
-import { isConfigured } from '../src/firebase';
+import { backend, isConfigured } from '../src/firebase';
 import { Button } from '../src/ui';
 import { color, radius, semantic, type } from '../src/theme';
 
@@ -63,6 +63,16 @@ export default function SignIn() {
         <Text style={s.wordmark}>FAST</Text>
         <Text style={s.sub}>BASKETBALL</Text>
         <Text style={s.lede}>Coach, parent, and athlete — one place. Sign in with the account Coach Kingsley set up for you.</Text>
+
+        {backend.kind === 'emulator' && (
+          <View style={s.notice}>
+            <Text style={s.noticeText}>
+              Pointing at the LOCAL EMULATOR, not your Firebase project. If sign-in fails to
+              connect, either start it with `npm run emulators` or run `npm run use-cloud` to
+              switch back.
+            </Text>
+          </View>
+        )}
 
         {!isConfigured && (
           <View style={s.notice}>

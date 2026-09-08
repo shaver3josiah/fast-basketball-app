@@ -32,6 +32,18 @@ const firebaseConfig = {
 
 const USE_EMULATOR = process.env.EXPO_PUBLIC_USE_EMULATOR === '1';
 
+/**
+ * Which backend this build talks to, so the UI can say so.
+ *
+ * `npm run seed` writes .env.local to point the app at the local emulator, and Expo
+ * loads .env.local ahead of .env. Run the seed once on a machine with a real project
+ * configured and every later launch silently targets an emulator — which, when it is
+ * not running, surfaces only as "connection failed" with nothing naming the cause.
+ */
+export const backend = USE_EMULATOR
+  ? ({ kind: 'emulator', label: 'local emulator' } as const)
+  : ({ kind: 'cloud', label: firebaseConfig.projectId ?? 'unconfigured' } as const);
+
 /** Blake's Auth uid. The same constant is hard-coded in firestore.rules — the rules are
  *  the enforcement, this is only so the UI knows which screens to draw. */
 export const COACH_UID = process.env.EXPO_PUBLIC_COACH_UID ?? '';
@@ -73,4 +85,8 @@ if (USE_EMULATOR) {
     process.env.EXPO_PUBLIC_EMULATOR_HOST ?? (Platform.OS === 'android' ? '10.0.2.2' : '127.0.0.1');
   connectAuthEmulator(auth, `http://${host}:9099`, { disableWarnings: true });
   connectFirestoreEmulator(db, host, 8080);
+  console.warn(
+    `[fastbb] Using the LOCAL EMULATOR at ${host} (EXPO_PUBLIC_USE_EMULATOR=1). ` +
+      'Delete .env.local — or run `npm run use-cloud` — to talk to the real project.'
+  );
 }
