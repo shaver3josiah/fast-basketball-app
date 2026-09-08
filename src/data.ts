@@ -140,11 +140,57 @@ export function subscribeThreads(uid: string, cb: (t: Thread[]) => void): Unsubs
   );
 }
 
-export function subscribeMessages(threadId: string, cb: (m: Message[]) => void): Unsubscribe {
+/**
+ * The most recent `max` messages, oldest-first for rendering.
+ *
+ * Ordered DESCENDING and reversed rather than ascending, which matters more than it
+ * looks: `orderBy('createdAt','asc') + limit(500)` returns the OLDEST 500, so a thread
+ * that ever passed 500 messages would freeze — every new message falls outside the
+ * window and never arrives.
+ *
+ * `serverTimestamps: 'estimate'` fills in a local estimate for a message that is still
+ * in flight. Without it a just-sent message reads back with createdAt === null, which
+ * sorts unpredictably and makes your own message jump around the thread until the
+ * server confirms it. The final sort is done here, on the estimates, so the order on
+ * screen never depends on how the query treated a pending write.
+ */
+export function subscribeMessages(
+  threadId: string,
+  cb: (m: Message[]) => void,
+  max = 200
+): Unsubscribe {
   return onSnapshot(
-    query(collection(db, 'threads', threadId, 'messages'), orderBy('createdAt', 'asc'), limit(500)),
-    (snap) => cb(snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Message)),
+    query(collection(db, 'threads', threadId, 'messages'), orderBy('createdAt', 'desc'), limit(max)),
+    (snap) => {
+      const msgs = snap.docs.map(
+        (d) => ({ id: d.id, ...d.data({ serverTimestamps: 'estimate' }) }) as Message
+      );
+      msgs.sort((a, b) => (a.createdAt?.toMillis() ?? 0) - (b.createdAt?.toMillis() ?? 0));
+      cb(msgs);
+    },
     err('messages')
+  );
+}
+
+/**
+ * Just the newest message, for a thread row's preview line.
+ *
+ * The list used to subscribe to every message in every thread and take the last one —
+ * up to 500 document reads per thread, per cold start, to draw two lines of text. On
+ * Firestore's free tier that was comfortably the largest thing on the bill. This reads
+ * exactly one.
+ */
+export function subscribeLastMessage(
+  threadId: string,
+  cb: (m: Message | null) => void
+): Unsubscribe {
+  return onSnapshot(
+    query(collection(db, 'threads', threadId, 'messages'), orderBy('createdAt', 'desc'), limit(1)),
+    (snap) => {
+      const d = snap.docs[0];
+      cb(d ? ({ id: d.id, ...d.data({ serverTimestamps: 'estimate' }) } as Message) : null);
+    },
+    err('lastMessage')
   );
 }
 

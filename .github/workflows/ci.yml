@@ -53,5 +53,10 @@ jobs:
       # emulators:exec starts Firestore, runs node --test against the rules, and
       # tears the emulator down again. The security rules are the whole authorization
       # model here, so this is the test suite that matters.
+      # Query shape, not rules: that a busy thread still shows its newest message, and
+      # that a thread-row preview reads one document instead of the whole thread.
+      - name: Message window tests
+        run: npm run test:messages
+
       - name: Firestore rules tests
         run: npm run test:rules

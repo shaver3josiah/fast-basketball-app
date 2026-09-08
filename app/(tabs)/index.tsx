@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSession, useNames } from '../../src/session';
-import { subscribeThreads, subscribeMessages } from '../../src/data';
+import { subscribeThreads, subscribeLastMessage } from '../../src/data';
 import type { Message, Thread } from '../../src/types';
 import { Avatar, Banner, Empty, Eyebrow, Screen, Tag } from '../../src/ui';
 import { color, radius, semantic, type } from '../../src/theme';
@@ -82,9 +82,9 @@ function ThreadRow({
   const names = useNames(thread.athleteId);
   const [last, setLast] = useState<Message | null>(null);
 
-  // One extra listener per thread. With two threads that is nothing; if a roster ever
-  // makes it dozens, denormalise a lastMessage field onto the thread doc instead.
-  useEffect(() => subscribeMessages(thread.id, (m) => setLast(m[m.length - 1] ?? null)), [thread.id]);
+  // One listener per thread, reading exactly one document each. If a roster ever makes
+  // that dozens of listeners, denormalise a lastMessage field onto the thread doc.
+  useEffect(() => subscribeLastMessage(thread.id, setLast), [thread.id]);
 
   // A parent watching the coach<->player thread is a reader, not a participant.
   const monitoring = role === 'parent' && !thread.participants.includes(user?.uid ?? '');
