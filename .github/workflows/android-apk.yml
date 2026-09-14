@@ -41,6 +41,34 @@ jobs:
 
       - run: npm ci
 
+      # .env is gitignored, and EXPO_PUBLIC_* is INLINED INTO THE BUNDLE at build time.
+      # Without this the binary ships with no Firebase config at all: it installs, opens,
+      # and dead-ends on "unconfigured" -- a build nobody can sign in to. None of these
+      # values is a secret (a Firebase web config ships inside every copy of the app and
+      # firebase/firestore.rules is what protects the data); they live in a secret only
+      # because that is the one place a gitignored file can be kept in one piece.
+      - name: Write .env
+        env:
+          ENV_FILE: ${{ secrets.ENV_FILE }}
+        run: |
+          set -euo pipefail
+          printf '%s\n' "$ENV_FILE" > .env
+
+          # A missing secret would otherwise produce a perfectly green build of a dead
+          # app. Fail here instead, where the message can name the cause.
+          grep -qE '^EXPO_PUBLIC_FIREBASE_PROJECT_ID=.' .env || {
+            echo "::error::The ENV_FILE secret is missing or has no EXPO_PUBLIC_FIREBASE_PROJECT_ID. See docs/START-HERE.md section A5."; exit 1; }
+          grep -qE '^EXPO_PUBLIC_COACH_UID=.' .env || {
+            echo "::error::ENV_FILE has no EXPO_PUBLIC_COACH_UID -- Blake would not be recognised as the coach in this build. See docs/START-HERE.md section A7."; exit 1; }
+          grep -qE '^EXPO_PUBLIC_USE_EMULATOR=1' .env && {
+            echo "::error::ENV_FILE points at the local emulator. A phone cannot reach it."; exit 1; } || true
+
+          # The bundler reads .env, but exporting them too removes any doubt about which
+          # working directory that lookup happens in.
+          grep -E '^EXPO_PUBLIC_[A-Z0-9_]+=' .env >> "$GITHUB_ENV"
+
+          echo "project $(grep -E '^EXPO_PUBLIC_FIREBASE_PROJECT_ID=' .env | cut -d= -f2)"
+
       # Regenerates android/ from app.json. This hard-fails unless android.package is
       # set in app.json. CI=1 keeps it non-interactive; EXPO_NO_GIT_STATUS=1 stops it
       # bailing out over the working tree it is about to dirty.
