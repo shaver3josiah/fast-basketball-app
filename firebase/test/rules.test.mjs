@@ -757,6 +757,17 @@ describe('notification mutes', () => {
     await assertFails(getDoc(doc(as(COACH), 'users', PARENT)));
   });
 
+  // app/delete-account.tsx deletes exactly this document and then the Auth user.
+  // If the delete rule ever narrows, the in-app deletion App Review requires would
+  // fail at the last step, having already revoked the family’s consent.
+  test('account deletion removes its own prefs, and only its own', async () => {
+    await seed();
+    await assertSucceeds(setDoc(doc(as(PARENT), 'users', PARENT), { mutedThreads: [T_CP] }));
+    await assertFails(deleteDoc(doc(as(PLAYER), 'users', PARENT)));
+    await assertFails(deleteDoc(doc(as(COACH), 'users', PARENT)));
+    await assertSucceeds(deleteDoc(doc(as(PARENT), 'users', PARENT)));
+  });
+
   test('prefs are not a general-purpose bucket', async () => {
     await seed();
     await assertFails(

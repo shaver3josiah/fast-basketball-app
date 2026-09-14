@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSession, useNames } from '../../src/session';
 import { hasConsent, setConsent, setMuted, subscribeThreads } from '../../src/data';
@@ -186,8 +186,36 @@ export default function You() {
         <Body>{user?.email}</Body>
         <View style={{ height: 14 }} />
         <SignOutButton />
+        <LinkRow label="Privacy policy" url="https://fast-basketball.com/privacy" />
+        <LinkRow label="Get help or report a concern" url="https://fast-basketball.com/contact" />
+        {role !== 'coach' && (
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push('/delete-account')}
+            style={s.linkRow}
+          >
+            <Text style={s.danger}>Delete my account</Text>
+          </Pressable>
+        )}
       </Card>
     </Screen>
+  );
+}
+
+/**
+ * App Review wants a privacy policy and a support route reachable from inside the app,
+ * not only from the store listing. Both live on the marketing site, so this opens them
+ * rather than duplicating the copy in two places that would then drift apart.
+ */
+function LinkRow({ label, url }: { label: string; url: string }) {
+  return (
+    <Pressable
+      accessibilityRole="link"
+      onPress={() => Linking.openURL(url)}
+      style={s.linkRow}
+    >
+      <Text style={s.link}>{label}</Text>
+    </Pressable>
   );
 }
 
@@ -227,4 +255,7 @@ const s = StyleSheet.create({
   rosterRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6 },
   rosterName: { fontSize: 14, fontWeight: '700', color: color.chalk, marginBottom: 2 },
   error: { color: color.redHot, fontSize: 13.5, lineHeight: 19, marginBottom: 12 },
+  linkRow: { minHeight: 44, justifyContent: 'center' },
+  link: { color: color.redHot, fontSize: 14, fontWeight: '700' },
+  danger: { color: color.textDim, fontSize: 14, fontWeight: '700' },
 });

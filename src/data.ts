@@ -1,6 +1,7 @@
 import {
   addDoc,
   collection,
+  deleteDoc,
   deleteField,
   doc,
   getDocs,
@@ -459,4 +460,19 @@ export function setMuted(uid: string, prefs: UserPrefs, threadId: string, muted:
     ? Array.from(new Set([...(prefs.mutedThreads ?? []), threadId]))
     : (prefs.mutedThreads ?? []).filter((t) => t !== threadId);
   return setDoc(doc(db, 'users', uid), { ...prefs, mutedThreads: next }, { merge: true });
+}
+
+/**
+ * Delete this account's own preferences document. Called from the account-deletion
+ * flow, which App Store Review Guideline 5.1.1(v) requires any app with a signup
+ * screen to offer.
+ *
+ * It is the ONLY Firestore document an account owns outright, so it is the only one
+ * deletion can remove. Messages are deliberately permanent — they are the record a
+ * guardian is promised, and `allow update, delete: if false` on /threads/{tid}/messages
+ * binds the coach too. The athlete record belongs to the coach. The deletion screen
+ * says both of those in plain words rather than implying a clean sweep.
+ */
+export function deletePrefs(uid: string) {
+  return deleteDoc(doc(db, 'users', uid));
 }
