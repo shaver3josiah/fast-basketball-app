@@ -154,7 +154,7 @@ export default function ThreadScreen() {
               value={draft}
               onChangeText={setDraft}
               placeholder="Message…"
-              placeholderTextColor={color.textLabel}
+              placeholderTextColor={color.textFaint}
               accessibilityLabel="Message"
               multiline
               maxLength={4000}
@@ -247,7 +247,7 @@ const s = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 1,
     textTransform: 'uppercase',
-    color: color.textLabel,
+    color: color.textFaint,
     marginVertical: 14,
   },
   bubble: { maxWidth: '84%', borderRadius: 16, paddingHorizontal: 13, paddingVertical: 10, marginBottom: 8 },
@@ -261,7 +261,7 @@ const s = StyleSheet.create({
   },
   who: { fontSize: 11, fontWeight: '800', color: color.redHot, marginBottom: 3, letterSpacing: 0.4 },
   text: { fontSize: 15, lineHeight: 21, color: color.chalk },
-  stamp: { fontSize: 10.5, color: color.textFaint, marginTop: 5, alignSelf: 'flex-end' },
+  stamp: { fontSize: 10.5, color: color.textLede, marginTop: 5, alignSelf: 'flex-end' },
 
   composer: {
     flexDirection: 'row',
@@ -279,7 +279,7 @@ const s = StyleSheet.create({
     maxHeight: 120,
     backgroundColor: semantic.surfaceInput,
     borderWidth: 1,
-    borderColor: semantic.border,
+    borderColor: semantic.borderStrong,
     borderRadius: radius.pill,
     paddingHorizontal: 16,
     paddingTop: 12,

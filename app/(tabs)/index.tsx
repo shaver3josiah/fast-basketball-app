@@ -121,7 +121,7 @@ function ThreadRow({
         </Text>
         {(monitoring || muted) && (
           <View style={s.tags}>
-            {monitoring && <Tag tone="mon">◉ Monitoring</Tag>}
+            {monitoring && <Tag tone="mon" icon="eye-outline">Monitoring</Tag>}
             {monitoring && <Tag tone="ro">Read only</Tag>}
             {muted && <Tag tone="muted">Muted</Tag>}
           </View>
@@ -148,7 +148,7 @@ const s = StyleSheet.create({
     alignItems: 'flex-start',
     backgroundColor: semantic.surfaceCard,
     borderWidth: 1,
-    borderColor: semantic.border,
+    borderColor: semantic.borderStrong,
     borderRadius: radius.cardLg,
     padding: 13,
     marginBottom: 10,

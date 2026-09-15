@@ -1,5 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { Redirect, Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSession } from '../src/session';
@@ -167,6 +176,7 @@ export default function Schedule() {
   }
 
   return (
+    <KeyboardAvoidingView style={s.page} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
     <ScrollView style={s.page} contentContainerStyle={s.pad} keyboardShouldPersistTaps="handled">
       <Stack.Screen options={{ title: editing ? 'Edit session' : 'Add to the calendar' }} />
 
@@ -247,7 +257,7 @@ export default function Schedule() {
         value={name}
         onChangeText={setName}
         placeholder="Ball handling and finishing"
-        placeholderTextColor={color.textLabel}
+        placeholderTextColor={color.textFaint}
         accessibilityLabel="Session name"
       />
 
@@ -377,7 +387,7 @@ export default function Schedule() {
         value={location}
         onChangeText={setLocation}
         placeholder={HOME_GYM}
-        placeholderTextColor={color.textLabel}
+        placeholderTextColor={color.textFaint}
         accessibilityLabel="Where"
       />
 
@@ -406,7 +416,7 @@ export default function Schedule() {
         value={notes}
         onChangeText={setNotes}
         placeholder="Bring a ball and water. We are outside if the gym is busy."
-        placeholderTextColor={color.textLabel}
+        placeholderTextColor={color.textFaint}
         accessibilityLabel="Notes for the family"
         multiline
       />
@@ -427,6 +437,7 @@ export default function Schedule() {
 
       {editing && <EditActions event={editing} events={events} onDone={() => router.back()} />}
     </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -597,14 +608,14 @@ const s = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 1.4,
     textTransform: 'uppercase',
-    color: color.textLabel,
+    color: color.textFaint,
     marginBottom: 8,
     marginTop: 20,
   },
   input: {
     backgroundColor: semantic.surfaceInput,
     borderWidth: 1,
-    borderColor: semantic.border,
+    borderColor: semantic.borderStrong,
     borderRadius: radius.input,
     color: color.chalk,
     fontSize: 16,
@@ -620,11 +631,11 @@ const s = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    minHeight: 40,
+    minHeight: 44,
     paddingHorizontal: 13,
     borderRadius: radius.pill,
     borderWidth: 1,
-    borderColor: semantic.border,
+    borderColor: semantic.borderStrong,
     backgroundColor: semantic.surfaceCard,
   },
   pillOn: { backgroundColor: color.fastRed, borderColor: color.fastRed },
@@ -639,7 +650,7 @@ const s = StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: radius.card,
     borderWidth: 1,
-    borderColor: semantic.border,
+    borderColor: semantic.borderStrong,
     backgroundColor: semantic.surfaceCard,
   },
   tplOn: { borderColor: color.redHot },
@@ -656,7 +667,7 @@ const s = StyleSheet.create({
     paddingHorizontal: 4,
     borderRadius: radius.card,
     borderWidth: 1,
-    borderColor: semantic.border,
+    borderColor: semantic.borderStrong,
     backgroundColor: semantic.surfaceInput,
   },
   typeLabel: { fontSize: 10.5, fontWeight: '700', color: color.textDim, textAlign: 'center' },
@@ -667,7 +678,7 @@ const s = StyleSheet.create({
     justifyContent: 'space-between',
     backgroundColor: semantic.surfaceInput,
     borderWidth: 1,
-    borderColor: semantic.border,
+    borderColor: semantic.borderStrong,
     borderRadius: radius.card,
     padding: 3,
   },
@@ -675,12 +686,12 @@ const s = StyleSheet.create({
   dayText: { flex: 1, textAlign: 'center', fontSize: 15, fontWeight: '800', color: color.chalk },
 
   time: {
-    minHeight: 40,
+    minHeight: 44,
     justifyContent: 'center',
     paddingHorizontal: 13,
     borderRadius: radius.pill,
     borderWidth: 1,
-    borderColor: semantic.border,
+    borderColor: semantic.borderStrong,
     backgroundColor: semantic.surfaceCard,
   },
   timeOn: { backgroundColor: color.fastRed, borderColor: color.fastRed },
@@ -689,7 +700,7 @@ const s = StyleSheet.create({
   dates: { fontSize: 12.5, color: color.textDim, marginTop: 8, lineHeight: 18 },
 
   blockRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 5 },
-  blockNum: { width: 18, fontSize: 11, fontWeight: '800', color: color.textLabel },
+  blockNum: { width: 18, fontSize: 11, fontWeight: '800', color: color.textFaint },
   blockName: { flex: 1, fontSize: 14, color: color.chalk },
   blockMin: { fontSize: 12, fontWeight: '700', color: color.textDim },
 

@@ -119,7 +119,7 @@ export default function AthleteScreen() {
                     {e.canceled ? ' · Canceled' : ''}
                   </Text>
                 </View>
-                <Ionicons name="chevron-forward" size={16} color={color.textLabel} />
+                <Ionicons name="chevron-forward" size={16} color={color.textFaint} />
               </Pressable>
             );
           })
@@ -171,5 +171,5 @@ const s = StyleSheet.create({
   },
   rowName: { fontSize: 14.5, fontWeight: '600', color: color.chalk },
   rowMeta: { ...type.meta, marginTop: 2 },
-  struck: { textDecorationLine: 'line-through', opacity: 0.45 },
+  struck: { textDecorationLine: 'line-through', color: color.textDim },
 });

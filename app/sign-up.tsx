@@ -115,7 +115,7 @@ export default function SignUp() {
           textContentType="username"
           autoComplete="email"
           placeholder="you@example.com"
-          placeholderTextColor={color.textLabel}
+          placeholderTextColor={color.textFaint}
           accessibilityLabel="Email"
         />
 
@@ -128,7 +128,7 @@ export default function SignUp() {
           textContentType="newPassword"
           autoComplete="new-password"
           placeholder="At least 8 characters"
-          placeholderTextColor={color.textLabel}
+          placeholderTextColor={color.textFaint}
           accessibilityLabel="Password"
           onSubmitEditing={submit}
           returnKeyType="go"
@@ -169,14 +169,14 @@ const s = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 1.4,
     textTransform: 'uppercase',
-    color: color.textLabel,
+    color: color.textFaint,
     marginBottom: 6,
     marginTop: 12,
   },
   input: {
     backgroundColor: semantic.surfaceInput,
     borderWidth: 1,
-    borderColor: semantic.border,
+    borderColor: semantic.borderStrong,
     borderRadius: radius.input,
     color: color.chalk,
     fontSize: 16,

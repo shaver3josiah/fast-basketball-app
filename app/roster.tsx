@@ -266,7 +266,7 @@ function Field({
         value={value}
         onChangeText={onChange}
         placeholder={placeholder}
-        placeholderTextColor={color.textLabel}
+        placeholderTextColor={color.textFaint}
         accessibilityLabel={label}
         autoCapitalize={keyboardType === 'email-address' ? 'none' : 'words'}
         autoCorrect={false}
@@ -300,13 +300,13 @@ const s = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 1.2,
     textTransform: 'uppercase',
-    color: color.textLabel,
+    color: color.textFaint,
     marginBottom: 5,
   },
   input: {
     backgroundColor: semantic.surfaceInput,
     borderWidth: 1,
-    borderColor: semantic.border,
+    borderColor: semantic.borderStrong,
     borderRadius: radius.input,
     color: color.chalk,
     fontSize: 15,

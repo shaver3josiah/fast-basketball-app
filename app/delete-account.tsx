@@ -136,7 +136,7 @@ export default function DeleteAccount() {
           textContentType="password"
           autoComplete="current-password"
           placeholder="Your password"
-          placeholderTextColor={color.textLabel}
+          placeholderTextColor={color.textFaint}
           accessibilityLabel="Password"
           onSubmitEditing={submit}
           returnKeyType="go"
@@ -170,14 +170,14 @@ const s = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 1.4,
     textTransform: 'uppercase',
-    color: color.textLabel,
+    color: color.textFaint,
     marginBottom: 6,
     marginTop: 12,
   },
   input: {
     backgroundColor: semantic.surfaceInput,
     borderWidth: 1,
-    borderColor: semantic.border,
+    borderColor: semantic.borderStrong,
     borderRadius: radius.input,
     color: color.chalk,
     fontSize: 16,

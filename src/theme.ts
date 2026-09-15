@@ -34,6 +34,12 @@ export const color = {
   textDim: '#9C9CA9',
   textFaint: '#82828F',
   textMute: '#75757F',
+  /**
+   * MEASURED FAILING. 3.94:1 on the page, 3.41:1 on a card, 3.22:1 on a pressed row.
+   * There is no surface in this app where it clears AA as normal text, so nothing
+   * uses it. Kept only because the site DS carries it; reach for textFaint instead,
+   * or textDim on anything that also renders on inkHover. `npm run contrast`.
+   */
   textLabel: '#6E6E7C',
 } as const;
 
@@ -52,6 +58,13 @@ export const semantic = {
   actionText: color.redHot,
   focusRing: color.redHot,
   border: color.lineDark,
+  /**
+   * The outline of anything you can press or type into. semantic.border measures
+   * 1.20 to 1.55 against every surface here, which is fine for a divider and not
+   * fine for the only thing marking where a text field is. slate is the dimmest
+   * token that clears 1.4.11 on all five surfaces (3.11 to 3.82).
+   */
+  borderStrong: color.slate,
 } as const;
 
 export const radius = {
@@ -99,7 +112,7 @@ export const type = {
     fontWeight: '700' as const,
     letterSpacing: 1.6,
     textTransform: 'uppercase' as const,
-    color: color.textLabel,
+    color: color.textFaint,
   },
   body: { fontSize: 15, lineHeight: 21, color: color.textBody },
   meta: { fontSize: 12, color: color.textDim },
@@ -108,7 +121,7 @@ export const type = {
 
 /** Avatar tint per role — matches the preview's .av.coach / .parent / .player. */
 export const roleTint = {
-  coach: { bg: 'rgba(230,12,32,0.16)', fg: color.redHot, border: color.redLine },
-  parent: { bg: 'rgba(37,224,208,0.14)', fg: color.miamiTeal, border: color.tealLine },
-  player: { bg: 'rgba(245,243,239,0.12)', fg: color.chalk, border: color.lineDark },
+  coach: { bg: color.redTint, fg: color.redHot, border: color.fastRed },
+  parent: { bg: color.tealTint, fg: color.miamiTeal, border: color.tealLine },
+  player: { bg: 'rgba(245,243,239,0.12)', fg: color.chalk, border: color.chalk2 },
 } as const;

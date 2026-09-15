@@ -94,7 +94,7 @@ export default function SignIn() {
           textContentType="username"
           autoComplete="email"
           placeholder="you@example.com"
-          placeholderTextColor={color.textLabel}
+          placeholderTextColor={color.textFaint}
           accessibilityLabel="Email"
         />
 
@@ -107,7 +107,7 @@ export default function SignIn() {
           textContentType="password"
           autoComplete="current-password"
           placeholder="••••••••"
-          placeholderTextColor={color.textLabel}
+          placeholderTextColor={color.textFaint}
           accessibilityLabel="Password"
           onSubmitEditing={submit}
           returnKeyType="go"
@@ -152,7 +152,7 @@ const s = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     letterSpacing: 6,
-    color: color.fastRed,
+    color: color.redHot,
     marginBottom: 18,
   },
   lede: { ...type.body, marginBottom: 26 },
@@ -161,14 +161,14 @@ const s = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 1.4,
     textTransform: 'uppercase',
-    color: color.textLabel,
+    color: color.textFaint,
     marginBottom: 6,
     marginTop: 12,
   },
   input: {
     backgroundColor: semantic.surfaceInput,
     borderWidth: 1,
-    borderColor: semantic.border,
+    borderColor: semantic.borderStrong,
     borderRadius: radius.input,
     color: color.chalk,
     fontSize: 16,
@@ -179,7 +179,7 @@ const s = StyleSheet.create({
   notice: {
     backgroundColor: 'rgba(230,12,32,0.07)',
     borderWidth: 1,
-    borderColor: color.redLine,
+    borderColor: color.fastRed,
     borderRadius: radius.card,
     padding: 12,
     marginBottom: 8,

@@ -62,13 +62,13 @@ export function Banner({
   children: React.ReactNode;
 }) {
   const tint = {
-    watch: { bg: 'rgba(37,224,208,0.10)', line: color.tealLine, ic: '◉', fg: color.miamiTeal },
-    lock: { bg: color.redTint, line: color.redLine, ic: '⚿', fg: color.redHot },
-    ok: { bg: 'rgba(245,243,239,0.06)', line: color.lineDark, ic: '↑', fg: color.chalk },
+    watch: { bg: 'rgba(37,224,208,0.10)', line: color.tealLine, ic: 'eye-outline' as IconName, fg: color.miamiTeal },
+    lock: { bg: color.redTint, line: color.fastRed, ic: 'lock-closed-outline' as IconName, fg: color.redHot },
+    ok: { bg: 'rgba(245,243,239,0.06)', line: color.slate, ic: 'information-circle-outline' as IconName, fg: color.chalk },
   }[tone];
   return (
     <View style={[s.banner, { backgroundColor: tint.bg, borderColor: tint.line }]}>
-      <Text style={[s.bannerIcon, { color: tint.fg }]}>{tint.ic}</Text>
+      <Ionicons name={tint.ic} size={16} color={tint.fg} style={s.bannerIcon} />
       <View style={{ flex: 1 }}>
         <Text style={[s.bannerTitle, { color: tint.fg }]}>{title}</Text>
         <Text style={s.bannerBody}>{children}</Text>
@@ -115,14 +115,24 @@ export const Body = ({ children }: { children: React.ReactNode }) => (
   <Text style={type.body}>{children}</Text>
 );
 
-export function Tag({ tone, children }: { tone: 'mon' | 'ro' | 'muted'; children: React.ReactNode }) {
+export function Tag({
+  tone,
+  icon,
+  children,
+}: {
+  tone: 'mon' | 'ro' | 'muted';
+  icon?: IconName;
+  children: React.ReactNode;
+}) {
   const tint = {
     mon: { bg: 'rgba(37,224,208,0.14)', fg: color.miamiTeal, bd: color.tealLine },
-    ro: { bg: 'rgba(255,255,255,0.06)', fg: color.textDim, bd: color.lineDark },
-    muted: { bg: 'rgba(255,255,255,0.06)', fg: color.textFaint, bd: color.lineDark },
+    ro: { bg: 'rgba(255,255,255,0.06)', fg: color.textDim, bd: color.chalk2 },
+    // Same fill as ro on purpose: the word is the difference, not the colour.
+    muted: { bg: 'rgba(255,255,255,0.06)', fg: color.textDim, bd: color.chalk2 },
   }[tone];
   return (
     <View style={[s.tag, { backgroundColor: tint.bg, borderColor: tint.bd }]}>
+      {icon ? <Ionicons name={icon} size={10.5} color={tint.fg} /> : null}
       <Text style={{ color: tint.fg, fontSize: 10.5, fontWeight: '700', letterSpacing: 0.6 }}>
         {children}
       </Text>
@@ -164,8 +174,22 @@ export function Setting({
         <Text style={s.settingTitle}>{title}</Text>
         <Text style={s.settingDesc}>{description}</Text>
       </View>
-      <View style={[s.track, { backgroundColor: value ? on : 'rgba(255,255,255,0.14)' }]}>
-        <View style={[s.knob, value && { alignSelf: 'flex-end' }]} />
+      <View
+        style={[
+          s.track,
+          { backgroundColor: value ? on : 'rgba(255,255,255,0.14)' },
+          // Its own fill is 1.42 against a card, so when the switch is off the outline
+          // IS the control boundary. borderStrong is only 2.15 against that fill.
+          !value && { borderWidth: 1, borderColor: color.textDim },
+        ]}
+      >
+        <View
+          style={[
+            s.knob,
+            value && { alignSelf: 'flex-end' },
+            value && tone === 'teal' && { backgroundColor: color.courtBlack },
+          ]}
+        />
       </View>
     </Pressable>
   );
@@ -175,7 +199,7 @@ export function Setting({
  *  drawn icon, not a box-drawing character standing in for one. */
 export const Empty = ({ icon, children }: { icon: IconName; children: React.ReactNode }) => (
   <View style={s.empty}>
-    <Ionicons name={icon} size={30} color={color.textLabel} style={{ marginBottom: 10 }} />
+    <Ionicons name={icon} size={30} color={color.textFaint} style={{ marginBottom: 10 }} />
     <Text style={[type.body, { textAlign: 'center', color: color.textDim }]}>{children}</Text>
   </View>
 );
@@ -205,7 +229,7 @@ export function Button({
       onPress={onPress}
       style={({ pressed }) => [
         s.btn,
-        { backgroundColor: pressed ? color.redHot : color.fastRed },
+        { backgroundColor: pressed ? color.redDeep : color.fastRed },
         (disabled || busy) && { opacity: 0.5 },
       ]}
     >
@@ -395,11 +419,19 @@ const s = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 1.4,
     textTransform: 'uppercase',
-    color: color.textLabel,
+    color: color.textFaint,
     marginBottom: 10,
   },
 
-  tag: { borderWidth: 1, borderRadius: radius.badge, paddingHorizontal: 7, paddingVertical: 3 },
+  tag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    borderWidth: 1,
+    borderRadius: radius.badge,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+  },
 
   setting: {
     flexDirection: 'row',
@@ -429,7 +461,7 @@ const s = StyleSheet.create({
     flexDirection: 'row',
     backgroundColor: semantic.surfaceInput,
     borderWidth: 1,
-    borderColor: semantic.border,
+    borderColor: semantic.borderStrong,
     borderRadius: radius.card,
     padding: 3,
     gap: 3,
@@ -440,7 +472,7 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 5,
-    minHeight: 40,
+    minHeight: 44,
     borderRadius: radius.chip,
     paddingHorizontal: 6,
   },
@@ -454,14 +486,14 @@ const s = StyleSheet.create({
     alignSelf: 'flex-start',
     backgroundColor: semantic.surfaceInput,
     borderWidth: 1,
-    borderColor: semantic.border,
+    borderColor: semantic.borderStrong,
     borderRadius: radius.card,
     padding: 3,
     gap: 2,
   },
   stepBtn: {
     width: 44,
-    height: 40,
+    height: 44,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radius.chip,
@@ -487,7 +519,7 @@ const s = StyleSheet.create({
     paddingHorizontal: 14,
     borderRadius: radius.pill,
     borderWidth: 1,
-    borderColor: semantic.border,
+    borderColor: semantic.borderStrong,
     backgroundColor: semantic.surfaceCard,
   },
   ghostLabel: { fontSize: 13.5, fontWeight: '700' },

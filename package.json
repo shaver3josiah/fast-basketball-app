@@ -35,6 +35,7 @@
     "test:rules": "firebase emulators:exec --project fast-basketball-rules-test --only firestore --config firebase/firebase.json \"node --test firebase/test/rules.test.mjs\"",
     "emulators": "firebase emulators:start --project fast-basketball-dev --config firebase/firebase.json",
     "typecheck": "tsc --noEmit",
+    "contrast": "node scripts/contrast.mjs",
     "seed": "node scripts/seed.mjs",
     "set-coach-uid": "node scripts/set-coach-uid.mjs",
     "test:period": "node --experimental-strip-types scripts/check-period.mjs",

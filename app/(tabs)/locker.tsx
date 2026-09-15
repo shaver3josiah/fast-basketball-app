@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSession, useNames } from '../../src/session';
@@ -163,7 +164,7 @@ function WorkflowRow({
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={`Open workflow: ${workflow.name}`}
-      style={({ pressed }) => [s.row, pressed && { backgroundColor: color.inkHover }]}
+      style={({ pressed }) => [s.row, pressed && { backgroundColor: color.ink }]}
     >
       <View style={s.icon}>
         <Text style={s.iconText}>HTML</Text>
@@ -176,7 +177,7 @@ function WorkflowRow({
         {submissionCount > 0 && (
           <View style={s.pill}>
             <Text style={s.pillText}>
-              ✓ {submissionCount} submitted
+              {submissionCount} submitted
             </Text>
           </View>
         )}
@@ -205,11 +206,11 @@ function SubmissionRow({
       style={({ pressed }) => [
         s.row,
         { borderColor: color.tealLine },
-        pressed && { backgroundColor: color.inkHover },
+        pressed && { backgroundColor: color.ink },
       ]}
     >
       <View style={[s.icon, { backgroundColor: color.tealTint, borderColor: color.tealLine }]}>
-        <Text style={[s.iconText, { color: color.miamiTeal }]}>✓</Text>
+        <Ionicons name="checkmark" size={17} color={color.miamiTeal} />
       </View>
       <View style={{ flex: 1 }}>
         <Text style={s.name}>
@@ -236,7 +237,7 @@ const s = StyleSheet.create({
     gap: 12,
     backgroundColor: semantic.surfaceCard,
     borderWidth: 1,
-    borderColor: semantic.border,
+    borderColor: semantic.borderStrong,
     borderRadius: radius.cardLg,
     padding: 13,
     marginBottom: 10,
@@ -248,7 +249,7 @@ const s = StyleSheet.create({
     borderRadius: radius.chip,
     backgroundColor: color.redTint,
     borderWidth: 1,
-    borderColor: color.redLine,
+    borderColor: color.fastRed,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -266,7 +267,7 @@ const s = StyleSheet.create({
     paddingVertical: 2,
   },
   pillText: { fontSize: 10.5, fontWeight: '700', color: color.miamiTeal },
-  chev: { fontSize: 22, color: color.textLabel, paddingHorizontal: 2 },
+  chev: { fontSize: 22, color: color.textDim, paddingHorizontal: 2 },
   rosterName: {
     fontSize: 13,
     fontWeight: '800',

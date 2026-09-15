@@ -100,6 +100,7 @@ export default function CalendarScreen() {
   const cellRects = useRef(new Map<number, LayoutRectangle>());
   const [dragging, setDragging] = useState(false);
   const [hoverDay, setHoverDay] = useState<number | null>(null);
+  const hoverRef = useRef<number | null>(null);
 
   const measureGrid = useCallback(() => {
     gridRef.current?.measureInWindow((x, y) => {
@@ -199,7 +200,7 @@ export default function CalendarScreen() {
         ))}
       </View>
 
-      <View style={s.grid} ref={gridRef} collapsable={false}>
+      <View style={s.grid} ref={gridRef} collapsable={false} onLayout={measureGrid}>
         {Array.from({ length: new Date(year, month, 1).getDay() }, (_, i) => (
           <View key={`blank${i}`} style={s.cell} />
         ))}
@@ -325,9 +326,14 @@ export default function CalendarScreen() {
             measureGrid();
             setDragging(true);
           }}
-          onDragMove={(x, y) => setHoverDay(hitTest(x, y))}
+          onDragMove={(x, y) => {
+            const day = hitTest(x, y);
+            hoverRef.current = day;
+            setHoverDay(day);
+          }}
           onDragEnd={async () => {
-            const day = hoverDay;
+            const day = hoverRef.current;
+            hoverRef.current = null;
             setDragging(false);
             setHoverDay(null);
             await drop(e, day);
@@ -387,21 +393,24 @@ function DayCell({
         {day}
       </Text>
       <View style={s.chips}>
-        {events.slice(0, 2).map((e) => (
-          <View
-            key={e.id}
-            style={[
-              s.gridChip,
-              {
-                backgroundColor: e.canceled
-                  ? 'transparent'
-                  : (SESSION_TYPES[e.type]?.color ?? color.slate),
-                borderColor: SESSION_TYPES[e.type]?.color ?? color.slate,
-              },
-            ]}
-          />
-        ))}
-        {events.length > 2 && <Text style={s.more}>+{events.length - 2}</Text>}
+        {events.slice(0, 2).map((e) => {
+          // On the selected cell the fill is the brand red, and a type colour on top of
+          // it measures as low as 1.34:1. Bone reads on both, and the type is still
+          // carried by the day list below, which is where the labels are.
+          const tint = isSelected ? color.bone : (SESSION_TYPES[e.type]?.color ?? color.slate);
+          return (
+            <View
+              key={e.id}
+              style={[
+                s.gridChip,
+                { backgroundColor: e.canceled ? 'transparent' : tint, borderColor: tint },
+              ]}
+            />
+          );
+        })}
+        {events.length > 2 && (
+          <Text style={[s.more, isSelected && { color: color.bone }]}>+{events.length - 2}</Text>
+        )}
       </View>
     </Pressable>
   );
@@ -469,20 +478,26 @@ function SessionCard({
     setHeld(false);
     Animated.parallel([
       reduceMotion
-        ? Animated.timing(pan, { toValue: { x: 0, y: 0 }, duration: 0, useNativeDriver: true })
+        ? Animated.timing(pan, { toValue: { x: 0, y: 0 }, duration: 0, useNativeDriver: false })
         : Animated.spring(pan, {
             toValue: { x: 0, y: 0 },
-            useNativeDriver: true,
+            useNativeDriver: false,
             friction: 7,
             tension: 90,
           }),
       Animated.timing(lift, {
         toValue: 0,
         duration: reduceMotion ? 0 : 140,
-        useNativeDriver: true,
+        useNativeDriver: false,
       }),
     ]).start();
   }, [pan, lift, reduceMotion]);
+
+  // Rebuilt handlers during a live gesture are the classic PanResponder footgun: the
+  // parent re-renders on every hover change, and a fresh handler object arrives
+  // mid-drag. Build the responder once and read the current callbacks off a ref.
+  const cb = useRef({ onDragStart, onDragMove, onDragEnd });
+  cb.current = { onDragStart, onDragMove, onDragEnd };
 
   const responder = useMemo(
     () =>
@@ -493,25 +508,26 @@ function SessionCard({
         onMoveShouldSetPanResponderCapture: () => armed.current,
         onPanResponderGrant: () => {
           pan.setValue({ x: 0, y: 0 });
-          onDragStart();
+          cb.current.onDragStart();
         },
         onPanResponderMove: (e, g) => {
           pan.setValue({ x: g.dx, y: g.dy });
-          onDragMove(e.nativeEvent.pageX, e.nativeEvent.pageY);
+          cb.current.onDragMove(e.nativeEvent.pageX, e.nativeEvent.pageY);
         },
         onPanResponderRelease: () => {
-          onDragEnd();
+          cb.current.onDragEnd();
           release();
         },
+        // A terminate is the system taking the gesture away, which must still put the
+        // card back rather than leaving it stranded mid-flight.
         onPanResponderTerminate: () => {
-          onDragEnd();
+          cb.current.onDragEnd();
           release();
         },
       }),
-    [pan, onDragStart, onDragMove, onDragEnd, release]
+    [pan, release]
   );
 
-  const shadow = lift.interpolate({ inputRange: [0, 1], outputRange: [0, 0.45] });
   const scale = lift.interpolate({ inputRange: [0, 1], outputRange: [1, 1.03] });
 
   return (
@@ -522,9 +538,7 @@ function SessionCard({
         held && s.evHeld,
         {
           transform: [{ translateX: pan.x }, { translateY: pan.y }, { scale }],
-          shadowOpacity: shadow,
           zIndex: held ? 20 : 0,
-          elevation: held ? 8 : 0,
         },
       ]}
     >
@@ -538,7 +552,7 @@ function SessionCard({
           if (!draggable) return;
           armed.current = true;
           setHeld(true);
-          Animated.timing(lift, { toValue: 1, duration: 120, useNativeDriver: true }).start();
+          Animated.timing(lift, { toValue: 1, duration: 120, useNativeDriver: false }).start();
         }}
         style={s.evInner}
       >
@@ -636,12 +650,12 @@ const s = StyleSheet.create({
 
   filterRow: { gap: 6, paddingBottom: 12 },
   filter: {
-    minHeight: 34,
+    minHeight: 44,
     justifyContent: 'center',
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
     borderRadius: radius.pill,
     borderWidth: 1,
-    borderColor: semantic.border,
+    borderColor: semantic.borderStrong,
     backgroundColor: semantic.surfaceCard,
   },
   filterOn: { backgroundColor: color.fastRed, borderColor: color.fastRed },
@@ -706,19 +720,22 @@ const s = StyleSheet.create({
     marginTop: 14,
   },
   clipText: { flex: 1, fontSize: 13, color: color.chalk, lineHeight: 18 },
-  clipClear: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  clipClear: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
 
   ev: {
     backgroundColor: semantic.surfaceCard,
     borderWidth: 1,
-    borderColor: semantic.border,
+    borderColor: semantic.borderStrong,
     borderRadius: radius.card,
     marginBottom: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowRadius: 18,
   },
-  evHeld: { borderColor: color.miamiTeal, backgroundColor: color.inkHover },
+  // An offset and a real blur, so the card reads as lifted off the page rather than
+  // ringed. A zero-offset glow is decoration; this is depth.
+  evHeld: {
+    borderColor: color.miamiTeal,
+    backgroundColor: color.inkHover,
+    boxShadow: '0 10px 22px rgba(0,0,0,0.45)',
+  },
   evInner: { flexDirection: 'row', gap: 11, padding: 12, alignItems: 'flex-start' },
   evIcon: {
     width: 34,
@@ -735,9 +752,9 @@ const s = StyleSheet.create({
   coachedText: { fontSize: 10.5, fontWeight: '800', letterSpacing: 0.6, color: color.miamiTeal },
   evName: { fontSize: 15, fontWeight: '600', color: color.chalk, marginTop: 3 },
   evMeta: { ...type.meta, marginTop: 2 },
-  evBlocks: { fontSize: 12, color: color.textFaint, marginTop: 5 },
-  evCopy: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', marginTop: -4, marginRight: -6 },
-  struck: { textDecorationLine: 'line-through', opacity: 0.45 },
+  evBlocks: { fontSize: 12, color: color.textDim, marginTop: 5 },
+  evCopy: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', marginTop: -4, marginRight: -6 },
+  struck: { textDecorationLine: 'line-through', color: color.textDim },
 
   flash: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 12 },
   flashText: { fontSize: 13, fontWeight: '600', color: color.miamiTeal },

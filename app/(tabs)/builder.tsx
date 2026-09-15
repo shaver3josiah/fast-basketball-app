@@ -1,5 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { Redirect, useRouter } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSession } from '../../src/session';
@@ -37,6 +46,7 @@ export default function Builder() {
   if (role !== 'coach') return <Redirect href="/(tabs)" />;
 
   return (
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
     <Screen>
       {draft ? (
         <Editor
@@ -74,6 +84,7 @@ export default function Builder() {
         </>
       )}
     </Screen>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -109,7 +120,7 @@ function TemplateCard({
             </Text>
           </View>
         </View>
-        <Ionicons name="chevron-forward" size={18} color={color.textLabel} />
+        <Ionicons name="chevron-forward" size={18} color={color.textFaint} />
       </Pressable>
 
       {template.blocks.length > 0 && (
@@ -255,7 +266,7 @@ function Editor({
         value={draft.name}
         onChangeText={(name) => onChange({ ...draft, name })}
         placeholder="Tuesday ball handling"
-        placeholderTextColor={color.textLabel}
+        placeholderTextColor={color.textFaint}
         accessibilityLabel="Workout name"
         returnKeyType="next"
       />
@@ -388,7 +399,7 @@ function BlockRow({
           value={block.name}
           onChangeText={(name) => onChange({ name })}
           placeholder="Two-ball pound dribbles"
-          placeholderTextColor={color.textLabel}
+          placeholderTextColor={color.textFaint}
           accessibilityLabel={`Block ${index + 1} name`}
           autoFocus={autoFocus}
         />
@@ -485,14 +496,14 @@ const s = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 1.4,
     textTransform: 'uppercase',
-    color: color.textLabel,
+    color: color.textFaint,
     marginBottom: 6,
     marginTop: 16,
   },
   input: {
     backgroundColor: semantic.surfaceInput,
     borderWidth: 1,
-    borderColor: semantic.border,
+    borderColor: semantic.borderStrong,
     borderRadius: radius.input,
     color: color.chalk,
     fontSize: 16,
@@ -510,7 +521,7 @@ const s = StyleSheet.create({
     paddingHorizontal: 4,
     borderRadius: radius.card,
     borderWidth: 1,
-    borderColor: semantic.border,
+    borderColor: semantic.borderStrong,
     backgroundColor: semantic.surfaceInput,
   },
   typeLabel: { fontSize: 10.5, fontWeight: '700', color: color.textDim, textAlign: 'center' },
@@ -532,7 +543,7 @@ const s = StyleSheet.create({
     textAlign: 'center',
     fontSize: 12,
     fontWeight: '800',
-    color: color.textLabel,
+    color: color.textFaint,
   },
   blockInput: {
     flex: 1,

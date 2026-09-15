@@ -48,7 +48,9 @@ export default function TabsLayout() {
         // --red-hot, not the canonical red: at tab-label size the canonical #E60C20
         // measures 4.18:1 on court black and fails AA. This swap is inside the DS.
         tabBarActiveTintColor: color.redHot,
-        tabBarInactiveTintColor: color.textMute,
+        // textMute measured 4.06 on the tab bar. textFaint is 4.88 and is the next
+        // token up, so the inactive label clears AA without going near the active red.
+        tabBarInactiveTintColor: color.textFaint,
         tabBarLabelStyle: { fontSize: 10.5, fontWeight: '700', letterSpacing: 0.8 },
       }}
     >
