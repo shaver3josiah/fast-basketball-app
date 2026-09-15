@@ -33,7 +33,13 @@ export default function AthleteScreen() {
   const upcoming = useMemo(() => {
     const now = Date.now();
     return events
-      .filter((e) => e.athleteId === athleteId && (e.startsAt?.toMillis?.() ?? 0) >= now)
+      // A coached session is one shared document, so this athlete may be on it
+      // without being the athleteId it is filed under.
+      .filter(
+        (e) =>
+          (e.athleteId === athleteId || e.athleteIds?.includes(athleteId ?? '')) &&
+          (e.startsAt?.toMillis?.() ?? 0) >= now
+      )
       .slice(0, 6);
   }, [events, athleteId]);
 

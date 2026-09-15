@@ -14,6 +14,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSession } from '../src/session';
 import {
   MAX_SCHEDULED,
+  canShareWith,
   deleteEvent,
   deleteSeries,
   editEvent,
@@ -26,7 +27,7 @@ import {
   totalMinutes,
 } from '../src/data';
 import type { SessionEvent, WorkoutBlock, WorkoutKind, WorkoutTemplate } from '../src/types';
-import { Body, Button, Card, CardTitle, GhostButton, Segmented, Stepper } from '../src/ui';
+import { Banner, Body, Button, Card, CardTitle, GhostButton, Segmented, Stepper } from '../src/ui';
 import { SESSION_TYPES, color, radius, semantic, type, type SessionType } from '../src/theme';
 
 const HOME_GYM = 'Salvation Army Fort Lauderdale Corps gym';
@@ -128,9 +129,22 @@ export default function Schedule() {
     () => projectDates(when, everyWeeks ? occurrences : 1, everyWeeks || 1),
     [when, everyWeeks, occurrences]
   );
-  const writes = dates.length * Math.max(1, athleteIds.length);
+  const chosen = athleteIds.map((id) => athletesById[id]).filter(Boolean);
+  // A coached session with more than one athlete is ONE document, so the run is one
+  // per date. Individual work is one per athlete per date: separate workouts that
+  // happen to have been typed in once.
+  const sharedSession = kind === 'coached' && chosen.length > 1;
+  const writes = dates.length * (sharedSession ? 1 : Math.max(1, chosen.length));
   const roster = Object.values(athletesById);
-  const canSave = name.trim().length > 0 && athleteIds.length > 0 && writes <= MAX_SCHEDULED;
+  // Their guardian has no uid until the family signs up, and the rules refuse a
+  // shared session whose membership list is missing one. Individual sessions are
+  // fine: their read resolves through a get() and starts working on signup.
+  const unshareable = sharedSession ? chosen.filter((a) => !canShareWith(a)) : [];
+  const canSave =
+    name.trim().length > 0 &&
+    chosen.length > 0 &&
+    writes <= MAX_SCHEDULED &&
+    unshareable.length === 0;
 
   if (role !== 'coach') return <Redirect href="/(tabs)" />;
 
@@ -150,7 +164,7 @@ export default function Schedule() {
         });
       } else {
         await scheduleWorkout({
-          athleteIds,
+          athletes: athleteIds.map((id) => athletesById[id]).filter(Boolean),
           type: sessionType,
           name,
           location,
@@ -214,12 +228,23 @@ export default function Schedule() {
           })}
         </View>
       )}
-      {!editing && athleteIds.length > 1 && (
+      {!editing && chosen.length > 1 && (
         <Text style={s.hint}>
-          {kind === 'coached'
-            ? 'One coached session. Each family sees it on their own calendar.'
-            : 'The same workout goes on each of their calendars separately.'}
+          {sharedSession
+            ? 'One session, shared. Every family on it sees the same row, and cancelling it cancels it for all of them.'
+            : 'The same workout goes on each of their calendars separately, as their own session.'}
         </Text>
+      )}
+
+      {unshareable.length > 0 && (
+        <View style={{ marginTop: 12 }}>
+          <Banner tone="lock" title="Not yet, for this group">
+            {unshareable.map((a) => a.playerName).join(', ')}{' '}
+            {unshareable.length === 1 ? 'has' : 'have'} no account on the family side yet,
+            and a shared session has to name everyone who may read it. Schedule them
+            individually for now, or wait until they sign up.
+          </Banner>
+        </View>
       )}
 
       {/* --- from a template ------------------------------------------------ */}
@@ -361,7 +386,12 @@ export default function Schedule() {
             <CardTitle>What this writes</CardTitle>
             <Body>
               {writes} {writes === 1 ? 'session' : 'sessions'}
-              {athleteIds.length > 1 ? `, across ${athleteIds.length} athletes` : ''}.
+              {chosen.length > 1
+                ? sharedSession
+                  ? `, shared by ${chosen.length} athletes`
+                  : `, across ${chosen.length} athletes`
+                : ''}
+              .
             </Body>
             <Text style={s.dates}>
               {dates

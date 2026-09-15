@@ -1,11 +1,15 @@
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { SessionProvider } from '../src/session';
 import { color, semantic } from '../src/theme';
 
 export default function RootLayout() {
   return (
+    // react-native-gesture-handler needs this at the root or every gesture below it
+    // silently does nothing. The calendar drag is the only consumer today.
+    <GestureHandlerRootView style={{ flex: 1 }}>
     <SafeAreaProvider>
       <SessionProvider>
         {/* Light glyphs: every screen sits on court black, in both system themes. */}
@@ -32,5 +36,6 @@ export default function RootLayout() {
         </Stack>
       </SessionProvider>
     </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }

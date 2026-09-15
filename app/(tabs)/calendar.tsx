@@ -1,20 +1,23 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  AccessibilityInfo,
-  Animated,
-  PanResponder,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-  type LayoutRectangle,
-} from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Animated, {
+  measure,
+  runOnJS,
+  useAnimatedRef,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withSpring,
+  withTiming,
+  type SharedValue,
+} from 'react-native-reanimated';
+import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSession } from '../../src/session';
 import { moveEvent, pasteEvents, subscribeEvents } from '../../src/data';
-import type { Athlete, SessionEvent } from '../../src/types';
+import type { SessionEvent } from '../../src/types';
 import { Empty, Eyebrow, GhostButton } from '../../src/ui';
 import { SESSION_TYPES, color, radius, semantic, type } from '../../src/theme';
 
@@ -23,22 +26,30 @@ const sameDay = (a: Date, b: Date) =>
   a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
 
+/** One day cell's box, in grid coordinates. Kept in a shared value so the drag can
+ *  hit-test on the UI thread without asking React where anything is. */
+interface CellRect {
+  d: number;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
 /**
- * The calendar, and for the coach the place he actually runs the week from.
+ * The calendar, and for the coach the place he runs the week from.
  *
- * The one authored interaction is the drag: press and hold a session in the day list,
- * and it lifts off the page and follows your thumb up into the month grid, where the
- * day under it lights up. Let go and it moves. That is the gesture a coach reaches for
- * without being taught, and it is the whole reason this screen is not a list.
+ * The one authored interaction is the drag. Press and hold a session in the day list
+ * and it lifts off the page, follows your thumb up into the month grid, and the day
+ * under it swells and lights up. Let go and it moves.
  *
- * It is built on PanResponder and Animated, which ship with React Native. Reanimated
- * and gesture-handler would run the same drag on the UI thread, and both are native
- * modules: adding them means a new prebuild of a release pipeline that works today,
- * for a gesture that moves one small card at a time. If the roster ever grows to the
- * point where this drops frames, that trade is worth revisiting. It is not now.
+ * All of that runs on the UI thread: the gesture is react-native-gesture-handler, the
+ * movement is Reanimated shared values, and the hit-test is a worklet reading the cell
+ * boxes out of a shared value. Dragging across thirty cells re-renders no React at
+ * all. The only hops back to JS are the write itself and the haptics.
  */
 export default function CalendarScreen() {
-  const { role, athlete, athletesById } = useSession();
+  const { user, role, athlete, athletesById } = useSession();
   const router = useRouter();
   const isCoach = role === 'coach';
 
@@ -49,27 +60,24 @@ export default function CalendarScreen() {
   const [clipboard, setClipboard] = useState<{ from: Date; events: SessionEvent[] } | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [dragging, setDragging] = useState(false);
 
-  // Direct manipulation is not decoration, so the drag itself always works. What
+  // Direct manipulation is never decoration, so the drag itself always works. What
   // Reduce Motion turns off is the spring: the card snaps home instead of overshooting.
-  const [reduceMotion, setReduceMotion] = useState(false);
-  useEffect(() => {
-    let live = true;
-    AccessibilityInfo.isReduceMotionEnabled().then((on) => live && setReduceMotion(on));
-    const sub = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotion);
-    return () => {
-      live = false;
-      sub.remove();
-    };
-  }, []);
+  const reduceMotion = useReducedMotion();
 
   useEffect(() => {
     if (!isCoach && !athlete?.id) return;
-    return subscribeEvents(role, isCoach ? null : (athlete?.id ?? null), setEvents);
-  }, [role, athlete?.id, isCoach]);
+    // The uid is what lets a family also see the coached sessions they were written
+    // into, which live on another athlete's athleteId.
+    return subscribeEvents(role, isCoach ? null : (athlete?.id ?? null), setEvents, user?.uid);
+  }, [role, athlete?.id, isCoach, user?.uid]);
 
   const visible = useMemo(
-    () => (events ?? []).filter((e) => filter === 'all' || e.athleteId === filter),
+    () =>
+      (events ?? []).filter(
+        (e) => filter === 'all' || e.athleteId === filter || e.athleteIds?.includes(filter)
+      ),
     [events, filter]
   );
 
@@ -88,48 +96,60 @@ export default function CalendarScreen() {
   }, [visible, month, year]);
 
   const dayEvents = useMemo(
-    () => (visible ?? []).filter((e) => e.startsAt?.toDate && sameDay(e.startsAt.toDate(), selected)),
+    () => visible.filter((e) => e.startsAt?.toDate && sameDay(e.startsAt.toDate(), selected)),
     [visible, selected]
   );
 
-  // --- drag plumbing --------------------------------------------------------
-  // The grid's window position, taken once when a drag begins. Scrolling is frozen
-  // for the duration, so a single measurement stays true until the finger lifts.
-  const gridRef = useRef<View>(null);
-  const gridWin = useRef({ x: 0, y: 0 });
-  const cellRects = useRef(new Map<number, LayoutRectangle>());
-  const [dragging, setDragging] = useState(false);
-  const [hoverDay, setHoverDay] = useState<number | null>(null);
-  const hoverRef = useRef<number | null>(null);
+  // --- drag plumbing, all of it on the UI thread ----------------------------
+  const gridRef = useAnimatedRef<View>();
+  const gridOrigin = useSharedValue({ x: 0, y: 0 });
+  const cellRects = useSharedValue<CellRect[]>([]);
+  const hoverDay = useSharedValue(-1);
+  // Cells report their box one at a time as they lay out, so they are collected in a
+  // plain ref and published to the shared value as each one lands.
+  const rectsRef = useRef(new Map<number, CellRect>());
 
-  const measureGrid = useCallback(() => {
-    gridRef.current?.measureInWindow((x, y) => {
-      gridWin.current = { x, y };
-    });
+  const publishRect = useCallback(
+    (r: CellRect) => {
+      rectsRef.current.set(r.d, r);
+      cellRects.value = [...rectsRef.current.values()];
+    },
+    [cellRects]
+  );
+
+  // A new month means last month's boxes are stale. Clearing rather than keeping them
+  // means a drag during the first frame of a new month hits nothing, which is better
+  // than hitting the wrong day.
+  useEffect(() => {
+    rectsRef.current.clear();
+    cellRects.value = [];
+  }, [month, year, cellRects]);
+
+  const buzz = useCallback((kind: 'pick' | 'move' | 'drop') => {
+    // expo-haptics has nothing to drive on the web and throws rather than no-opping.
+    if (Platform.OS === 'web') return;
+    if (kind === 'pick') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    else if (kind === 'move') Haptics.selectionAsync();
+    else Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   }, []);
 
-  const hitTest = useCallback((pageX: number, pageY: number) => {
-    const gx = pageX - gridWin.current.x;
-    const gy = pageY - gridWin.current.y;
-    for (const [day, r] of cellRects.current) {
-      if (gx >= r.x && gx <= r.x + r.width && gy >= r.y && gy <= r.y + r.height) return day;
-    }
-    return null;
-  }, []);
-
-  async function drop(e: SessionEvent, day: number | null) {
-    if (day == null) return;
-    const target = new Date(year, month, day);
-    if (sameDay(e.startsAt.toDate(), target)) return;
-    setError(null);
-    try {
-      await moveEvent(e, target);
-      setSelected(target);
-      setFlash(`Moved to ${target.toLocaleDateString([], { weekday: 'short', day: 'numeric' })}`);
-    } catch {
-      setError('That did not move. Check your connection and try again.');
-    }
-  }
+  const drop = useCallback(
+    async (e: SessionEvent, day: number) => {
+      if (day < 1) return;
+      const target = new Date(year, month, day);
+      if (sameDay(e.startsAt.toDate(), target)) return;
+      setError(null);
+      try {
+        await moveEvent(e, target);
+        buzz('drop');
+        setSelected(target);
+        setFlash(`Moved to ${target.toLocaleDateString([], { weekday: 'short', day: 'numeric' })}`);
+      } catch {
+        setError('That did not move. Check your connection and try again.');
+      }
+    },
+    [year, month, buzz]
+  );
 
   async function paste() {
     if (!clipboard) return;
@@ -149,6 +169,10 @@ export default function CalendarScreen() {
   }, [flash]);
 
   const roster = Object.values(athletesById);
+  const namesOn = (e: SessionEvent) =>
+    (e.athleteIds ?? [e.athleteId])
+      .map((id) => athletesById[id]?.playerName)
+      .filter((n): n is string => !!n);
 
   return (
     <ScrollView
@@ -175,11 +199,7 @@ export default function CalendarScreen() {
       </View>
 
       {isCoach && roster.length > 1 && (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={s.filterRow}
-        >
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.filterRow}>
           <FilterChip label="Everyone" on={filter === 'all'} onPress={() => setFilter('all')} />
           {roster.map((a) => (
             <FilterChip
@@ -200,7 +220,7 @@ export default function CalendarScreen() {
         ))}
       </View>
 
-      <View style={s.grid} ref={gridRef} collapsable={false} onLayout={measureGrid}>
+      <View style={s.grid} ref={gridRef} collapsable={false}>
         {Array.from({ length: new Date(year, month, 1).getDay() }, (_, i) => (
           <View key={`blank${i}`} style={s.cell} />
         ))}
@@ -214,9 +234,9 @@ export default function CalendarScreen() {
               events={byDay.get(day) ?? []}
               isToday={sameDay(date, today)}
               isSelected={sameDay(date, selected)}
-              isHovered={hoverDay === day}
+              hoverDay={hoverDay}
               onPress={() => setSelected(date)}
-              onLayout={(r) => cellRects.current.set(day, r)}
+              onRect={publishRect}
             />
           );
         })}
@@ -313,31 +333,21 @@ export default function CalendarScreen() {
         <SessionCard
           key={e.id}
           event={e}
-          athlete={athletesById[e.athleteId]}
-          showAthlete={isCoach && filter === 'all'}
+          names={isCoach && filter === 'all' ? namesOn(e) : []}
           draggable={isCoach}
           reduceMotion={reduceMotion}
+          gridRef={gridRef}
+          gridOrigin={gridOrigin}
+          cellRects={cellRects}
+          hoverDay={hoverDay}
           onOpen={() => router.push({ pathname: '/schedule', params: { eventId: e.id } })}
           onCopy={() => {
             setClipboard({ from: selected, events: [e] });
             setFlash('Session copied');
           }}
-          onDragStart={() => {
-            measureGrid();
-            setDragging(true);
-          }}
-          onDragMove={(x, y) => {
-            const day = hitTest(x, y);
-            hoverRef.current = day;
-            setHoverDay(day);
-          }}
-          onDragEnd={async () => {
-            const day = hoverRef.current;
-            hoverRef.current = null;
-            setDragging(false);
-            setHoverDay(null);
-            await drop(e, day);
-          }}
+          onDragState={setDragging}
+          onBuzz={buzz}
+          onDrop={(day) => drop(e, day)}
         />
       ))}
 
@@ -357,17 +367,17 @@ function DayCell({
   events,
   isToday,
   isSelected,
-  isHovered,
+  hoverDay,
   onPress,
-  onLayout,
+  onRect,
 }: {
   day: number;
   events: SessionEvent[];
   isToday: boolean;
   isSelected: boolean;
-  isHovered: boolean;
+  hoverDay: SharedValue<number>;
   onPress: () => void;
-  onLayout: (r: LayoutRectangle) => void;
+  onRect: (r: CellRect) => void;
 }) {
   const label = events.length
     ? `${day}, ${events.length} ${events.length === 1 ? 'session' : 'sessions'}: ${events
@@ -375,44 +385,58 @@ function DayCell({
         .join('. ')}`
     : `${day}, nothing scheduled`;
 
+  // Reads hoverDay on the UI thread, so the drop target lights up mid-drag without
+  // React hearing about it. A ring AND a swell: on a grid of small cells a tint change
+  // alone is easy to miss with a thumb over it.
+  const drop = useAnimatedStyle(() => {
+    const over = hoverDay.value === day;
+    return {
+      borderColor: over ? color.miamiTeal : 'transparent',
+      backgroundColor: over ? color.tealTint : isSelected ? color.fastRed : 'transparent',
+      transform: [{ scale: withSpring(over ? 1.1 : 1, { damping: 13, stiffness: 220 }) }],
+    };
+  }, [day, isSelected]);
+
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      accessibilityState={{ selected: isSelected }}
-      onPress={onPress}
-      onLayout={(e) => onLayout(e.nativeEvent.layout)}
-      style={({ pressed }) => [
-        s.cell,
-        isSelected && s.cellSelected,
-        isHovered && s.cellHover,
-        pressed && !isSelected && { backgroundColor: color.ink },
-      ]}
+    <Animated.View
+      style={[s.cell, drop]}
+      onLayout={(e) => {
+        const { x, y, width, height } = e.nativeEvent.layout;
+        onRect({ d: day, x, y, w: width, h: height });
+      }}
     >
-      <Text style={[s.cellNum, isToday && s.cellNumToday, isSelected && { color: color.bone }]}>
-        {day}
-      </Text>
-      <View style={s.chips}>
-        {events.slice(0, 2).map((e) => {
-          // On the selected cell the fill is the brand red, and a type colour on top of
-          // it measures as low as 1.34:1. Bone reads on both, and the type is still
-          // carried by the day list below, which is where the labels are.
-          const tint = isSelected ? color.bone : (SESSION_TYPES[e.type]?.color ?? color.slate);
-          return (
-            <View
-              key={e.id}
-              style={[
-                s.gridChip,
-                { backgroundColor: e.canceled ? 'transparent' : tint, borderColor: tint },
-              ]}
-            />
-          );
-        })}
-        {events.length > 2 && (
-          <Text style={[s.more, isSelected && { color: color.bone }]}>+{events.length - 2}</Text>
-        )}
-      </View>
-    </Pressable>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={label}
+        accessibilityState={{ selected: isSelected }}
+        onPress={onPress}
+        style={s.cellInner}
+      >
+        <Text style={[s.cellNum, isToday && s.cellNumToday, isSelected && { color: color.bone }]}>
+          {day}
+        </Text>
+        <View style={s.chips}>
+          {events.slice(0, 2).map((e) => {
+            // On the selected cell the fill is the brand red, and a type colour on top
+            // of it measures as low as 1.34:1. Bone reads on both, and the type is
+            // still carried by the icon and the word in the day list below.
+            const tint = isSelected ? color.bone : (SESSION_TYPES[e.type]?.color ?? color.slate);
+            return (
+              <View
+                key={e.id}
+                style={[
+                  s.gridChip,
+                  { backgroundColor: e.canceled ? 'transparent' : tint, borderColor: tint },
+                ]}
+              />
+            );
+          })}
+          {events.length > 2 && (
+            <Text style={[s.more, isSelected && { color: color.bone }]}>+{events.length - 2}</Text>
+          )}
+        </View>
+      </Pressable>
+    </Animated.View>
   );
 }
 
@@ -440,26 +464,32 @@ function Legend() {
 
 function SessionCard({
   event,
-  athlete,
-  showAthlete,
+  names,
   draggable,
   reduceMotion,
+  gridRef,
+  gridOrigin,
+  cellRects,
+  hoverDay,
   onOpen,
   onCopy,
-  onDragStart,
-  onDragMove,
-  onDragEnd,
+  onDragState,
+  onBuzz,
+  onDrop,
 }: {
   event: SessionEvent;
-  athlete?: Athlete;
-  showAthlete: boolean;
+  names: string[];
   draggable: boolean;
   reduceMotion: boolean;
+  gridRef: ReturnType<typeof useAnimatedRef<View>>;
+  gridOrigin: SharedValue<{ x: number; y: number }>;
+  cellRects: SharedValue<CellRect[]>;
+  hoverDay: SharedValue<number>;
   onOpen: () => void;
   onCopy: () => void;
-  onDragStart: () => void;
-  onDragMove: (pageX: number, pageY: number) => void;
-  onDragEnd: () => void;
+  onDragState: (on: boolean) => void;
+  onBuzz: (kind: 'pick' | 'move' | 'drop') => void;
+  onDrop: (day: number) => void;
 }) {
   const t = SESSION_TYPES[event.type] ?? {
     label: event.type,
@@ -468,139 +498,159 @@ function SessionCard({
   };
   const d = event.startsAt.toDate();
 
-  const pan = useRef(new Animated.ValueXY()).current;
-  const lift = useRef(new Animated.Value(0)).current;
-  const armed = useRef(false);
-  const [held, setHeld] = useState(false);
+  const tx = useSharedValue(0);
+  const ty = useSharedValue(0);
+  const lift = useSharedValue(0);
 
-  const release = useCallback(() => {
-    armed.current = false;
-    setHeld(false);
-    Animated.parallel([
-      reduceMotion
-        ? Animated.timing(pan, { toValue: { x: 0, y: 0 }, duration: 0, useNativeDriver: false })
-        : Animated.spring(pan, {
-            toValue: { x: 0, y: 0 },
-            useNativeDriver: false,
-            friction: 7,
-            tension: 90,
-          }),
-      Animated.timing(lift, {
-        toValue: 0,
-        duration: reduceMotion ? 0 : 140,
-        useNativeDriver: false,
-      }),
-    ]).start();
-  }, [pan, lift, reduceMotion]);
-
-  // Rebuilt handlers during a live gesture are the classic PanResponder footgun: the
-  // parent re-renders on every hover change, and a fresh handler object arrives
-  // mid-drag. Build the responder once and read the current callbacks off a ref.
-  const cb = useRef({ onDragStart, onDragMove, onDragEnd });
-  cb.current = { onDragStart, onDragMove, onDragEnd };
-
-  const responder = useMemo(
+  const pan = useMemo(
     () =>
-      PanResponder.create({
-        // Capture, not bubble: the Pressable underneath has already claimed the touch
-        // by the time the long press arms the drag, and only a capture handler can
-        // take it back from a child that is already the responder.
-        onMoveShouldSetPanResponderCapture: () => armed.current,
-        onPanResponderGrant: () => {
-          pan.setValue({ x: 0, y: 0 });
-          cb.current.onDragStart();
-        },
-        onPanResponderMove: (e, g) => {
-          pan.setValue({ x: g.dx, y: g.dy });
-          cb.current.onDragMove(e.nativeEvent.pageX, e.nativeEvent.pageY);
-        },
-        onPanResponderRelease: () => {
-          cb.current.onDragEnd();
-          release();
-        },
-        // A terminate is the system taking the gesture away, which must still put the
-        // card back rather than leaving it stranded mid-flight.
-        onPanResponderTerminate: () => {
-          cb.current.onDragEnd();
-          release();
-        },
-      }),
-    [pan, release]
+      Gesture.Pan()
+        .enabled(draggable)
+        // A press and hold, not a swipe. The card sits inside a scroll view, and a pan
+        // that claimed the touch immediately would make the page unscrollable.
+        .activateAfterLongPress(220)
+        .onStart(() => {
+          'worklet';
+          // Measured here, synchronously on the UI thread, so the origin is whatever
+          // it is right now. Measuring asynchronously at drag start means hit-testing
+          // against a stale origin for the first few frames.
+          const m = measure(gridRef);
+          if (m) gridOrigin.value = { x: m.pageX, y: m.pageY };
+          lift.value = withTiming(1, { duration: 120 });
+          runOnJS(onDragState)(true);
+          runOnJS(onBuzz)('pick');
+        })
+        .onUpdate((e) => {
+          'worklet';
+          tx.value = e.translationX;
+          ty.value = e.translationY;
+
+          const gx = e.absoluteX - gridOrigin.value.x;
+          const gy = e.absoluteY - gridOrigin.value.y;
+          let found = -1;
+          const rects = cellRects.value;
+          for (let i = 0; i < rects.length; i++) {
+            const r = rects[i];
+            if (gx >= r.x && gx <= r.x + r.w && gy >= r.y && gy <= r.y + r.h) {
+              found = r.d;
+              break;
+            }
+          }
+          // One tick per day crossed, not one per frame.
+          if (found !== hoverDay.value) {
+            hoverDay.value = found;
+            if (found > 0) runOnJS(onBuzz)('move');
+          }
+        })
+        .onEnd(() => {
+          'worklet';
+          const day = hoverDay.value;
+          if (day > 0) runOnJS(onDrop)(day);
+        })
+        .onFinalize(() => {
+          'worklet';
+          // Runs on a cancel as well as a normal end, so a gesture the system takes
+          // away still puts the card back rather than leaving it stranded mid-flight.
+          hoverDay.value = -1;
+          lift.value = withTiming(0, { duration: reduceMotion ? 0 : 140 });
+          if (reduceMotion) {
+            tx.value = 0;
+            ty.value = 0;
+          } else {
+            tx.value = withSpring(0, { damping: 15, stiffness: 180 });
+            ty.value = withSpring(0, { damping: 15, stiffness: 180 });
+          }
+          runOnJS(onDragState)(false);
+        }),
+    [
+      draggable,
+      reduceMotion,
+      gridRef,
+      gridOrigin,
+      cellRects,
+      hoverDay,
+      tx,
+      ty,
+      lift,
+      onDragState,
+      onBuzz,
+      onDrop,
+    ]
   );
 
-  const scale = lift.interpolate({ inputRange: [0, 1], outputRange: [1, 1.03] });
+  const card = useAnimatedStyle(() => ({
+    transform: [{ translateX: tx.value }, { translateY: ty.value }, { scale: 1 + lift.value * 0.03 }],
+    zIndex: lift.value > 0 ? 20 : 0,
+  }));
+
+  // The lifted look is its own layer so it can fade in rather than snap on, and so
+  // the resting card keeps a flat, cheap style.
+  const heldStyle = useAnimatedStyle(() => ({ opacity: lift.value }));
 
   return (
-    <Animated.View
-      {...(draggable ? responder.panHandlers : {})}
-      style={[
-        s.ev,
-        held && s.evHeld,
-        {
-          transform: [{ translateX: pan.x }, { translateY: pan.y }, { scale }],
-          zIndex: held ? 20 : 0,
-        },
-      ]}
-    >
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={`${t.label}, ${event.name}, ${event.timeLabel || d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}${event.canceled ? ', canceled' : ''}`}
-        accessibilityHint={draggable ? 'Opens the session. Press and hold to move it to another day.' : undefined}
-        onPress={onOpen}
-        delayLongPress={220}
-        onLongPress={() => {
-          if (!draggable) return;
-          armed.current = true;
-          setHeld(true);
-          Animated.timing(lift, { toValue: 1, duration: 120, useNativeDriver: false }).start();
-        }}
-        style={s.evInner}
-      >
-        <View style={[s.evIcon, { backgroundColor: `${t.color}22`, borderColor: t.color }]}>
-          <Ionicons name={t.icon} size={16} color={t.color} />
-        </View>
+    <GestureDetector gesture={pan}>
+      <Animated.View style={[s.ev, card]}>
+        <Animated.View style={[StyleSheet.absoluteFill, s.evHeld, heldStyle]} pointerEvents="none" />
 
-        <View style={{ flex: 1 }}>
-          <View style={s.evTop}>
-            <Text style={[s.evClock, event.canceled && s.struck]}>
-              {event.timeLabel || d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`${t.label}, ${event.name}, ${event.timeLabel || d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}${event.canceled ? ', canceled' : ''}`}
+          accessibilityHint={
+            draggable ? 'Opens the session. Press and hold to move it to another day.' : undefined
+          }
+          onPress={onOpen}
+          style={s.evInner}
+        >
+          <View style={[s.evIcon, { backgroundColor: `${t.color}22`, borderColor: t.color }]}>
+            <Ionicons name={t.icon} size={16} color={t.color} />
+          </View>
+
+          <View style={{ flex: 1 }}>
+            <View style={s.evTop}>
+              <Text style={[s.evClock, event.canceled && s.struck]}>
+                {event.timeLabel || d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+              </Text>
+              {event.durationMin ? <Text style={s.evDur}>{event.durationMin} min</Text> : null}
+              {event.kind === 'coached' ? (
+                <View style={s.coached}>
+                  <Ionicons name="people-outline" size={11} color={color.miamiTeal} />
+                  <Text style={s.coachedText}>
+                    {(event.athleteIds?.length ?? 1) > 1
+                      ? `Coached, ${event.athleteIds?.length} athletes`
+                      : 'Coached'}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+
+            <Text style={[s.evName, event.canceled && s.struck]}>{event.name}</Text>
+            <Text style={s.evMeta}>
+              {names.length ? `${names.join(', ')} · ` : ''}
+              {event.location}
+              {event.canceled ? ' · Canceled' : ''}
             </Text>
-            {event.durationMin ? <Text style={s.evDur}>{event.durationMin} min</Text> : null}
-            {event.kind === 'coached' ? (
-              <View style={s.coached}>
-                <Ionicons name="people-outline" size={11} color={color.miamiTeal} />
-                <Text style={s.coachedText}>Coached</Text>
-              </View>
+
+            {event.blocks?.length ? (
+              <Text style={s.evBlocks} numberOfLines={1}>
+                {event.blocks.map((b) => b.name).join(' · ')}
+              </Text>
             ) : null}
           </View>
 
-          <Text style={[s.evName, event.canceled && s.struck]}>{event.name}</Text>
-          <Text style={s.evMeta}>
-            {showAthlete && athlete ? `${athlete.playerName} · ` : ''}
-            {event.location}
-            {event.canceled ? ' · Canceled' : ''}
-          </Text>
-
-          {event.blocks?.length ? (
-            <Text style={s.evBlocks} numberOfLines={1}>
-              {event.blocks.map((b) => b.name).join(' · ')}
-            </Text>
-          ) : null}
-        </View>
-
-        {draggable && (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`Copy ${event.name}`}
-            onPress={onCopy}
-            hitSlop={8}
-            style={s.evCopy}
-          >
-            <Ionicons name="copy-outline" size={16} color={color.textDim} />
-          </Pressable>
-        )}
-      </Pressable>
-    </Animated.View>
+          {draggable && (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Copy ${event.name}`}
+              onPress={onCopy}
+              hitSlop={8}
+              style={s.evCopy}
+            >
+              <Ionicons name="copy-outline" size={16} color={color.textDim} />
+            </Pressable>
+          )}
+        </Pressable>
+      </Animated.View>
+    </GestureDetector>
   );
 }
 
@@ -675,16 +725,11 @@ const s = StyleSheet.create({
   cell: {
     width: `${100 / 7}%`,
     aspectRatio: 0.84,
-    alignItems: 'center',
-    justifyContent: 'center',
     borderRadius: radius.chip,
     borderWidth: 1,
     borderColor: 'transparent',
   },
-  cellSelected: { backgroundColor: color.fastRed },
-  // The drop target. A ring plus a fill, not a fill alone: on a grid of small cells a
-  // tint change is easy to miss with a thumb over it.
-  cellHover: { borderColor: color.miamiTeal, backgroundColor: color.tealTint },
+  cellInner: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   cellNum: { fontSize: 13.5, fontWeight: '600', color: color.textBody },
   cellNumToday: { color: color.redHot, fontWeight: '900' },
   chips: { flexDirection: 'row', alignItems: 'center', gap: 2, height: 9, marginTop: 4 },
@@ -732,6 +777,8 @@ const s = StyleSheet.create({
   // An offset and a real blur, so the card reads as lifted off the page rather than
   // ringed. A zero-offset glow is decoration; this is depth.
   evHeld: {
+    borderRadius: radius.card,
+    borderWidth: 1,
     borderColor: color.miamiTeal,
     backgroundColor: color.inkHover,
     boxShadow: '0 10px 22px rgba(0,0,0,0.45)',

@@ -358,6 +358,122 @@ describe('the queries the app actually runs', () => {
   });
 });
 
+describe('a coached session is one shared document', () => {
+  // A second family, so a shared session has someone to be shared WITH.
+  const A2 = 'athlete_two';
+  const P2 = 'parent_two_uid';
+  const K2 = 'player_two_uid';
+
+  async function seedSecondFamily({ claimed = true } = {}) {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'athletes', A2), {
+        guardianEmail: 'other@example.com',
+        playerEmail: 'kid@example.com',
+        guardianUid: claimed ? P2 : '',
+        playerUid: claimed ? K2 : '',
+        playerName: 'Jordan Reyes',
+        guardianName: 'Maria Reyes',
+      });
+    });
+  }
+
+  const shared = (over) => ({
+    athleteId: ATHLETE,
+    athleteIds: [ATHLETE, A2],
+    memberUids: [PARENT, PLAYER, P2, K2],
+    type: 'team',
+    name: 'Small group',
+    location: 'the gym',
+    startsAt: new Date(),
+    ...over,
+  });
+
+  test('both families read the one document, and a stranger does not', async () => {
+    await seed();
+    await seedSecondFamily();
+    await assertSucceeds(setDoc(doc(as(COACH), 'events', 'g1'), shared()));
+
+    // The second family is on memberUids but NOT on athleteId, so this is the branch
+    // that only exists because the session is shared.
+    await assertSucceeds(getDoc(doc(as(P2), 'events', 'g1')));
+    await assertSucceeds(getDoc(doc(as(K2), 'events', 'g1')));
+    await assertSucceeds(getDoc(doc(as(PARENT), 'events', 'g1')));
+
+    // And the query shape src/data.ts actually runs.
+    await assertSucceeds(
+      getDocs(query(collection(as(P2), 'events'), where('memberUids', 'array-contains', P2)))
+    );
+  });
+
+  test('the coach cannot leave a family off a session their child is on', async () => {
+    await seed();
+    await seedSecondFamily();
+    // memberUids is the audience and the coach writes it, so this is the same power
+    // the audit took away from him on threads: quietly excluding the parent who is
+    // supposed to be watching. The rule reads the athlete records rather than
+    // trusting the list.
+    await assertFails(
+      setDoc(doc(as(COACH), 'events', 'g2'), shared({ memberUids: [PARENT, PLAYER, K2] }))
+    );
+    // Leaving the ATHLETE off is refused for the same reason.
+    await assertFails(
+      setDoc(doc(as(COACH), 'events', 'g3'), shared({ memberUids: [PARENT, PLAYER, P2] }))
+    );
+    // Nor can he smuggle an athlete in without naming them at all.
+    await assertFails(
+      setDoc(doc(as(COACH), 'events', 'g4'), shared({ athleteIds: [ATHLETE, A2, 'ghost'] }))
+    );
+  });
+
+  test('a family with no account cannot be put on a shared session', async () => {
+    await seed();
+    await seedSecondFamily({ claimed: false });
+    // Their guardianUid is the empty string. If '' satisfied a membership test the
+    // session would look shared and be readable by nobody, which is exactly the bug
+    // the thread rule was fixed for.
+    await assertFails(setDoc(doc(as(COACH), 'events', 'g5'), shared({ memberUids: [PARENT, PLAYER, ''] })));
+    await assertFails(setDoc(doc(as(COACH), 'events', 'g5'), shared()));
+  });
+
+  test('athleteId must be one of the athletes on the session', async () => {
+    await seed();
+    await seedSecondFamily();
+    // The read rule still resolves athleteId through a get(), so a document whose
+    // athleteId names someone not on it would grant a family a session they are not
+    // part of.
+    await assertFails(
+      setDoc(doc(as(COACH), 'events', 'g6'), shared({ athleteId: 'someone_else' }))
+    );
+  });
+
+  test('an individual session still works, and needs none of this', async () => {
+    await seed();
+    // No athleteIds at all: every event written before sessions could be shared has
+    // this shape, and must keep working untouched.
+    await assertSucceeds(
+      setDoc(doc(as(COACH), 'events', 'solo'), {
+        athleteId: ATHLETE,
+        type: 'skills',
+        name: 'On your own',
+        location: 'home hoop',
+        startsAt: new Date(),
+      })
+    );
+    await assertSucceeds(getDoc(doc(as(PARENT), 'events', 'solo')));
+    await assertSucceeds(getDoc(doc(as(PLAYER), 'events', 'solo')));
+  });
+
+  test('eight athletes is the ceiling the rules unroll to', async () => {
+    await seed();
+    await seedSecondFamily();
+    await assertFails(
+      setDoc(doc(as(COACH), 'events', 'g7'), shared({
+        athleteIds: [ATHLETE, A2, 'a3', 'a4', 'a5', 'a6', 'a7', 'a8', 'a9'],
+      }))
+    );
+  });
+});
+
 describe('the Locker', () => {
   test('only the coach publishes, and the html has a size ceiling', async () => {
     await seed();

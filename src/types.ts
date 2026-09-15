@@ -50,7 +50,26 @@ export interface Message {
 
 export interface SessionEvent {
   id: string;
+  /**
+   * The athlete this session is primarily about, and always athleteIds[0].
+   *
+   * Kept even now that a coached session is one shared document, because the read
+   * rule's athleteId branch resolves through a get() at READ time: a family that
+   * signs up AFTER a session was scheduled can still see it, which a denormalised
+   * memberUids snapshot cannot do on its own.
+   */
   athleteId: string;
+  /** Every athlete on the session. One entry for individual work, up to eight for a
+   *  coached one (the ceiling the rules unroll to). */
+  athleteIds?: string[];
+  /**
+   * Every uid allowed to read it: each athlete's guardian, and the athlete too where
+   * they have a login. Denormalised so that deciding a read costs no document gets,
+   * which is the whole reason a coached session can be one row instead of one per
+   * athlete. The coach writes it and the rules check it against the athlete records,
+   * because he is the monitored party and does not get to choose his own audience.
+   */
+  memberUids?: string[];
   type: import('./theme').SessionType;
   name: string;
   location: string;

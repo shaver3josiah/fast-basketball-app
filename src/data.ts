@@ -14,6 +14,8 @@ import {
   updateDoc,
   where,
   writeBatch,
+  type DocumentData,
+  type Query,
   Timestamp,
   type Unsubscribe,
 } from 'firebase/firestore';
@@ -348,20 +350,50 @@ export function canPostIn(thread: Thread, uid: string, athlete: Athlete | null):
 export function subscribeEvents(
   role: Role,
   athleteId: string | null,
-  cb: (e: SessionEvent[]) => void
+  cb: (e: SessionEvent[]) => void,
+  uid?: string
 ): Unsubscribe {
-  const base = collection(db, 'events');
-  const q =
-    role === 'coach' && !athleteId ? query(base) : query(base, where('athleteId', '==', athleteId));
-  return onSnapshot(
-    q,
-    (snap) => {
-      const events = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as SessionEvent);
-      events.sort((a, b) => (a.startsAt?.toMillis() ?? 0) - (b.startsAt?.toMillis() ?? 0));
-      cb(events);
-    },
-    err('events')
-  );
+  const base = collection(db, "events");
+  const sort = (list: SessionEvent[]) =>
+    list.sort((a, b) => (a.startsAt?.toMillis() ?? 0) - (b.startsAt?.toMillis() ?? 0));
+
+  // The coach reads the collection unconstrained; isCoach() does not look at the
+  // document, so no query shape can return something he may not read.
+  if (role === "coach" && !athleteId) {
+    return onSnapshot(
+      query(base),
+      (snap) => cb(sort(snap.docs.map((x) => ({ id: x.id, ...x.data() }) as SessionEvent))),
+      err("events")
+    );
+  }
+
+  // A family needs both branches of the read rule, and one query cannot ask both
+  // questions: athleteId == theirs covers their own sessions and anything scheduled
+  // before they signed up, memberUids array-contains covers every coached session
+  // they were written into. Merged by id, because a session they are the primary
+  // athlete on satisfies both and would otherwise appear twice.
+  const seen = new Map<string, SessionEvent[]>();
+  const emit = () => {
+    const byId = new Map<string, SessionEvent>();
+    for (const e of [...seen.values()].flat()) byId.set(e.id, e);
+    cb(sort([...byId.values()]));
+  };
+  const watch = (key: string, q: Query<DocumentData>) =>
+    onSnapshot(
+      q,
+      (snap) => {
+        seen.set(
+          key,
+          snap.docs.map((x) => ({ id: x.id, ...x.data() }) as SessionEvent)
+        );
+        emit();
+      },
+      err("events:" + key)
+    );
+
+  const stops = [watch("own", query(base, where("athleteId", "==", athleteId)))];
+  if (uid) stops.push(watch("shared", query(base, where("memberUids", "array-contains", uid))));
+  return () => stops.forEach((s) => s());
 }
 
 // --- the Locker ------------------------------------------------------------
@@ -554,8 +586,12 @@ export const MAX_SCHEDULED = 480;
 const newId = () => doc(collection(db, "ids")).id;
 
 export interface ScheduleInput {
-  /** One id for individual work. Several fans out one event per athlete. */
-  athleteIds: string[];
+  /**
+   * The athlete records, not just their ids: a shared session has to write each
+   * family's uids into memberUids, and the rules check them against these same
+   * documents.
+   */
+  athletes: Athlete[];
   type: SessionType;
   name: string;
   location: string;
@@ -570,26 +606,48 @@ export interface ScheduleInput {
   everyWeeks: number;
 }
 
+/** Everyone who may read a session: each athlete's guardian, and the athlete too
+ *  where they have a login. An empty uid is a family that has not signed up, and it
+ *  is dropped rather than written, because '' in a membership list would match a
+ *  document whose own slot is still empty. */
+export const audienceOf = (athletes: Athlete[]) =>
+  Array.from(
+    new Set(athletes.flatMap((a) => [a.guardianUid, a.playerUid]).filter((uid) => !!uid))
+  );
+
+/** An athlete nobody has claimed yet cannot be put on a SHARED session: the rules
+ *  refuse a membership list that does not carry their guardian, and their guardian
+ *  has no uid to carry. Individual sessions are fine, and start resolving the moment
+ *  the family signs up. */
+export const canShareWith = (a: Athlete) => !!a.guardianUid;
+
 /**
  * Write a workout onto one or more calendars, projected out as far as asked.
  *
- * A coached session becomes one event PER ATHLETE rather than one shared event.
- * That is deliberate: /events is read with `isGuardian(resource.data.athleteId)`,
- * so a shared document would need an array-membership rule and a get() per athlete
- * to decide a read. Fanning out keeps the existing rule exactly as it is, and each
- * family sees their own row with their own cancellation state.
+ * A coached session is ONE document carrying every athlete on it, and a `memberUids`
+ * list saying who may read it. That costs nothing at read time, which is the point:
+ * the alternative shape, one copy per athlete, meant a group of six produced six
+ * documents to cancel, six to move, and six rows in the coach's own month.
+ *
+ * The cost moved to write time, where each athlete on the session is one document
+ * get inside the rule. Writes therefore go one at a time and NOT in a batch: a
+ * batched write shares a single document-access budget across every document in it,
+ * so a projected run of twelve would blow through it on the third occurrence.
+ * Losing atomicity is the trade, and the caller is told how many landed.
  */
 export async function scheduleWorkout(input: ScheduleInput): Promise<number> {
   const dates = projectDates(input.startsAt, input.occurrences, input.everyWeeks);
-  const total = dates.length * input.athleteIds.length;
+  const shared = input.kind === 'coached' && input.athletes.length > 1;
+  // A coached session is one document per DATE. Individual work is one per athlete
+  // per date, because those are separate workouts that happen to have been typed in
+  // once.
+  const perDate = shared ? 1 : input.athletes.length;
+  const total = dates.length * perDate;
   if (total === 0) return 0;
   if (total > MAX_SCHEDULED) {
-    throw new Error(
-      `That would write ${total} sessions. The limit is ${MAX_SCHEDULED} in one go.`
-    );
+    throw new Error(`That would write ${total} sessions. The limit is ${MAX_SCHEDULED} in one go.`);
   }
 
-  const batch = writeBatch(db);
   const seriesId = dates.length > 1 ? newId() : undefined;
   const blocks = input.blocks.map((b) => ({
     id: b.id,
@@ -598,30 +656,34 @@ export async function scheduleWorkout(input: ScheduleInput): Promise<number> {
     ...(b.notes ? { notes: b.notes } : {}),
   }));
 
+  const base = (athletes: Athlete[], date: Date) => ({
+    athleteId: athletes[0].id,
+    athleteIds: athletes.map((a) => a.id),
+    memberUids: audienceOf(athletes),
+    type: input.type,
+    name: input.name.trim(),
+    location: input.location.trim(),
+    startsAt: Timestamp.fromDate(date),
+    timeLabel: clockLabel(date, input.type),
+    kind: input.kind,
+    blocks,
+    durationMin: input.durationMin,
+    ...(input.notes?.trim() ? { notes: input.notes.trim() } : {}),
+    ...(input.templateId ? { templateId: input.templateId } : {}),
+    ...(seriesId ? { seriesId } : {}),
+  });
+
+  const writes: Promise<unknown>[] = [];
   for (const date of dates) {
-    // One groupId per OCCURRENCE, shared by that occurrence's athlete copies, so
-    // "move Tuesday's group session" can find the copies without also moving next
-    // Tuesday's.
-    const groupId = input.athleteIds.length > 1 ? newId() : undefined;
-    for (const athleteId of input.athleteIds) {
-      batch.set(doc(collection(db, 'events')), {
-        athleteId,
-        type: input.type,
-        name: input.name.trim(),
-        location: input.location.trim(),
-        startsAt: Timestamp.fromDate(date),
-        timeLabel: clockLabel(date, input.type),
-        kind: input.kind,
-        blocks,
-        durationMin: input.durationMin,
-        ...(input.notes?.trim() ? { notes: input.notes.trim() } : {}),
-        ...(input.templateId ? { templateId: input.templateId } : {}),
-        ...(groupId ? { groupId } : {}),
-        ...(seriesId ? { seriesId } : {}),
-      });
+    if (shared) {
+      writes.push(setDoc(doc(collection(db, 'events')), base(input.athletes, date)));
+    } else {
+      for (const a of input.athletes) {
+        writes.push(setDoc(doc(collection(db, 'events')), base([a], date)));
+      }
     }
   }
-  await batch.commit();
+  await Promise.all(writes);
   return total;
 }
 
@@ -687,16 +749,16 @@ export async function applyToSeries(
     (e) => e.seriesId === seriesId && (!after || e.startsAt.toDate() >= after)
   );
   if (!members.length) return 0;
-  const batch = writeBatch(db);
-  let n = 0;
-  for (const e of members.slice(0, MAX_SCHEDULED)) {
-    const patch = op(e);
-    if (!patch) continue;
-    batch.update(doc(db, 'events', e.id), patch);
-    n++;
-  }
-  await batch.commit();
-  return n;
+  // Updates run the audience check in the rules, which costs a document get per
+  // athlete on each session. A batch would share one document-access budget across
+  // the whole series and be refused partway through a long run.
+  const writes = members
+    .slice(0, MAX_SCHEDULED)
+    .map((e) => ({ e, patch: op(e) }))
+    .filter((x) => x.patch)
+    .map((x) => updateDoc(doc(db, 'events', x.e.id), x.patch as Record<string, unknown>));
+  await Promise.all(writes);
+  return writes.length;
 }
 
 export async function deleteSeries(events: SessionEvent[], seriesId: string, after: Date | null) {
@@ -717,13 +779,19 @@ export async function deleteSeries(events: SessionEvent[], seriesId: string, aft
 export async function pasteEvents(events: SessionEvent[], onto: Date): Promise<number> {
   if (!events.length) return 0;
   if (events.length > MAX_SCHEDULED) throw new Error('Too many sessions to paste at once.');
-  const batch = writeBatch(db);
-  for (const e of events) {
+  // Not a batch, for the same reason scheduleWorkout is not: each of these spends a
+  // document get per athlete inside the rule, and a batched write shares one
+  // document-access budget across every document in it.
+  const writes = events.map((e) => {
     const from = e.startsAt.toDate();
     const next = new Date(onto);
     next.setHours(from.getHours(), from.getMinutes(), 0, 0);
-    batch.set(doc(collection(db, 'events')), {
+    return setDoc(doc(collection(db, 'events')), {
       athleteId: e.athleteId,
+      // The copy carries the original's audience. Without it the rules reject the
+      // write, and rightly so: a session nobody can read is worse than no session.
+      ...(e.athleteIds ? { athleteIds: e.athleteIds } : {}),
+      ...(e.memberUids ? { memberUids: e.memberUids } : {}),
       type: e.type,
       name: e.name,
       location: e.location,
@@ -738,7 +806,8 @@ export async function pasteEvents(events: SessionEvent[], onto: Date): Promise<n
       // Inheriting seriesId would make "cancel the series" reach into a day the
       // coach copied it to by hand, which is not what he asked for.
     });
-  }
-  await batch.commit();
+  });
+  await Promise.all(writes);
   return events.length;
 }
+

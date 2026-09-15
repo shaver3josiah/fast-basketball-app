@@ -926,7 +926,7 @@ const guard = (needle, what) => {
  */
 const calPath = join(ROOT, 'app/(tabs)/calendar.tsx');
 const calSrc = existsSync(calPath) ? readFileSync(calPath, 'utf8') : '';
-for (const key of ['evIcon', 'gridChip', 'cellSelected', 'cellHover', 'legendItem']) {
+for (const key of ['evIcon', 'gridChip', 'cellInner', 'legendItem']) {
   if (calSrc && !new RegExp(`\\b${key}\\s*:`).test(calSrc)) {
     driftWarnings.push(`app/(tabs)/calendar.tsx no longer defines s.${key} - the SESSION_TYPES contexts below name it`);
   }
@@ -947,14 +947,14 @@ for (const [k, v] of Object.entries(THEME.SESSION_TYPES ?? {})) {
   addDyn('SESSION_TYPES', `${k} - grid chip, plain cell`, c, 'semantic.surfacePage', 'semantic.surfacePage',
     'ui', null, null, 'calendar.tsx s.gridChip (12x3.5)', 'graphical object in the month grid');
   addDyn('SESSION_TYPES', `${k} - grid chip, drag-target cell`, c, 'color.tealTint', 'semantic.surfacePage',
-    'ui', null, null, 'calendar.tsx s.gridChip on s.cellHover', 'graphical object on the teal drop target');
+    'ui', null, null, 'calendar.tsx s.gridChip on the drop target (DayCell useAnimatedStyle)', 'graphical object on the teal drop target');
   addDyn('SESSION_TYPES', `${k} - grid chip, pressed cell`, c, 'color.ink', 'semantic.surfacePage',
     'ui', null, null, 'calendar.tsx s.gridChip on the pressed cell', 'graphical object while the cell is held');
   // On the selected cell the chip is painted bone, not the type colour: the cell fill
   // is the brand red and three of the four types measured under 3:1 on it. The type is
   // still carried by the icon and the word in the day list below.
   addDyn('SESSION_TYPES', `${k} - grid chip, SELECTED cell`, 'color.bone', 'color.fastRed', 'semantic.surfacePage',
-    'ui', null, null, 'calendar.tsx s.gridChip on s.cellSelected', 'painted bone on the selected cell, not the type colour');
+    'ui', null, null, 'calendar.tsx s.gridChip on the selected cell (DayCell useAnimatedStyle)', 'painted bone on the selected cell, not the type colour');
   // Reference only: the 11px/800 uppercase label was removed when the row went to
   // icons. Kept so the number is on record if a text label comes back.
   addDyn('SESSION_TYPES', `${k} - as 11px/800 label (reference)`, c, 'semantic.surfaceCard', 'semantic.surfacePage',

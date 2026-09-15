@@ -44,6 +44,52 @@ service cloud.firestore {
 
     function changed() { return request.resource.data.diff(resource.data).affectedKeys(); }
 
+    // --- the audience of a shared calendar event ---------------------------
+    //
+    // Every athlete on a session must have their guardian in memberUids, and their
+    // own login too where they have one. Without this the coach could quietly leave
+    // a parent off a session he runs with her child, which is the same power the
+    // audit already took away from him on threads.
+    //
+    // A guardian who has not signed up yet has uid , and  must never satisfy a
+    // membership test: that is the exact bug the thread rule was fixed for. So a
+    // session cannot be SHARED with a family before they have an account. Give them
+    // an individual session instead, whose athleteId branch on read resolves through
+    // a get() and starts working the moment they claim their slot.
+    function athleteAudienceOk(aid, members) {
+      let a = athleteDoc(aid);
+      return a.guardianUid != 
+        && a.guardianUid in members
+        && (!(playerUid in a) || a.playerUid ==  || a.playerUid in members);
+    }
+
+    // Rules have no loops, so the list is unrolled to a fixed ceiling. Each term
+    // short-circuits past the end of the list WITHOUT spending a document get, so a
+    // two-athlete session costs two gets and not eight. That ceiling is also why
+    // src/data.ts writes these one at a time rather than in a batch: a batched write
+    // shares ONE document-access budget across every document in it.
+    function idxAudienceOk(ids, members, i) {
+      return ids.size() <= i || athleteAudienceOk(ids[i], members);
+    }
+
+    function audienceWritten(d) {
+      return !(athleteIds in d) || (
+        d.athleteIds is list
+        && d.athleteIds.size() >= 1
+        && d.athleteIds.size() <= 8
+        && d.memberUids is list
+        && d.athleteId in d.athleteIds
+        && idxAudienceOk(d.athleteIds, d.memberUids, 0)
+        && idxAudienceOk(d.athleteIds, d.memberUids, 1)
+        && idxAudienceOk(d.athleteIds, d.memberUids, 2)
+        && idxAudienceOk(d.athleteIds, d.memberUids, 3)
+        && idxAudienceOk(d.athleteIds, d.memberUids, 4)
+        && idxAudienceOk(d.athleteIds, d.memberUids, 5)
+        && idxAudienceOk(d.athleteIds, d.memberUids, 6)
+        && idxAudienceOk(d.athleteIds, d.memberUids, 7)
+      );
+    }
+
     // ---------------------------------------------------------------
     // Athletes — the consent record itself
     // ---------------------------------------------------------------
@@ -189,12 +235,32 @@ service cloud.firestore {
     // Calendar
     // ---------------------------------------------------------------
     // NOTE: `read` covers list queries, and rules never filter — the client must
-    // query with where('athleteId','==',aid) or the whole query is denied.
+    // query in a shape the rule can satisfy for EVERY document it could return, or
+    // the whole query is denied. src/data.ts runs two: one on athleteId, one on
+    // memberUids, which are the two branches below.
+    //
+    // A coached session is ONE document shared by several athletes, not a copy per
+    // athlete, so "who may read this" cannot be derived from a single athleteId any
+    // more. `memberUids` carries the answer directly, which makes a read cost no
+    // document gets at all — and which means the COACH writes the audience for his
+    // own session. He is the monitored party here, so the write rule does not take
+    // his word for it: see audienceOk below.
     match /events/{eid} {
       allow read: if isCoach()
+                  // The shared branch. Covers every athlete on a coached session.
+                  || ('memberUids' in resource.data
+                      && request.auth.uid in resource.data.memberUids)
+                  // The original branch, and not merely for old documents: it
+                  // resolves through a get() at READ time, so a family that signs up
+                  // AFTER a session was scheduled can still see it. memberUids is a
+                  // snapshot and cannot do that on its own.
                   || isGuardian(resource.data.athleteId)
                   || isPlayer(resource.data.athleteId);
-      allow create, update, delete: if isCoach();
+
+      // Nothing below applies to an event with no athleteIds, so every event written
+      // before coached sessions were shared keeps working exactly as it did.
+      allow create, update: if isCoach() && audienceWritten(request.resource.data);
+      allow delete: if isCoach();
     }
 
     // ---------------------------------------------------------------
