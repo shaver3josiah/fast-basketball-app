@@ -86,7 +86,10 @@ export default function DeleteAccount() {
             ? 'Too many attempts. Wait a few minutes and try again.'
             : code === 'auth/network-request-failed'
               ? 'No connection. Check your signal and try again.'
-              : 'Could not delete the account. Nothing was changed.'
+              : // The password errors above all happen before anything is written. This
+                // one can land after consent has already been revoked, so it must not
+                // promise that nothing changed.
+                'Could not finish deleting the account. Your login is still there — try again, or ask Coach Kingsley.'
       );
     } finally {
       setBusy(false);
