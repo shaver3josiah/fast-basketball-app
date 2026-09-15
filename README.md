@@ -168,9 +168,12 @@ subscription.
 - **iOS TestFlight** — a macOS runner prebuilds, archives with Xcode cloud signing
   against an App Store Connect API key, and uploads with `fastlane pilot`.
 
-Four Apple secrets (`APPLE_TEAM_ID`, `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_P8`) and
-four Android ones. `docs/SHIPPING.md` says exactly where each comes from and which steps
-only the account holder can perform.
+Nine repository secrets: four Apple (`APPLE_TEAM_ID`, `ASC_KEY_ID`, `ASC_ISSUER_ID`,
+`ASC_KEY_P8`), four Android, and `ENV_FILE` — the whole of `.env`, which both builds
+need because Expo inlines the Firebase config into the bundle and a build without it
+produces an app nobody can sign in to. `docs/SHIPPING.md` says exactly where each comes
+from and which steps only the account holder can perform; `docs/APP-STORE.md` has the
+listing copy, the privacy answers and the review notes for the submission itself.
 
 ---
 

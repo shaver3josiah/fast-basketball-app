@@ -140,7 +140,7 @@ Keep `fast-basketball-upload.jks` and `keystore.base64.txt` **out of the repo**.
 
 ---
 
-## 4. The eight secrets
+## 4. The nine secrets
 
 GitHub, then your repo, then **Settings**, then Secrets and variables, then
 **Actions**, then New repository secret.
@@ -155,6 +155,21 @@ GitHub, then your repo, then **Settings**, then Secrets and variables, then
 | `ANDROID_KEYSTORE_PASSWORD` | Android | The keystore password you chose |
 | `ANDROID_KEY_ALIAS` | Android | `fast-basketball` |
 | `ANDROID_KEY_PASSWORD` | Android | Same as the keystore password |
+| `ENV_FILE` | both | The whole of `.env`, verbatim. **Not optional** — see below |
+
+### `ENV_FILE`: the one whose absence is silent
+
+`.env` is gitignored and `EXPO_PUBLIC_*` is inlined into the JavaScript bundle at build
+time, so a runner without this file builds an app carrying no Firebase config at all: it
+installs, it opens, and it dead-ends on the "unconfigured" screen. Both build workflows
+now refuse to continue without a project id and a coach uid in it, because the failure is
+otherwise a perfectly green build of a dead app.
+
+```powershell
+gh secret set ENV_FILE --repo shaver3josiah/fast-basketball-app < "C:/Users/shave/Documents/Claude/Projects/Fast Basketball/fast-basketball-app/.env"
+```
+
+Re-run that whenever `.env` changes. A secret is a copy, not a link.
 
 ### `ASC_KEY_P8`: paste it raw
 

@@ -86,6 +86,16 @@ which backend it is using.
 `.env` is gitignored. None of it is secret anyway — a Firebase web config is public by
 design, and the security rules are what actually protect the data.
 
+**The release builds need the same file, and cannot read yours.** Expo inlines these
+values into the JavaScript bundle at build time, so a build without them produces an app
+that installs, opens and dead-ends on "unconfigured". GitHub gets its copy from an
+`ENV_FILE` repository secret, which is already set — **re-set it whenever `.env`
+changes**, or the next build ships the old backend:
+
+```powershell
+gh secret set ENV_FILE --repo shaver3josiah/fast-basketball-app < "C:/Users/shave/Documents/Claude/Projects/Fast Basketball/fast-basketball-app/.env"
+```
+
 ### A6. Deploy the security rules — the step that matters most
 
 Until this runs, your database denies everything and none of the consent or
@@ -156,42 +166,24 @@ minor's conversation.
 
 ---
 
-## Session B — Android signing (do before real testers)
+## Session B — Android signing — **done, 15 September 2026**
 
-Today's APK is **debug-signed**. It installs and runs, but a properly signed build
-later **cannot upgrade over it** — Android rejects the signature change and every
-tester has to uninstall first. Five minutes now avoids that conversation.
+The upload keystore exists and the four `ANDROID_*` repository secrets are set from it,
+so every APK the pipeline builds is release-signed and can be upgraded in place. The
+file, its password and the certificate fingerprint are recorded in
+`docs/owner-open-items.md` at the **project root** — not in this repository, which is
+public.
 
-```powershell
-& "C:\Program Files\Java\jdk-17\bin\keytool.exe" -genkeypair -v -keystore "$HOME\fast-basketball-upload.jks" -alias fast-basketball -keyalg RSA -keysize 2048 -validity 10000
-```
-
-It asks for a password, then some name and organisation fields — any answers are fine.
-
-> **Save that password somewhere permanent, and keep the `.jks` file.** Losing either
-> means you can never update the app again; Android has no recovery for this. Do not
-> put the file in the repo — `.gitignore` already blocks `*.jks`, but keep it
-> elsewhere anyway.
-
-```powershell
-gh secret set ANDROID_KEYSTORE_BASE64 --repo shaver3josiah/fast-basketball-app --body ([Convert]::ToBase64String([IO.File]::ReadAllBytes("$HOME\fast-basketball-upload.jks")))
-```
-
-```powershell
-gh secret set ANDROID_KEY_ALIAS --repo shaver3josiah/fast-basketball-app --body "fast-basketball"
-```
-
-Then set `ANDROID_KEYSTORE_PASSWORD` and `ANDROID_KEY_PASSWORD` to the password you
-chose — the same value for both.
-
-Full detail: [`SHIPPING.md` §3](SHIPPING.md).
-
----
+**Back that keystore up.** Losing it or its password means no future version of the
+Android app can ever update over an installed one, and Play rejects a signature change.
+Android has no recovery for this.
 
 ## Session C — Apple (only for iPhones)
 
-The click-by-click is [`SHIPPING.md` §2](SHIPPING.md). The short version, plus the two
-things that actually go wrong:
+The click-by-click is [`SHIPPING.md` §2](SHIPPING.md), and everything App Store Connect
+asks for once the build is up there — the listing copy, the privacy answers, the age
+rating and the review notes — is written out in [`APP-STORE.md`](APP-STORE.md). The short
+version, plus the two things that actually go wrong:
 
 1. **developer.apple.com — accept any pending agreement first.** A pending agreement
    breaks distribution silently, deep inside a build, with an error that does not
