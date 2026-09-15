@@ -195,8 +195,10 @@ export default function You() {
                     unlocked={isUnlocked(c, rewards)}
                     chosen={chosen?.id === c.id}
                     onPress={() => {
+                      // Locked ones play but are not equipped. Watching what you are
+                      // chasing is the point; a row of padlocks tells you nothing.
                       setPreview({ id: c.id, nonce: preview.nonce + 1 });
-                      save({ celebration: c.id });
+                      if (isUnlocked(c, rewards)) save({ celebration: c.id });
                     }}
                   />
                 ))}
@@ -468,9 +470,9 @@ function Row({
 }
 
 /**
- * A celebration, locked or not. A locked one still shows what it is and what it costs:
- * a row of grey padlocks with no names is a wall, and the point is to give the athlete
- * something to aim at.
+ * A celebration, locked or not. A locked one still shows what it is, what it costs, and
+ * PLAYS when tapped: a row of grey padlocks tells an athlete nothing about what they are
+ * chasing, and the animation is the thing being chased. Tapping just does not equip it.
  */
 function CelebrationRow({
   celebration: c,
@@ -492,16 +494,17 @@ function CelebrationRow({
 
   return (
     <Pressable
-      accessibilityRole="radio"
-      accessibilityState={{ selected: chosen, disabled: !unlocked }}
-      accessibilityLabel={unlocked ? `${c.label}. ${c.blurb}` : `${c.label}, locked. Needs ${need}.`}
-      disabled={!unlocked}
+      accessibilityRole={unlocked ? 'radio' : 'button'}
+      accessibilityState={unlocked ? { selected: chosen } : undefined}
+      accessibilityLabel={
+        unlocked ? `${c.label}. ${c.blurb}` : `Play ${c.label}. Locked, unlocks at ${need}.`
+      }
       onPress={onPress}
       style={({ pressed }) => [
         s.celeb,
         chosen && { borderColor: color.fastRed, backgroundColor: color.redTint },
-        pressed && unlocked && { backgroundColor: color.inkHover },
-        !unlocked && { opacity: 0.55 },
+        pressed && { backgroundColor: color.inkHover },
+        !unlocked && { opacity: 0.72 },
       ]}
     >
       <Ionicons
@@ -511,9 +514,9 @@ function CelebrationRow({
       />
       <View style={{ flex: 1 }}>
         <Text style={s.celebName}>{c.label}</Text>
-        <Text style={s.rowHint}>{unlocked ? c.blurb : `Unlocks at ${need}.`}</Text>
+        <Text style={s.rowHint}>{unlocked ? c.blurb : `${c.blurb} Unlocks at ${need}.`}</Text>
       </View>
-      {chosen ? <Tag tone="mon">On</Tag> : null}
+      {chosen ? <Tag tone="mon">On</Tag> : <Ionicons name="play-circle-outline" size={19} color={color.textDim} />}
     </Pressable>
   );
 }

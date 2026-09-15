@@ -7,7 +7,7 @@ import * as Linking from 'expo-linking';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../src/firebase';
 import { useSession, useNames } from '../../src/session';
-import { saveWorkflowAnswers, subscribeSubmissions } from '../../src/data';
+import { builtinWorkflow, saveWorkflowAnswers, subscribeSubmissions } from '../../src/data';
 import { periodLabel, submissionId } from '../../src/period';
 import { COLLECT_SCRIPT, bridgeScript } from '../../src/workflowBridge';
 import type { SavedWorkflow, Workflow } from '../../src/types';
@@ -38,6 +38,13 @@ export default function WorkflowScreen() {
 
   useEffect(() => {
     if (!id) return;
+    // A worksheet that ships in the binary has no Firestore document to watch, and
+    // asking for one would render "no longer published" for a file that is right here.
+    const local = builtinWorkflow(id);
+    if (local) {
+      setWorkflow(local);
+      return;
+    }
     return onSnapshot(doc(db, 'workflows', id), (snap) =>
       setWorkflow(snap.exists() ? ({ id: snap.id, ...snap.data() } as Workflow) : null)
     );

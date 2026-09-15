@@ -8,6 +8,8 @@ import { subscribeThreads } from '../../src/data';
 import { color, semantic } from '../../src/theme';
 import { Loading } from '../../src/ui';
 import { Pending } from '../../src/Pending';
+import { RewardsIntro } from '../../src/RewardsIntro';
+import { readState } from '../../src/rewards';
 
 /** Unread is approximated by "threads you can see" until read receipts exist.
  *  ponytail: a real per-thread lastRead pointer is a schema change and a rules change.
@@ -23,7 +25,7 @@ function useThreadCount() {
 }
 
 export default function TabsLayout() {
-  const { user, ready, needsVerification, notInvited, role } = useSession();
+  const { user, ready, needsVerification, notInvited, role, prefs } = useSession();
   const threads = useThreadCount();
 
   if (!ready) return <Loading />;
@@ -33,6 +35,9 @@ export default function TabsLayout() {
   if (needsVerification || notInvited) return <Pending />;
 
   return (
+    <>
+    {/* Once per device, and never for the coach: the streak is the athlete's. */}
+    {role !== 'coach' && <RewardsIntro state={readState(prefs)} />}
     <Tabs
       screenOptions={{
         headerStyle: { backgroundColor: semantic.surfaceBand },
@@ -99,5 +104,6 @@ export default function TabsLayout() {
         }}
       />
     </Tabs>
+    </>
   );
 }

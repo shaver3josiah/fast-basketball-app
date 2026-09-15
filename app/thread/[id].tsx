@@ -106,9 +106,19 @@ export default function ThreadScreen() {
               : undefined,
         }}
       />
+      {/*
+        `padding` on BOTH platforms. The Android branch used to pass `undefined` and
+        lean on the window resizing itself, which is what Expo's own guide says — but
+        this app draws edge to edge, so the window does NOT resize and the composer sat
+        under the keyboard with whatever was being typed hidden behind it.
+
+        Padding is self-correcting either way: KeyboardAvoidingView measures its own
+        frame against the keyboard, so on a build where the window DID resize the
+        overlap is zero and it adds nothing.
+      */}
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior="padding"
         keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top + 44 : 0}
       >
         <FlatList
@@ -117,6 +127,9 @@ export default function ThreadScreen() {
           keyExtractor={(m) => m.id}
           contentContainerStyle={s.list}
           onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
+          // Send without dismissing first: a tap on the button while the keyboard is
+          // open would otherwise be swallowed closing it.
+          keyboardShouldPersistTaps="handled"
           ListHeaderComponent={
             <View>
               {monitoring && (
@@ -150,6 +163,28 @@ export default function ThreadScreen() {
             {error}
           </Text>
         ) : null}
+
+        {/*
+          The conversation is where a session gets agreed, so it is where the calendar
+          should be one tap away. The coach lands on the scheduler with this athlete
+          already chosen; a family cannot write events, so theirs opens the calendar.
+        */}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={role === 'coach' ? 'Add a session to the calendar' : 'Open the calendar'}
+          onPress={() =>
+            role === 'coach' && thread?.athleteId
+              ? router.push({ pathname: '/schedule', params: { athleteId: thread.athleteId } })
+              : router.push('/calendar')
+          }
+          style={({ pressed }) => [s.calBar, pressed && { backgroundColor: color.inkHover }]}
+        >
+          <Ionicons name="calendar-outline" size={16} color={color.redHot} />
+          <Text style={s.calText}>
+            {role === 'coach' ? 'Add a session to the calendar' : 'Open the calendar'}
+          </Text>
+          <Ionicons name="chevron-forward" size={15} color={color.textDim} />
+        </Pressable>
 
         {canPost ? (
           <View style={[s.composer, { paddingBottom: Math.max(insets.bottom, 10) }]}>
@@ -270,6 +305,18 @@ const s = StyleSheet.create({
   who: { fontSize: 11, fontWeight: '800', color: color.redHot, marginBottom: 3, letterSpacing: 0.4 },
   text: { fontSize: 15, lineHeight: 21, color: color.chalk },
   stamp: { fontSize: 10.5, color: color.textLede, marginTop: 5, alignSelf: 'flex-end' },
+
+  calBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 9,
+    minHeight: 44,
+    paddingHorizontal: 14,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: semantic.border,
+    backgroundColor: semantic.surfaceBand,
+  },
+  calText: { flex: 1, fontSize: 13.5, fontWeight: '700', color: color.chalk },
 
   composer: {
     flexDirection: 'row',

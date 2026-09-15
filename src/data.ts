@@ -23,6 +23,7 @@ import {
 import { db, COACH_UID } from './firebase';
 import { parseSubmissionId, periodKey, submissionId } from './period';
 import { clockLabel, projectDates } from './schedule';
+import { BUILTIN_WORKFLOWS, isBuiltin } from './worksheets.generated';
 
 export { projectDates } from './schedule';
 import type { SessionType } from './theme';
@@ -399,16 +400,32 @@ export function subscribeEvents(
 
 // --- the Locker ------------------------------------------------------------
 
+/**
+ * The Locker's list: what the coach published, plus the worksheets that ship inside
+ * the binary. Merged here, in the one function every consumer reads through, so the
+ * screens cannot disagree about whether a built-in exists.
+ *
+ * A published document with the same id wins, which is the upgrade path: publish
+ * `builtin-night-shots` to Firestore and it replaces the shipped copy everywhere
+ * without an app release.
+ */
 export function subscribeWorkflows(cb: (w: Workflow[]) => void): Unsubscribe {
   return onSnapshot(
     collection(db, 'workflows'),
     (snap) => {
-      const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Workflow);
+      const published = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Workflow);
+      const ids = new Set(published.map((w) => w.id));
+      const list = [...published, ...BUILTIN_WORKFLOWS.filter((w) => !ids.has(w.id))];
       list.sort((a, b) => a.name.localeCompare(b.name));
       cb(list);
     },
     err('workflows')
   );
+}
+
+/** A built-in by id, or null. Lets a screen open one without asking Firestore. */
+export function builtinWorkflow(id: string): Workflow | null {
+  return isBuiltin(id) ? (BUILTIN_WORKFLOWS.find((w) => w.id === id) ?? null) : null;
 }
 
 /**

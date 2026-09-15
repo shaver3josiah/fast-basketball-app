@@ -6,6 +6,7 @@ import { useSession, useNames } from '../../src/session';
 import { subscribeWorkflows, subscribeSubmissions, subscribeRosterSubmissions } from '../../src/data';
 import { periodLabel } from '../../src/period';
 import { summarize } from '../../src/workflowBridge';
+import { isBuiltin } from '../../src/worksheets.generated';
 import type { SavedWorkflow, Workflow } from '../../src/types';
 import { Banner, Empty, Eyebrow, Screen } from '../../src/ui';
 import { color, radius, semantic, type } from '../../src/theme';
@@ -173,6 +174,9 @@ function WorkflowRow({
         <Text style={s.name}>{workflow.name}</Text>
         <Text style={s.meta}>
           {CADENCE_LABEL[cadence] ?? 'One-off'} · {formatSize(workflow.sizeBytes ?? 0)}
+          {/* The coach did not publish this one and cannot delete it: it ships with the
+              app. Saying so is cheaper than him wondering where it came from. */}
+          {isBuiltin(workflow.id) ? ' · Built in' : ''}
         </Text>
         {submissionCount > 0 && (
           <View style={s.pill}>

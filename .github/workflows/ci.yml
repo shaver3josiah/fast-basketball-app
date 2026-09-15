@@ -53,11 +53,21 @@ jobs:
       - name: Schedule arithmetic self-check
         run: npm run test:schedule
 
+      # Streak arithmetic and the reminder plan, including their own DST case.
+      - name: Rewards self-check
+        run: npm run test:rewards
+
       # The password reset must answer an unknown address exactly as it answers a
       # known one, or the screen becomes a way to ask whether a given family trains
       # here. That is one line away from being helpfully improved into a leak.
       - name: Auth message self-check
         run: npm run test:auth
+
+      # src/worksheets.generated.ts is the copy of scripts/worksheets/*.html that ships
+      # inside the binary. Edit the HTML, forget to regenerate, and the app keeps
+      # serving the old worksheet with nothing to show that it has.
+      - name: Built-in worksheets are current
+        run: npm run check:worksheets
 
       - name: Typecheck
         run: npx tsc --noEmit
