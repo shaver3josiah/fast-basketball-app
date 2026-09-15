@@ -15,7 +15,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSession } from '../../src/session';
 import { moveEvent, pasteEvents, subscribeEvents } from '../../src/data';
 import type { Athlete, SessionEvent } from '../../src/types';
-import { Empty, Eyebrow, GhostButton, TypeChip } from '../../src/ui';
+import { Empty, Eyebrow, GhostButton } from '../../src/ui';
 import { SESSION_TYPES, color, radius, semantic, type } from '../../src/theme';
 
 const DOW = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];

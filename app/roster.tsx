@@ -78,8 +78,6 @@ function AthleteCard({
   const parentIn = Boolean(athlete.guardianUid);
   const playerInvited = Boolean(athlete.playerEmail);
   const playerIn = Boolean(athlete.playerUid);
-  // The guardian's uid has to exist before the rules will let a thread be created.
-  const canOpen = parentIn && !hasThreads;
 
   async function open() {
     setBusy(true);
