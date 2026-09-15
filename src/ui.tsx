@@ -150,6 +150,7 @@ export function Setting({
   value,
   onChange,
   disabled,
+  first,
   tone = 'red',
 }: {
   title: string;
@@ -157,6 +158,9 @@ export function Setting({
   value: boolean;
   onChange?: (next: boolean) => void;
   disabled?: boolean;
+  /** First row in its group: the hairline is a DIVIDER between siblings, so the top
+   *  one drops it rather than drawing a line across the top of the card it opens. */
+  first?: boolean;
   tone?: 'red' | 'teal';
 }) {
   const on = tone === 'teal' ? color.miamiTeal : color.fastRed;
@@ -168,7 +172,7 @@ export function Setting({
       accessibilityHint={description}
       disabled={disabled || !onChange}
       onPress={() => onChange?.(!value)}
-      style={[s.setting, disabled && { opacity: 0.65 }]}
+      style={[s.setting, first && { borderTopWidth: 0, paddingTop: 2 }, disabled && { opacity: 0.65 }]}
     >
       <View style={{ flex: 1, paddingRight: 12 }}>
         <Text style={s.settingTitle}>{title}</Text>

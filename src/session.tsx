@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import {
   onAuthStateChanged,
   sendEmailVerification,
@@ -13,6 +13,7 @@ import {
   subscribeAthlete,
   subscribeAthletes,
   subscribePrefs,
+  readPrefsOnce,
   savePrefs,
   hasConsent,
   findInvite,
@@ -56,7 +57,6 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const [athlete, setAthlete] = useState<Athlete | null>(null);
   const [athletesById, setAthletesById] = useState<Record<string, Athlete>>({});
   const [prefs, setPrefs] = useState<UserPrefs>({ mutedThreads: [] });
-  const [prefsLoaded, setPrefsLoaded] = useState(false);
   const [ready, setReady] = useState(false);
 
   useEffect(() => onAuthStateChanged(auth, (u) => setUser(u)), []);
@@ -117,37 +117,54 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   }, [user?.uid, role]);
 
   useEffect(() => {
-    setPrefsLoaded(false);
     if (!user) return;
-    return subscribePrefs(user.uid, (p) => {
-      setPrefs(p);
-      setPrefsLoaded(true);
-    });
+    return subscribePrefs(user.uid, setPrefs);
   }, [user?.uid]);
 
   /**
-   * The daily streak. Counted on opening the app, which is the thing being rewarded.
+   * The daily streak, counted ONCE per sign-in.
    *
-   * Gated on the snapshot having actually arrived: the default prefs object carries
-   * no lastDay, so running this against it would write streak 1 on every single
-   * launch and quietly destroy the streak it is supposed to keep. `visit` returns
-   * null once the day is counted, so a day is one write however often the app opens.
+   * It used to run on every prefs snapshot, and that was the bug: Firestore answers a
+   * cold listener from cache first, and for a document it has never cached the answer
+   * is "does not exist". As a UserPrefs that is an account with no lastDay, which
+   * `visit()` reads as a first-ever open and writes `streak: 1` — clobbering the real
+   * streak arriving from the server a moment later. Every launch was a coin flip.
+   *
+   * So: one read, at sign-in, and nothing at all unless Firestore actually confirmed
+   * what it found. The ref keeps it to once per account even if this effect is torn
+   * down and rebuilt, and `visit()` still returns null on a day already counted, so
+   * signing in twice in an evening writes nothing.
    */
+  const streakChecked = useRef<string | null>(null);
   useEffect(() => {
-    if (!user || !prefsLoaded) return;
-    const patch = visit(readState(prefs), new Date());
-    if (patch) savePrefs(user.uid, prefs, patch).catch(() => {});
-  }, [user?.uid, prefsLoaded, prefs]);
+    const uid = user?.uid;
+    // Cleared on sign-out so signing back in is a fresh login and checks again.
+    if (!uid) {
+      streakChecked.current = null;
+      return;
+    }
+    if (streakChecked.current === uid) return;
+    streakChecked.current = uid;
+    let cancelled = false;
 
-  /**
-   * Streak reminders, re-planned whenever the streak or the switch moves. notify.ts
-   * cancels everything it had queued first, which is what stops a warning firing at
-   * someone who did come back today.
-   */
-  useEffect(() => {
-    if (!user || !prefsLoaded) return;
-    syncReminders(readState(prefs), prefs.remind !== false);
-  }, [user?.uid, prefsLoaded, prefs.streak, prefs.lastDay, prefs.remind]);
+    (async () => {
+      const { prefs: saved, confirmed } = await readPrefsOnce(uid);
+      if (cancelled || !confirmed) return;
+
+      const before = readState(saved);
+      const patch = visit(before, new Date());
+      if (patch) await savePrefs(uid, saved, patch).catch(() => {});
+
+      // Re-planned here rather than on every snapshot, for the same reason: the streak
+      // this is warning about has just been settled, and nothing later in the session
+      // changes it. The You tab re-plans when the switch is toggled.
+      await syncReminders({ ...before, ...patch }, saved.remind !== false);
+    })().catch((e) => console.warn('[fastbb] streak check failed:', e));
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.uid]);
 
   const value = useMemo<Session>(
     () => ({

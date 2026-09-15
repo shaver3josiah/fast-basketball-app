@@ -5,6 +5,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSession, useNames } from '../../src/session';
 import { hasConsent, savePrefs, setConsent, setMuted, subscribeThreads } from '../../src/data';
 import { Celebrate } from '../../src/Celebrate';
+import { syncReminders } from '../../src/notify';
 import {
   CELEBRATIONS,
   activeCelebration,
@@ -14,18 +15,33 @@ import {
   type Celebration,
 } from '../../src/rewards';
 import type { Thread, UserPrefs } from '../../src/types';
-import { Avatar, Body, Button, Card, CardTitle, Screen, Setting, Tag } from '../../src/ui';
-import { CHAT_COLORS, bubbleColor, color, radius, semantic, type } from '../../src/theme';
+import { Avatar, Body, Button, Card, Eyebrow, Screen, Setting, Tag } from '../../src/ui';
+import { CHAT_COLORS, bubbleColor, color, radius, semantic, type, type IconName } from '../../src/theme';
 
+/**
+ * Settings, as a grouped list rather than a stack of cards.
+ *
+ * The screen had grown one card per feature, eight of them, all the same weight: a
+ * parent opening it to check consent scrolled past a streak scoreboard, six celebration
+ * rows and a colour picker to reach the one switch that matters. The order here is by
+ * what each role opens the screen FOR, the two personalisation pickers are collapsed to
+ * a row each because they are chosen once, and every notification control now lives in
+ * the same group instead of two.
+ */
 export default function You() {
   const { user, role, athlete, athletesById, consent, prefs } = useSession();
   const names = useNames();
   const router = useRouter();
   const [threads, setThreads] = useState<Thread[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [open, setOpen] = useState<'celebration' | 'colour' | null>(null);
   const [preview, setPreview] = useState({ id: 'spark', nonce: 0 });
 
   const rewards = readState(prefs);
+  const chosen = CELEBRATIONS.find((c) => c.id === activeCelebration(rewards));
+  const next = nextUp(rewards);
+  const player = names.player.split(' ')[0];
+  const parent = names.parent.split(' ')[0];
 
   useEffect(() => {
     if (!user) return;
@@ -39,11 +55,11 @@ export default function You() {
     player: athlete?.age ? `Athlete · Age ${athlete.age}` : 'Athlete',
   }[role];
 
-  async function toggleConsent(next: boolean) {
+  async function toggleConsent(nextOn: boolean) {
     if (!athlete) return;
     setError(null);
     try {
-      await setConsent(athlete.id, next);
+      await setConsent(athlete.id, nextOn);
     } catch {
       // The rule is the enforcement; if it says no, say so rather than flipping
       // the switch optimistically and lying about the state.
@@ -51,7 +67,7 @@ export default function You() {
     }
   }
 
-  /** Both pickers write to the same private document, so they share one saver. */
+  /** Every picker on this screen writes to the same private document. */
   async function save(patch: Partial<UserPrefs>) {
     if (!user) return;
     setError(null);
@@ -74,234 +90,380 @@ export default function You() {
 
   return (
     <View style={{ flex: 1 }}>
-    <Screen>
-      <View style={s.who}>
-        <Avatar name={me} role={role} size={52} />
-        <View style={{ flex: 1 }}>
-          <Text style={s.name}>{me}</Text>
-          <Text style={s.role}>{roleLabel}</Text>
+      <Screen>
+        <View style={s.who}>
+          <Avatar name={me} role={role} size={52} />
+          <View style={{ flex: 1 }}>
+            <Text style={s.name}>{me}</Text>
+            <Text style={s.role}>{roleLabel}</Text>
+          </View>
         </View>
-      </View>
 
-      {error ? (
-        <Text style={s.error} accessibilityLiveRegion="polite">
-          {error}
-        </Text>
-      ) : null}
+        {error ? (
+          <Text style={s.error} accessibilityLiveRegion="polite">
+            {error}
+          </Text>
+        ) : null}
 
-      <Card>
-        <CardTitle>Your streak</CardTitle>
-        <View style={s.stats}>
-          <Stat n={rewards.streak} label="Day streak" hot={rewards.streak >= 3} />
-          <Stat n={rewards.bestStreak} label="Best run" />
-          <Stat n={rewards.workouts} label="Workouts" />
-        </View>
-        <Body>
-          {rewards.streak === 0
-            ? 'Open the app on a training day and the streak starts. Finish a workout on the timer and it counts.'
-            : `Opened ${rewards.streak} day${rewards.streak === 1 ? '' : 's'} in a row. Come back tomorrow and it keeps going.`}
-        </Body>
-        <Setting
-          title="Streak reminders"
-          description="A nudge in the evening when the streak is about to break, and a note the morning after if it does. Nothing leaves your phone."
-          value={prefs.remind !== false}
-          onChange={(on) => save({ remind: on })}
-        />
-      </Card>
+        {/* Highest stakes first, and it is different for each of the three people. */}
+        {role === 'parent' && (
+          <>
+            <Eyebrow style={s.firstGroup}>Consent</Eyebrow>
+            <Card>
+              <Setting
+                first
+                title="Training consent"
+                description={`Lets ${player} message Coach Kingsley directly. Turn it off and their thread goes read-only immediately.`}
+                value={consent}
+                onChange={toggleConsent}
+              />
+              <Setting
+                title="Read every message"
+                description="Always on for athletes under 18. Not something you or your athlete can switch off."
+                value
+                disabled
+                tone="teal"
+              />
+              <Row
+                icon="information-circle-outline"
+                label={`${player}'s thread`}
+                value={consent ? 'Open' : 'Locked'}
+                valueTone={consent ? 'ok' : 'warn'}
+                hint="Revoking locks it without deleting anything that was already said."
+              />
+            </Card>
+          </>
+        )}
 
-      <Card>
-        <CardTitle>Celebration</CardTitle>
-        <Body>
-          What goes off when you mark a block or a workout done. Tap one to try it.
-          {nextUp(rewards) ? ` Next up: ${nextUp(rewards)!.celebration.label}, ${nextUp(rewards)!.hint}.` : ''}
-        </Body>
-        <View style={{ height: 10 }} />
-        {CELEBRATIONS.map((c) => (
-          <CelebrationRow
-            key={c.id}
-            celebration={c}
-            unlocked={isUnlocked(c, rewards)}
-            chosen={activeCelebration(rewards) === c.id}
-            onPress={() => {
-              setPreview({ id: c.id, nonce: preview.nonce + 1 });
-              save({ celebration: c.id });
-            }}
-          />
-        ))}
-      </Card>
-
-      <Card>
-        <CardTitle>Chat colour</CardTitle>
-        <Body>Your own messages, in whichever of these you like. Nobody else's change.</Body>
-        <View style={s.swatches}>
-          {(Object.keys(CHAT_COLORS) as (keyof typeof CHAT_COLORS)[]).map((k) => {
-            const on = (prefs.chatColor ?? 'red') === k;
-            return (
-              <Pressable
-                key={k}
-                accessibilityRole="radio"
-                accessibilityState={{ selected: on }}
-                accessibilityLabel={CHAT_COLORS[k].label}
-                onPress={() => save({ chatColor: k })}
-                style={[s.swatch, { backgroundColor: CHAT_COLORS[k].bg }, on && s.swatchOn]}
-              >
-                {on ? <Ionicons name="checkmark-sharp" size={20} color={color.bone} /> : null}
-              </Pressable>
-            );
-          })}
-        </View>
-        <View style={[s.preview, { backgroundColor: bubbleColor(prefs.chatColor) }]}>
-          <Text style={s.previewText}>Your messages look like this.</Text>
-        </View>
-      </Card>
-
-      {role === 'parent' && (
-        <>
-          <Card>
-            <CardTitle>Consent</CardTitle>
-            <Setting
-              title="Training consent"
-              description={`Lets ${names.player.split(' ')[0]} message Coach Kingsley directly. Turn it off and their thread goes read-only immediately.`}
-              value={consent}
-              onChange={toggleConsent}
-            />
-            <Setting
-              title="Read every message"
-              description="Always on for athletes under 18. Not something you or your athlete can switch off."
-              value
-              disabled
-              tone="teal"
-            />
-          </Card>
-
-          <Card>
-            <CardTitle>Notifications</CardTitle>
-            {threads.map((t) => {
-              const muted = (prefs.mutedThreads ?? []).includes(t.id);
-              const label =
-                t.kind === 'coach-parent' ? 'Coach ↔ you' : `Coach ↔ ${names.player.split(' ')[0]}`;
-              return (
-                <Setting
-                  key={t.id}
-                  title={label}
-                  description={
-                    muted
-                      ? 'Muted. Messages still arrive, your phone stays quiet.'
-                      : 'Notify me about new messages in this thread.'
-                  }
-                  value={!muted}
-                  onChange={(on) => toggleMute(t.id, !on)}
-                />
-              );
-            })}
-          </Card>
-
-          <Card>
-            <CardTitle>{names.player.split(' ')[0]}’s account</CardTitle>
-            <Body>
-              Consent is{' '}
-              <Text style={{ color: consent ? color.miamiTeal : color.redHot, fontWeight: '700' }}>
-                {consent ? 'granted' : 'not granted'}
-              </Text>
-              . Revoking it locks the thread without deleting anything that was already said.
-            </Body>
-          </Card>
-        </>
-      )}
-
-      {role === 'player' && (
-        <>
-          <Card>
-            <CardTitle>Messaging status</CardTitle>
-            <Body>
-              {consent
-                ? `${names.parent.split(' ')[0]} approved messaging. You can ask Coach Kingsley anything about training. `
-                : `${names.parent.split(' ')[0]} has not approved messaging yet. Until they do you can read the calendar and the Locker, but the thread stays locked.`}
-              {consent ? (
-                <Text style={{ color: color.miamiTeal, fontWeight: '700' }}>
-                  They read this thread too
-                </Text>
-              ) : null}
-              {consent ? '. That is not a punishment. It is how the app works until you are 18.' : ''}
-            </Body>
-          </Card>
-          <Card>
-            <CardTitle>Notifications</CardTitle>
-            <Body>{names.parent.split(' ')[0]} controls notification settings for your account.</Body>
-          </Card>
-        </>
-      )}
-
-      {role === 'coach' && (
-        <>
-          <Card>
-            <CardTitle>Roster</CardTitle>
-            {Object.values(athletesById).length === 0 ? (
-              <Body>No athletes on the roster yet.</Body>
-            ) : (
-              Object.values(athletesById).map((a) => {
-                // Consent is per athlete, so it is read off each row rather than off
-                // the session — otherwise every athlete would inherit the first one's.
-                const granted = hasConsent(a);
-                return (
-                  <View key={a.id} style={s.rosterRow}>
+        {role === 'coach' && (
+          <>
+            <Eyebrow style={s.firstGroup}>Roster</Eyebrow>
+            <Card>
+              {Object.values(athletesById).length === 0 ? (
+                <Body>No athletes on the roster yet.</Body>
+              ) : (
+                // Consent is per athlete, so it is read off each row rather than off the
+                // session — otherwise every athlete would inherit the first one's.
+                Object.values(athletesById).map((a, i) => (
+                  <View key={a.id} style={[s.row, i === 0 && s.rowFirst]}>
                     <View style={{ flex: 1 }}>
-                      <Text style={s.rosterName}>
+                      <Text style={s.rowLabel}>
                         {a.playerName}
                         {a.age ? ` · ${a.age}` : ''}
                       </Text>
-                      <Text style={type.meta}>
-                        Guardian: {a.guardianName} · consent {granted ? 'granted' : 'pending'}
-                      </Text>
+                      <Text style={s.rowHint}>Guardian: {a.guardianName}</Text>
                     </View>
-                    <Tag tone={granted ? 'mon' : 'ro'}>{granted ? 'Active' : 'Pending'}</Tag>
+                    <Tag tone={hasConsent(a) ? 'mon' : 'ro'}>
+                      {hasConsent(a) ? 'Active' : 'Pending'}
+                    </Tag>
                   </View>
-                );
-              })
-            )}
-            <View style={{ height: 12 }} />
-            <Button label="Add or manage athletes" onPress={() => router.push('/roster')} />
-          </Card>
-          <Card>
-            <CardTitle>What parents see</CardTitle>
-            <Body>
-              Every message you send an athlete is visible to their guardian, and no message can be
-              edited or deleted afterwards, by them or by you. Write like it is on the record.
-            </Body>
-          </Card>
-        </>
-      )}
-
-      <Card>
-        <CardTitle>Account</CardTitle>
-        <Body>{user?.email}</Body>
-        <View style={{ height: 14 }} />
-        <SignOutButton />
-        <LinkRow label="Privacy policy" url="https://fast-basketball.com/privacy" />
-        <LinkRow label="Get help or report a concern" url="https://fast-basketball.com/contact" />
-        {role !== 'coach' && (
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => router.push('/delete-account')}
-            style={s.linkRow}
-          >
-            <Text style={s.danger}>Delete my account</Text>
-          </Pressable>
+                ))
+              )}
+              <Row
+                icon="people-outline"
+                label="Add or manage athletes"
+                onPress={() => router.push('/roster')}
+              />
+            </Card>
+          </>
         )}
-      </Card>
-    </Screen>
-    <Celebrate id={preview.id} nonce={preview.nonce} />
+
+        {/* The coach is not an athlete, so none of this is his. A guardian keeps it:
+            an under-13 has no login and trains from the family account. */}
+        {role !== 'coach' && (
+          <>
+            <Eyebrow style={role === 'player' ? s.firstGroup : undefined}>Training</Eyebrow>
+            <Card>
+              <Streak
+                streak={rewards.streak}
+                best={rewards.bestStreak}
+                workouts={rewards.workouts}
+              />
+              <Row
+                icon="sparkles-outline"
+                label="Celebration"
+                value={chosen?.label ?? 'Spark'}
+                hint={next ? `Next: ${next.celebration.label}, ${next.hint}.` : 'Every one unlocked.'}
+                expanded={open === 'celebration'}
+                onPress={() => setOpen(open === 'celebration' ? null : 'celebration')}
+              />
+              {open === 'celebration' &&
+                CELEBRATIONS.map((c) => (
+                  <CelebrationRow
+                    key={c.id}
+                    celebration={c}
+                    unlocked={isUnlocked(c, rewards)}
+                    chosen={chosen?.id === c.id}
+                    onPress={() => {
+                      setPreview({ id: c.id, nonce: preview.nonce + 1 });
+                      save({ celebration: c.id });
+                    }}
+                  />
+                ))}
+            </Card>
+          </>
+        )}
+
+        <Eyebrow>Messaging</Eyebrow>
+        <Card>
+          {role === 'player' && (
+            <Row
+              first
+              icon="chatbubbles-outline"
+              label="Direct messages"
+              value={consent ? 'Open' : 'Locked'}
+              valueTone={consent ? 'ok' : 'warn'}
+              hint={
+                consent
+                  ? `${parent} approved messaging and reads the thread too. That is how it works until you are 18.`
+                  : `${parent} has not approved messaging yet. The calendar and the Locker still work.`
+              }
+            />
+          )}
+          {role === 'coach' && (
+            <Row
+              first
+              icon="eye-outline"
+              label="Every message is on the record"
+              hint="A guardian sees everything you send their athlete, and nothing can be edited or deleted afterwards, by them or by you."
+            />
+          )}
+          <Row
+            first={role === 'parent'}
+            icon="color-palette-outline"
+            label="Your message colour"
+            value={CHAT_COLORS[(prefs.chatColor ?? 'red') as keyof typeof CHAT_COLORS]?.label ?? 'Fast red'}
+            swatch={bubbleColor(prefs.chatColor)}
+            expanded={open === 'colour'}
+            onPress={() => setOpen(open === 'colour' ? null : 'colour')}
+          />
+          {open === 'colour' && (
+            <View style={s.colourPanel}>
+              <View style={s.swatches}>
+                {(Object.keys(CHAT_COLORS) as (keyof typeof CHAT_COLORS)[]).map((k) => {
+                  const on = (prefs.chatColor ?? 'red') === k;
+                  return (
+                    <Pressable
+                      key={k}
+                      accessibilityRole="radio"
+                      accessibilityState={{ selected: on }}
+                      accessibilityLabel={CHAT_COLORS[k].label}
+                      onPress={() => save({ chatColor: k })}
+                      style={[s.swatch, { backgroundColor: CHAT_COLORS[k].bg }, on && s.swatchOn]}
+                    >
+                      {on ? <Ionicons name="checkmark-sharp" size={20} color={color.bone} /> : null}
+                    </Pressable>
+                  );
+                })}
+              </View>
+              <View style={[s.bubble, { backgroundColor: bubbleColor(prefs.chatColor) }]}>
+                <Text style={s.bubbleText}>Your messages look like this.</Text>
+              </View>
+              <Text style={s.rowHint}>Only yours change. Everyone else keeps theirs.</Text>
+            </View>
+          )}
+        </Card>
+
+        {/* One home for every notification control. The streak reminder used to sit
+            inside the streak card, three screens away from the thread switches. */}
+        {role !== 'coach' && (
+          <>
+            <Eyebrow>Notifications</Eyebrow>
+            <Card>
+              <Setting
+                first
+                title="Streak reminders"
+                description="A nudge in the evening when your streak is about to break, and a note the morning after if it does. Your phone sends these, not us."
+                value={prefs.remind !== false}
+                onChange={async (on) => {
+                  await save({ remind: on });
+                  await syncReminders(rewards, on);
+                }}
+              />
+              {role === 'parent' &&
+                threads.map((t) => {
+                  const muted = (prefs.mutedThreads ?? []).includes(t.id);
+                  return (
+                    <Setting
+                      key={t.id}
+                      title={t.kind === 'coach-parent' ? 'Coach ↔ you' : `Coach ↔ ${player}`}
+                      description={
+                        muted
+                          ? 'Muted. Messages still arrive, your phone stays quiet.'
+                          : 'Notify me about new messages in this thread.'
+                      }
+                      value={!muted}
+                      onChange={(on) => toggleMute(t.id, !on)}
+                    />
+                  );
+                })}
+              {role === 'player' && (
+                <Row
+                  icon="lock-closed-outline"
+                  label="Message alerts"
+                  value="Parent"
+                  hint={`${parent} controls notifications for your messages.`}
+                />
+              )}
+            </Card>
+          </>
+        )}
+
+        <Eyebrow>Account</Eyebrow>
+        <Card>
+          <Row first icon="mail-outline" label="Signed in as" value={user?.email ?? ''} />
+          <Row
+            icon="shield-checkmark-outline"
+            label="Privacy policy"
+            external
+            onPress={() => Linking.openURL('https://fast-basketball.com/privacy')}
+          />
+          <Row
+            icon="help-buoy-outline"
+            label="Get help or report a concern"
+            external
+            onPress={() => Linking.openURL('https://fast-basketball.com/contact')}
+          />
+          {role !== 'coach' && (
+            <Row
+              icon="trash-outline"
+              label="Delete my account"
+              danger
+              onPress={() => router.push('/delete-account')}
+            />
+          )}
+          <View style={{ height: 14 }} />
+          <SignOutButton />
+        </Card>
+      </Screen>
+
+      <Celebrate id={preview.id} nonce={preview.nonce} />
     </View>
   );
 }
 
-/** One number on the streak card. */
-function Stat({ n, label, hot }: { n: number; label: string; hot?: boolean }) {
+/**
+ * The streak, as one line rather than three equal tiles.
+ *
+ * Three same-sized number tiles gave the best run and the workout count the same weight
+ * as the streak itself, which is the number the athlete opened the screen to see. At
+ * zero it is an empty state that says how to start one, not a zero.
+ */
+function Streak({ streak, best, workouts }: { streak: number; best: number; workouts: number }) {
+  const hot = streak >= 3;
   return (
-    <View style={s.stat}>
-      <Text style={[s.statN, hot && { color: '#FF7A18' }]}>{n}</Text>
-      <Text style={s.statL}>{label}</Text>
+    <View style={[s.row, s.rowFirst]}>
+      <View style={[s.flame, hot && { backgroundColor: 'rgba(255,122,24,0.14)', borderColor: '#FF7A18' }]}>
+        <Ionicons name={hot ? 'flame' : 'flame-outline'} size={19} color={hot ? '#FF7A18' : color.textDim} />
+      </View>
+      <View style={{ flex: 1 }}>
+        {streak === 0 ? (
+          <>
+            <Text style={s.streakLead}>No streak yet</Text>
+            <Text style={s.rowHint}>
+              Finish a workout on the timer and day one is on the board.
+              {workouts > 0 ? ` ${workouts} logged so far.` : ''}
+            </Text>
+          </>
+        ) : (
+          <>
+            <Text style={s.streakLead}>
+              {streak} day{streak === 1 ? '' : 's'} in a row
+            </Text>
+            <Text style={s.rowHint}>
+              Best run {best} · {workouts} workout{workouts === 1 ? '' : 's'} logged
+            </Text>
+          </>
+        )}
+      </View>
     </View>
+  );
+}
+
+/**
+ * The one row vocabulary this screen uses for everything that is not a switch: a status,
+ * a link out, a destination, or a disclosure. Same shape every time, so the accessory on
+ * the right is the only thing that has to be read to know what a tap will do.
+ */
+function Row({
+  icon,
+  label,
+  value,
+  valueTone,
+  hint,
+  onPress,
+  expanded,
+  external,
+  danger,
+  swatch,
+  first,
+}: {
+  icon?: IconName;
+  label: string;
+  value?: string;
+  valueTone?: 'ok' | 'warn';
+  hint?: string;
+  onPress?: () => void;
+  /** Present means this row discloses a panel below it; the chevron points at its state. */
+  expanded?: boolean;
+  external?: boolean;
+  danger?: boolean;
+  /** First row in its group: drops the divider, which belongs BETWEEN siblings. */
+  first?: boolean;
+  /** A solid dot of the chosen colour, for the picker row. */
+  swatch?: string;
+}) {
+  const body = (
+    <>
+      {icon ? (
+        <Ionicons
+          name={icon}
+          size={18}
+          color={danger ? color.redHot : color.textDim}
+          style={{ marginTop: 1 }}
+        />
+      ) : null}
+      <View style={{ flex: 1 }}>
+        <View style={s.rowTop}>
+          <Text style={[s.rowLabel, danger && { color: color.redHot }]}>{label}</Text>
+          {value ? (
+            <Text
+              style={[
+                s.rowValue,
+                valueTone === 'ok' && { color: color.miamiTeal },
+                valueTone === 'warn' && { color: color.redHot },
+              ]}
+              numberOfLines={1}
+            >
+              {value}
+            </Text>
+          ) : null}
+        </View>
+        {hint ? <Text style={s.rowHint}>{hint}</Text> : null}
+      </View>
+      {swatch ? <View style={[s.dot, { backgroundColor: swatch }]} /> : null}
+      {expanded !== undefined ? (
+        <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={17} color={color.textDim} />
+      ) : external ? (
+        <Ionicons name="open-outline" size={16} color={color.textDim} />
+      ) : onPress ? (
+        <Ionicons name="chevron-forward" size={17} color={color.textDim} />
+      ) : null}
+    </>
+  );
+
+  if (!onPress) return <View style={[s.row, first && s.rowFirst]}>{body}</View>;
+  return (
+    <Pressable
+      accessibilityRole={external ? 'link' : 'button'}
+      accessibilityLabel={label}
+      accessibilityHint={hint}
+      accessibilityState={expanded === undefined ? undefined : { expanded }}
+      onPress={onPress}
+      style={({ pressed }) => [s.row, first && s.rowFirst, pressed && { backgroundColor: color.inkHover }]}
+    >
+      {body}
+    </Pressable>
   );
 }
 
@@ -337,7 +499,7 @@ function CelebrationRow({
       onPress={onPress}
       style={({ pressed }) => [
         s.celeb,
-        chosen && { borderColor: color.fastRed },
+        chosen && { borderColor: color.fastRed, backgroundColor: color.redTint },
         pressed && unlocked && { backgroundColor: color.inkHover },
         !unlocked && { opacity: 0.55 },
       ]}
@@ -349,26 +511,9 @@ function CelebrationRow({
       />
       <View style={{ flex: 1 }}>
         <Text style={s.celebName}>{c.label}</Text>
-        <Text style={type.meta}>{unlocked ? c.blurb : `Unlocks at ${need}.`}</Text>
+        <Text style={s.rowHint}>{unlocked ? c.blurb : `Unlocks at ${need}.`}</Text>
       </View>
       {chosen ? <Tag tone="mon">On</Tag> : null}
-    </Pressable>
-  );
-}
-
-/**
- * App Review wants a privacy policy and a support route reachable from inside the app,
- * not only from the store listing. Both live on the marketing site, so this opens them
- * rather than duplicating the copy in two places that would then drift apart.
- */
-function LinkRow({ label, url }: { label: string; url: string }) {
-  return (
-    <Pressable
-      accessibilityRole="link"
-      onPress={() => Linking.openURL(url)}
-      style={s.linkRow}
-    >
-      <Text style={s.link}>{label}</Text>
     </Pressable>
   );
 }
@@ -402,25 +547,42 @@ const s = StyleSheet.create({
     borderColor: semantic.border,
     borderRadius: 18,
     padding: 14,
-    marginBottom: 14,
   },
   name: { fontSize: 18, fontWeight: '800', color: color.chalk },
   role: { ...type.meta, marginTop: 2 },
-  rosterRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6 },
-  rosterName: { fontSize: 14, fontWeight: '700', color: color.chalk, marginBottom: 2 },
-  error: { color: color.redHot, fontSize: 13.5, lineHeight: 19, marginBottom: 12 },
-  linkRow: { minHeight: 44, justifyContent: 'center' },
+  error: { color: color.redHot, fontSize: 13.5, lineHeight: 19, marginTop: 12 },
+  /** The first group sits closer to the identity card than groups do to each other. */
+  firstGroup: { marginTop: 14 },
 
-  stats: { flexDirection: 'row', gap: 10, marginBottom: 12 },
-  stat: {
-    flex: 1,
-    backgroundColor: color.courtBlack,
-    borderRadius: radius.chip,
-    paddingVertical: 10,
-    alignItems: 'center',
+  // One row shape for the whole screen. The hairline is a divider between siblings, so
+  // the first row in a group drops it rather than drawing a line under the card's title.
+  row: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 11,
+    minHeight: 48,
+    paddingVertical: 11,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: semantic.border,
   },
-  statN: { fontSize: 26, fontWeight: '900', color: color.chalk, lineHeight: 30 },
-  statL: { fontSize: 10.5, fontWeight: '700', letterSpacing: 0.9, textTransform: 'uppercase', color: color.textDim },
+  rowFirst: { borderTopWidth: 0, paddingTop: 2 },
+  rowTop: { flexDirection: 'row', alignItems: 'baseline', gap: 10 },
+  rowLabel: { flex: 1, fontSize: 14, fontWeight: '700', color: color.chalk },
+  rowValue: { fontSize: 13, fontWeight: '700', color: color.textDim, maxWidth: '55%' },
+  rowHint: { fontSize: 12.5, lineHeight: 17, color: color.textDim, marginTop: 2 },
+
+  flame: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    borderWidth: 1,
+    borderColor: semantic.borderStrong,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  streakLead: { fontSize: 17, fontWeight: '800', color: color.chalk, letterSpacing: -0.2 },
+  /** The current bubble colour, shown on its row so the label is not the only evidence. */
+  dot: { width: 20, height: 20, borderRadius: 10, borderWidth: 1, borderColor: semantic.borderStrong, marginTop: 1 },
 
   celeb: {
     flexDirection: 'row',
@@ -432,11 +594,12 @@ const s = StyleSheet.create({
     borderWidth: 1,
     borderColor: semantic.borderStrong,
     borderRadius: radius.chip,
-    marginBottom: 8,
+    marginTop: 8,
   },
-  celebName: { fontSize: 14.5, fontWeight: '700', color: color.chalk, marginBottom: 2 },
+  celebName: { fontSize: 14.5, fontWeight: '700', color: color.chalk },
 
-  swatches: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 12 },
+  colourPanel: { paddingTop: 12 },
+  swatches: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   swatch: {
     width: 46,
     height: 46,
@@ -447,8 +610,13 @@ const s = StyleSheet.create({
     borderColor: 'transparent',
   },
   swatchOn: { borderColor: color.bone },
-  preview: { alignSelf: 'flex-end', marginTop: 14, borderRadius: 16, borderBottomRightRadius: 5, paddingHorizontal: 13, paddingVertical: 10 },
-  previewText: { fontSize: 15, lineHeight: 21, color: color.chalk },
-  link: { color: color.redHot, fontSize: 14, fontWeight: '700' },
-  danger: { color: color.textDim, fontSize: 14, fontWeight: '700' },
+  bubble: {
+    alignSelf: 'flex-end',
+    marginTop: 14,
+    borderRadius: 16,
+    borderBottomRightRadius: 5,
+    paddingHorizontal: 13,
+    paddingVertical: 10,
+  },
+  bubbleText: { fontSize: 15, lineHeight: 21, color: color.chalk },
 });

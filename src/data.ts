@@ -4,6 +4,7 @@ import {
   deleteDoc,
   deleteField,
   doc,
+  getDoc,
   getDocs,
   limit,
   onSnapshot,
@@ -487,9 +488,32 @@ export function saveWorkflowAnswers(
 export function subscribePrefs(uid: string, cb: (p: UserPrefs) => void): Unsubscribe {
   return onSnapshot(
     doc(db, 'users', uid),
-    (snap) => cb((snap.data() as UserPrefs) ?? { mutedThreads: [] }),
+    (snap) => {
+      // A document Firestore has not actually confirmed is absent is not news. On a
+      // cold start the SDK answers from cache first, and for a document it has never
+      // cached that answer is "does not exist" — which as a UserPrefs is an account
+      // with no streak, no colour and no mutes. Reporting that would make every launch
+      // flash empty settings for a moment, and anything that wrote back off it would
+      // erase the real ones.
+      if (!snap.exists() && snap.metadata.fromCache) return;
+      cb((snap.data() as UserPrefs) ?? { mutedThreads: [] });
+    },
     err('prefs')
   );
+}
+
+/**
+ * One read, for the once-per-sign-in streak check. Returns `confirmed: false` when all
+ * Firestore could offer was a cached miss, which is the caller's signal to do nothing:
+ * counting a day against a document that may exist on the server is how a streak gets
+ * silently reset to 1.
+ */
+export async function readPrefsOnce(uid: string): Promise<{ prefs: UserPrefs; confirmed: boolean }> {
+  const snap = await getDoc(doc(db, 'users', uid));
+  return {
+    prefs: (snap.data() as UserPrefs) ?? { mutedThreads: [] },
+    confirmed: snap.exists() || !snap.metadata.fromCache,
+  };
 }
 
 /**
