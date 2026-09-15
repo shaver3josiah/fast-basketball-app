@@ -224,12 +224,48 @@ jobs:
             echo "::error::No Assets.car in the archive -- the asset catalog was not compiled."
             exit 1
           fi
+
+          # Assets.car existing only proves SOME asset compiled -- the splash screen is in
+          # there too. These two are the proof that the APP ICON specifically compiled:
+          # actool writes the sized icon PNGs beside Assets.car, and names the icon set in
+          # the catalog's own index.
+          PNGS=$(find "$APP" -maxdepth 1 -name 'AppIcon*.png' | wc -l | tr -d ' ')
+          CAR=$(/usr/bin/assetutil --info "$APP/Assets.car" 2>/dev/null | grep -c '"AppIcon"' || true)
+          echo "AppIcon PNGs beside Assets.car: $PNGS; AppIcon named inside Assets.car: $CAR"
+
           NAME=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIconName" "$APP/Info.plist" 2>/dev/null || true)
-          if [ -z "$NAME" ]; then
-            echo "::error::CFBundleIconName is missing; App Store Connect will reject this build."
+          if [ -n "$NAME" ]; then
+            echo "CFBundleIconName=$NAME, Assets.car present."
+            exit 0
+          fi
+
+          # The icon is compiled but undeclared. Xcode 26 ran actool with --app-icon AppIcon
+          # and then ran builtin-infoPlistUtility with -additionalcontentfile pointing at
+          # the catalog's partial plist, and the key still did not arrive -- verified in the
+          # build log of run 34977481505. App Store Connect rejects the upload without it,
+          # AFTER the export and the upload have both run.
+          #
+          # So stamp it, exactly as the build number and marketing version are stamped a few
+          # steps above. Editing the archive is safe here and only here: -exportArchive
+          # re-signs the app, so a signature broken now is replaced in the next step.
+          #
+          # This is gated on the two checks above on purpose. Setting CFBundleIconName when
+          # the catalog carries no icon would buy a passing upload and ship an app with a
+          # blank icon on every home screen -- turning a loud failure into a silent one,
+          # which is the opposite of what this step is for.
+          if [ "$PNGS" -eq 0 ] && [ "$CAR" -eq 0 ]; then
+            echo "::error::CFBundleIconName is missing AND no compiled app icon is in the bundle -- the icon is genuinely absent, not merely undeclared. Do not paper over this."
+            echo "--- AppIcon.appiconset as prebuild generated it ---"
+            ls -la ios/*/Images.xcassets/AppIcon.appiconset/ 2>&1 || true
+            cat ios/*/Images.xcassets/AppIcon.appiconset/Contents.json 2>&1 || true
+            echo "--- files at the top of the .app ---"
+            ls -1 "$APP" | head -40
             exit 1
           fi
-          echo "CFBundleIconName=$NAME, Assets.car present."
+
+          echo "::warning::CFBundleIconName was missing from the built Info.plist; stamping it from the compiled catalog."
+          /usr/libexec/PlistBuddy -c "Add :CFBundleIconName string AppIcon" "$APP/Info.plist"
+          echo "CFBundleIconName=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIconName' "$APP/Info.plist")"
 
       - name: Export IPA
         run: |
