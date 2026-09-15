@@ -16,14 +16,20 @@ import { reminderPlan, type RewardState } from './rewards';
 
 // Shown even while the app is open. A streak warning that only appears when the app is
 // closed would arrive at the one moment it is not needed.
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowBanner: true,
-    shouldShowList: true,
-    shouldPlaySound: false,
-    shouldSetBadge: false,
-  }),
-});
+//
+// Guarded because this runs at import time, and src/session.tsx imports it on every
+// screen: on web the handler has no native module behind it, and a throw here would
+// take down `npm run web:coach`, which is how this app is looked at on this machine.
+if (Platform.OS !== 'web') {
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowBanner: true,
+      shouldShowList: true,
+      shouldPlaySound: false,
+      shouldSetBadge: false,
+    }),
+  });
+}
 
 const CHANNEL = 'streaks';
 
