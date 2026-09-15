@@ -2,6 +2,11 @@ name: Android APK
 
 on:
   workflow_dispatch:
+    inputs:
+      architectures:
+        description: "ABIs to build. arm64-v8a covers every real phone; add x86_64 only for an emulator."
+        default: arm64-v8a
+        required: false
   push:
     tags: ['v*']
 
@@ -114,9 +119,28 @@ jobs:
           grep -nE "^[[:space:]]*version(Code|Name) " "$G"
 
       # Gradle's assembleRelease runs Metro itself -- do NOT `expo export` first.
+      #
+      # ABIs are the whole build time. Measured on run 34992708992: assembleRelease was
+      # 1257s of a 1331s job, 94% of it, and every other step is rounding error. That
+      # time is spent compiling the native modules once per ABI, and the default set is
+      # four: armeabi-v7a, arm64-v8a, x86, x86_64. Two of those are emulator-only and
+      # accounted for 40MB of a 95MB APK -- no physical Android phone has ever been x86.
+      #
+      # arm64-v8a alone covers every phone built since about 2015, which is every phone
+      # this app will be sideloaded onto. A tag build keeps the full set, because a
+      # release is the artefact somebody might run anywhere; a dispatch can override the
+      # input when someone genuinely needs an emulator build.
+      #
+      # NOTE: this is for the sideloaded .apk. A Play Store upload is an .aab from
+      # bundleRelease and must carry every ABI; do not copy this flag there.
       - name: Assemble release
         working-directory: android
-        run: ./gradlew assembleRelease --no-daemon
+        env:
+          ABIS: ${{ inputs.architectures || 'armeabi-v7a,arm64-v8a,x86,x86_64' }}
+        run: |
+          set -euo pipefail
+          echo "building for: $ABIS"
+          ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures="$ABIS"
 
       # Expo's prebuild template points the release buildType at signingConfigs.debug,
       # so the APK Gradle just produced is DEBUG-signed. prebuild rewrites android/ on
