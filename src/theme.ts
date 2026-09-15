@@ -119,6 +119,30 @@ export const type = {
   label: { fontSize: 13, fontWeight: '600' as const, color: color.textLede },
 } as const;
 
+/**
+ * The colour an account's own message bubbles are painted in, picked on the You tab.
+ *
+ * Every one of these is dark enough to carry `chalk` body text and `textLede` stamps
+ * at AA (measured: 7.0:1 to 10.2:1 and 4.7:1 to 6.8:1). That is the whole constraint
+ * on the list — a picker offering a colour the text cannot be read on is not a choice,
+ * it is a trap. Add to it only with the ratios measured, not guessed.
+ */
+export const CHAT_COLORS = {
+  red: { label: 'Fast red', bg: color.redDeep },
+  ember: { label: 'Ember', bg: '#8A3A0C' },
+  gold: { label: 'Gold', bg: '#6B4A06' },
+  forest: { label: 'Forest', bg: '#1B5630' },
+  teal: { label: 'Miami', bg: '#0B5A52' },
+  ocean: { label: 'Ocean', bg: '#17407A' },
+  violet: { label: 'Violet', bg: '#4A2A73' },
+} as const satisfies Record<string, { label: string; bg: string }>;
+
+export type ChatColor = keyof typeof CHAT_COLORS;
+
+/** Unknown or unset falls back to the brand red the app shipped with. */
+export const bubbleColor = (key?: string): string =>
+  (CHAT_COLORS as Record<string, { bg: string }>)[key ?? '']?.bg ?? CHAT_COLORS.red.bg;
+
 /** Avatar tint per role — matches the preview's .av.coach / .parent / .player. */
 export const roleTint = {
   coach: { bg: color.redTint, fg: color.redHot, border: color.fastRed },

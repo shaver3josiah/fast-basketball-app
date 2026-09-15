@@ -504,6 +504,18 @@ export function setMuted(uid: string, prefs: UserPrefs, threadId: string, muted:
 }
 
 /**
+ * Everything else that lives in the account's own preferences document: the chat
+ * colour, and the reward counters.
+ *
+ * One writer for all of it, because they share a document and a partial `setDoc`
+ * without the merge below would drop the mute list. `patch` is whatever changed;
+ * `prefs` is what the session already has loaded, so nothing needs re-reading first.
+ */
+export function savePrefs(uid: string, prefs: UserPrefs, patch: Partial<UserPrefs>) {
+  return setDoc(doc(db, 'users', uid), { ...prefs, ...patch }, { merge: true });
+}
+
+/**
  * Delete this account's own preferences document. Called from the account-deletion
  * flow, which App Store Review Guideline 5.1.1(v) requires any app with a signup
  * screen to offer.

@@ -345,10 +345,29 @@ service cloud.firestore {
     // live in any document he can write.
     match /users/{uid} {
       allow read, delete: if isSignedIn() && request.auth.uid == uid;
+      // The chat colour and the reward counters live here too. They are private to
+      // this one account, nothing else reads through them, and no privilege anywhere
+      // derives from them — so the rule bounds the SIZE of what can be stored rather
+      // than policing whether an athlete's own scoreboard is honest.
       allow create, update: if isSignedIn() && request.auth.uid == uid
-        && request.resource.data.keys().hasOnly(['mutedThreads', 'displayName'])
+        && request.resource.data.keys().hasOnly([
+             'mutedThreads', 'displayName', 'chatColor', 'celebration',
+             'streak', 'bestStreak', 'lastDay', 'workouts', 'doneEvents', 'remind'
+           ])
         && request.resource.data.mutedThreads is list
-        && request.resource.data.mutedThreads.size() <= 200;
+        && request.resource.data.mutedThreads.size() <= 200
+        && (!('doneEvents' in request.resource.data)
+            || (request.resource.data.doneEvents is list
+                && request.resource.data.doneEvents.size() <= 60))
+        && (!('chatColor' in request.resource.data)
+            || (request.resource.data.chatColor is string
+                && request.resource.data.chatColor.size() <= 24))
+        && (!('celebration' in request.resource.data)
+            || (request.resource.data.celebration is string
+                && request.resource.data.celebration.size() <= 24))
+        && (!('lastDay' in request.resource.data)
+            || (request.resource.data.lastDay is string
+                && request.resource.data.lastDay.size() <= 10));
     }
 
     // Deny-by-default is already Firestore's behaviour; this is documentation, not a

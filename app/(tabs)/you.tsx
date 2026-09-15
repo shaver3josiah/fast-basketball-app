@@ -1,11 +1,21 @@
 import { useEffect, useState } from 'react';
 import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSession, useNames } from '../../src/session';
-import { hasConsent, setConsent, setMuted, subscribeThreads } from '../../src/data';
-import type { Thread } from '../../src/types';
+import { hasConsent, savePrefs, setConsent, setMuted, subscribeThreads } from '../../src/data';
+import { Celebrate } from '../../src/Celebrate';
+import {
+  CELEBRATIONS,
+  activeCelebration,
+  isUnlocked,
+  nextUp,
+  readState,
+  type Celebration,
+} from '../../src/rewards';
+import type { Thread, UserPrefs } from '../../src/types';
 import { Avatar, Body, Button, Card, CardTitle, Screen, Setting, Tag } from '../../src/ui';
-import { color, semantic, type } from '../../src/theme';
+import { CHAT_COLORS, bubbleColor, color, radius, semantic, type } from '../../src/theme';
 
 export default function You() {
   const { user, role, athlete, athletesById, consent, prefs } = useSession();
@@ -13,6 +23,9 @@ export default function You() {
   const router = useRouter();
   const [threads, setThreads] = useState<Thread[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [preview, setPreview] = useState({ id: 'spark', nonce: 0 });
+
+  const rewards = readState(prefs);
 
   useEffect(() => {
     if (!user) return;
@@ -38,6 +51,17 @@ export default function You() {
     }
   }
 
+  /** Both pickers write to the same private document, so they share one saver. */
+  async function save(patch: Partial<UserPrefs>) {
+    if (!user) return;
+    setError(null);
+    try {
+      await savePrefs(user.uid, prefs, patch);
+    } catch {
+      setError('Could not save that. Check your connection.');
+    }
+  }
+
   async function toggleMute(threadId: string, muted: boolean) {
     if (!user) return;
     setError(null);
@@ -49,6 +73,7 @@ export default function You() {
   }
 
   return (
+    <View style={{ flex: 1 }}>
     <Screen>
       <View style={s.who}>
         <Avatar name={me} role={role} size={52} />
@@ -63,6 +88,72 @@ export default function You() {
           {error}
         </Text>
       ) : null}
+
+      <Card>
+        <CardTitle>Your streak</CardTitle>
+        <View style={s.stats}>
+          <Stat n={rewards.streak} label="Day streak" hot={rewards.streak >= 3} />
+          <Stat n={rewards.bestStreak} label="Best run" />
+          <Stat n={rewards.workouts} label="Workouts" />
+        </View>
+        <Body>
+          {rewards.streak === 0
+            ? 'Open the app on a training day and the streak starts. Finish a workout on the timer and it counts.'
+            : `Opened ${rewards.streak} day${rewards.streak === 1 ? '' : 's'} in a row. Come back tomorrow and it keeps going.`}
+        </Body>
+        <Setting
+          title="Streak reminders"
+          description="A nudge in the evening when the streak is about to break, and a note the morning after if it does. Nothing leaves your phone."
+          value={prefs.remind !== false}
+          onChange={(on) => save({ remind: on })}
+        />
+      </Card>
+
+      <Card>
+        <CardTitle>Celebration</CardTitle>
+        <Body>
+          What goes off when you mark a block or a workout done. Tap one to try it.
+          {nextUp(rewards) ? ` Next up: ${nextUp(rewards)!.celebration.label}, ${nextUp(rewards)!.hint}.` : ''}
+        </Body>
+        <View style={{ height: 10 }} />
+        {CELEBRATIONS.map((c) => (
+          <CelebrationRow
+            key={c.id}
+            celebration={c}
+            unlocked={isUnlocked(c, rewards)}
+            chosen={activeCelebration(rewards) === c.id}
+            onPress={() => {
+              setPreview({ id: c.id, nonce: preview.nonce + 1 });
+              save({ celebration: c.id });
+            }}
+          />
+        ))}
+      </Card>
+
+      <Card>
+        <CardTitle>Chat colour</CardTitle>
+        <Body>Your own messages, in whichever of these you like. Nobody else's change.</Body>
+        <View style={s.swatches}>
+          {(Object.keys(CHAT_COLORS) as (keyof typeof CHAT_COLORS)[]).map((k) => {
+            const on = (prefs.chatColor ?? 'red') === k;
+            return (
+              <Pressable
+                key={k}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: on }}
+                accessibilityLabel={CHAT_COLORS[k].label}
+                onPress={() => save({ chatColor: k })}
+                style={[s.swatch, { backgroundColor: CHAT_COLORS[k].bg }, on && s.swatchOn]}
+              >
+                {on ? <Ionicons name="checkmark-sharp" size={20} color={color.bone} /> : null}
+              </Pressable>
+            );
+          })}
+        </View>
+        <View style={[s.preview, { backgroundColor: bubbleColor(prefs.chatColor) }]}>
+          <Text style={s.previewText}>Your messages look like this.</Text>
+        </View>
+      </Card>
 
       {role === 'parent' && (
         <>
@@ -199,6 +290,69 @@ export default function You() {
         )}
       </Card>
     </Screen>
+    <Celebrate id={preview.id} nonce={preview.nonce} />
+    </View>
+  );
+}
+
+/** One number on the streak card. */
+function Stat({ n, label, hot }: { n: number; label: string; hot?: boolean }) {
+  return (
+    <View style={s.stat}>
+      <Text style={[s.statN, hot && { color: '#FF7A18' }]}>{n}</Text>
+      <Text style={s.statL}>{label}</Text>
+    </View>
+  );
+}
+
+/**
+ * A celebration, locked or not. A locked one still shows what it is and what it costs:
+ * a row of grey padlocks with no names is a wall, and the point is to give the athlete
+ * something to aim at.
+ */
+function CelebrationRow({
+  celebration: c,
+  unlocked,
+  chosen,
+  onPress,
+}: {
+  celebration: Celebration;
+  unlocked: boolean;
+  chosen: boolean;
+  onPress: () => void;
+}) {
+  const need = [
+    c.needWorkouts !== undefined ? `${c.needWorkouts} workouts` : '',
+    c.needStreak !== undefined ? `a ${c.needStreak} day streak` : '',
+  ]
+    .filter(Boolean)
+    .join(' or ');
+
+  return (
+    <Pressable
+      accessibilityRole="radio"
+      accessibilityState={{ selected: chosen, disabled: !unlocked }}
+      accessibilityLabel={unlocked ? `${c.label}. ${c.blurb}` : `${c.label}, locked. Needs ${need}.`}
+      disabled={!unlocked}
+      onPress={onPress}
+      style={({ pressed }) => [
+        s.celeb,
+        chosen && { borderColor: color.fastRed },
+        pressed && unlocked && { backgroundColor: color.inkHover },
+        !unlocked && { opacity: 0.55 },
+      ]}
+    >
+      <Ionicons
+        name={!unlocked ? 'lock-closed' : chosen ? 'radio-button-on' : 'radio-button-off'}
+        size={20}
+        color={!unlocked ? color.textFaint : chosen ? color.redHot : color.textDim}
+      />
+      <View style={{ flex: 1 }}>
+        <Text style={s.celebName}>{c.label}</Text>
+        <Text style={type.meta}>{unlocked ? c.blurb : `Unlocks at ${need}.`}</Text>
+      </View>
+      {chosen ? <Tag tone="mon">On</Tag> : null}
+    </Pressable>
   );
 }
 
@@ -256,6 +410,45 @@ const s = StyleSheet.create({
   rosterName: { fontSize: 14, fontWeight: '700', color: color.chalk, marginBottom: 2 },
   error: { color: color.redHot, fontSize: 13.5, lineHeight: 19, marginBottom: 12 },
   linkRow: { minHeight: 44, justifyContent: 'center' },
+
+  stats: { flexDirection: 'row', gap: 10, marginBottom: 12 },
+  stat: {
+    flex: 1,
+    backgroundColor: color.courtBlack,
+    borderRadius: radius.chip,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  statN: { fontSize: 26, fontWeight: '900', color: color.chalk, lineHeight: 30 },
+  statL: { fontSize: 10.5, fontWeight: '700', letterSpacing: 0.9, textTransform: 'uppercase', color: color.textDim },
+
+  celeb: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    minHeight: 56,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderWidth: 1,
+    borderColor: semantic.borderStrong,
+    borderRadius: radius.chip,
+    marginBottom: 8,
+  },
+  celebName: { fontSize: 14.5, fontWeight: '700', color: color.chalk, marginBottom: 2 },
+
+  swatches: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 12 },
+  swatch: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  swatchOn: { borderColor: color.bone },
+  preview: { alignSelf: 'flex-end', marginTop: 14, borderRadius: 16, borderBottomRightRadius: 5, paddingHorizontal: 13, paddingVertical: 10 },
+  previewText: { fontSize: 15, lineHeight: 21, color: color.chalk },
   link: { color: color.redHot, fontSize: 14, fontWeight: '700' },
   danger: { color: color.textDim, fontSize: 14, fontWeight: '700' },
 });

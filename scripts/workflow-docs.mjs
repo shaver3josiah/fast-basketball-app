@@ -6,7 +6,15 @@
  * `data-k` attributes and nothing else, and the bridge is injected by the app
  * (src/workflowBridge.ts). A coach writing his own HTML in any editor gets saving for
  * free — he never has to know the bridge exists.
+ *
+ * A document may also be a whole file under scripts/worksheets/ instead of a body
+ * assembled here. Those skip the shared wrapper entirely, which is the point: a file
+ * that brings its own CSS opens in a browser by double-clicking it, so the coach can
+ * try a worksheet before it goes anywhere near the app.
  */
+
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
 const esc = (s) =>
   String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
@@ -250,11 +258,21 @@ const BODIES = {
       field('notes', 'Where did the misses cluster?', 'textarea'),
     script: TOTALS_JS,
   },
+  w7: {
+    // A shooting log the athlete fills in AT the hoop, one tap per real rep. The court
+    // on it only animates the shot that was just logged, so nothing in it can be earned
+    // on the couch.
+    name: 'Night Session: 70 Makes',
+    cadence: 'daily',
+    file: 'night-shots.html',
+  },
 };
 
 export function workflowDocs() {
-  return Object.entries(BODIES).map(([id, { name, body, script, cadence }]) => {
-    const html =
+  return Object.entries(BODIES).map(([id, { name, body, script, cadence, file }]) => {
+    const html = file
+      ? readFileSync(fileURLToPath(new URL(`worksheets/${file}`, import.meta.url)), 'utf8')
+      :
       '<!doctype html><meta charset="utf-8">' +
       '<meta name="viewport" content="width=device-width,initial-scale=1">' +
       `<title>${esc(name)}</title>` +

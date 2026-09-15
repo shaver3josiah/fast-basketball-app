@@ -1,0 +1,559 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Night Session: 70 Makes</title>
+<!--
+  A Locker worksheet that is a SHOOTING LOG first and a game second.
+
+  The design rule it is built on: nothing in here can be earned with a thumb. The ball
+  only flies when the athlete tells it a real shot went up, the rack only clears at a
+  real hoop, and the clock is real elapsed time. An arcade shot you can win on the couch
+  would reward the opposite of what Blake is selling, so there is no aiming, no power
+  meter, and no skill in the page at all. The reward is attached to the rep.
+
+  It saves like every other document in the Locker: the app injects its bridge, the
+  bridge reads anything carrying data-k, and this page keeps its counts in hidden inputs
+  that carry exactly that. Nothing in here knows the app exists, which is why it also
+  opens in a plain browser by double-clicking the file.
+
+  Restore works the same way in reverse. The bridge writes the saved values into the
+  inputs and fires one `change` on the document; pull() below listens for it and takes
+  the session back off the page, which is what lets a rack be finished tomorrow.
+-->
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  color:#E8E8EE;background:#08080C;padding:18px 16px 28px}
+h1{font-size:1.32rem;line-height:1.1;color:#fff;letter-spacing:-.01em}
+.by{font-size:.72rem;text-transform:uppercase;letter-spacing:.14em;color:#FF3A41;font-weight:700;margin:4px 0 12px}
+.note{background:rgba(230,12,32,.09);border-left:3px solid #E60C20;padding:9px 12px;
+  font-size:.84rem;color:#D8CFD0;border-radius:0 6px 6px 0;margin-bottom:14px}
+.wrap{max-width:430px;margin:0 auto}
+canvas{display:block;width:100%;aspect-ratio:360/440;border-radius:14px;
+  border:1px solid rgba(255,255,255,.1);background:#05060B}
+.spot{display:flex;align-items:center;gap:10px;margin-top:12px;background:#131318;
+  border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:11px 13px}
+.spot b{display:block;font-size:1.05rem;color:#fff;font-weight:800;line-height:1.25}
+.spot span{font-size:.72rem;text-transform:uppercase;letter-spacing:.1em;color:#9C9CA9;font-weight:700}
+.pips{display:flex;gap:4px;flex:none}
+.pip{width:9px;height:9px;border-radius:5px;background:#2A2A34}
+.pip.on{background:#E60C20}
+.cue{font-size:.84rem;color:#FFD34D;margin:10px 2px 0;min-height:1.6em;font-weight:600}
+.log{display:flex;gap:8px;margin-top:10px}
+button{font:inherit;font-size:.82rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;
+  border-radius:12px;border:1px solid rgba(255,255,255,.16);background:#1B1B22;color:#F5F3EF;
+  min-height:60px;cursor:pointer;padding:10px}
+button:active{transform:translateY(1px)}
+.made{flex:2;background:#E60C20;border-color:#E60C20;color:#fff}
+.miss{flex:1.2}
+.undo{flex:1;font-size:.7rem;min-height:44px;color:#9C9CA9}
+.undo:disabled{opacity:.4}
+.hud{display:flex;gap:6px;margin-top:12px}
+.st{flex:1;background:#131318;border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:7px 4px;text-align:center}
+.st b{display:block;font-size:1.1rem;font-weight:800;color:#fff;line-height:1.25}
+.st span{font-size:.58rem;text-transform:uppercase;letter-spacing:.09em;color:#9C9CA9;font-weight:700}
+.st.hot b{color:#FF7A18}
+.bar{height:8px;border-radius:5px;background:#1B1B22;overflow:hidden;border:1px solid rgba(255,255,255,.08);margin-top:12px}
+.bar i{display:block;height:100%;width:0;border-radius:5px;background:linear-gradient(90deg,#E60C20,#FF7A18);
+  transition:width .45s cubic-bezier(.2,.9,.25,1)}
+.tot{font-size:.74rem;color:#9C9CA9;margin-top:6px;letter-spacing:.03em}
+table{width:100%;border-collapse:collapse;margin-top:6px}
+th{text-align:left;font-size:.62rem;text-transform:uppercase;letter-spacing:.1em;color:#9C9CA9;padding:0 0 7px}
+th:not(:first-child),td:not(:first-child){width:62px;text-align:center}
+td{padding:7px 0;font-size:.84rem;border-top:1px solid rgba(255,255,255,.08);color:#E8E8EE}
+tr.now td{color:#FFD34D;font-weight:700}
+tr.full td{color:#8E8E9B}
+section{margin-top:22px}
+h2{font-size:.7rem;text-transform:uppercase;letter-spacing:.13em;color:#9C9CA9;margin-bottom:9px;
+  padding-bottom:6px;border-bottom:1px solid rgba(255,255,255,.1)}
+textarea{width:100%;font:inherit;font-size:.88rem;padding:10px 11px;border-radius:8px;
+  border:1px solid #6C6C78;background:#0C0C11;color:#F5F3EF;resize:vertical}
+textarea:focus{outline:2px solid #FF3A41;outline-offset:1px}
+.foot{margin-top:24px;padding-top:13px;border-top:1px solid rgba(255,255,255,.1);
+  font-size:.7rem;color:#75757F;text-align:center}
+@media (prefers-reduced-motion:reduce){.bar i{transition:none}}
+</style>
+<body>
+<div class="wrap">
+
+<h1>Night Session: 70 Makes</h1>
+<p class="by">Fast Basketball · Blake Kingsley</p>
+<p class="note">Ten makes from each of the seven spots. Take the shot at a real hoop,
+then log it. The ball on this page only moves when you do.</p>
+
+<canvas id="c" aria-label="A night court. The ball takes the shot you just logged."></canvas>
+
+<div class="spot">
+  <div style="flex:1">
+    <span>Shooting from</span>
+    <b id="spotName">Left corner</b>
+  </div>
+  <div class="pips" id="pips" aria-hidden="true"></div>
+</div>
+
+<p class="cue" id="cue">Warm up first. Then start at the left corner.</p>
+
+<div class="log">
+  <button class="made" id="made" type="button">Made it</button>
+  <button class="miss" id="miss" type="button">Missed</button>
+</div>
+<div class="log"><button class="undo" id="undo" type="button" disabled>Undo the last one</button></div>
+
+<div class="hud">
+  <div class="st"><b id="sMade">0</b><span>Makes</span></div>
+  <div class="st"><b id="sAtt">0</b><span>Shots</span></div>
+  <div class="st"><b id="sPct">0%</b><span>Clip</span></div>
+  <div class="st" id="stStreak"><b id="sStreak">0</b><span>Streak</span></div>
+  <div class="st"><b id="sBest">0</b><span>Best</span></div>
+  <div class="st"><b id="sMin">0</b><span>Minutes</span></div>
+</div>
+
+<div class="bar"><i id="fill"></i></div>
+<p class="tot" id="totTxt">0 of 70 makes</p>
+
+<section>
+  <h2>By spot</h2>
+  <table id="grid">
+    <tr><th>Spot</th><th>Makes</th><th>Shots</th></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Before you close this</h2>
+  <textarea data-k="ns_notes" rows="3" placeholder="Where did the misses go? Short, long, left, right?"></textarea>
+</section>
+
+<input type="hidden" data-k="ns_best" value="0">
+<input type="hidden" data-k="ns_min" value="0">
+
+<p class="foot">Uploaded by Coach Kingsley · rendered inside Fast Basketball</p>
+</div>
+
+<script>
+(function () {
+  var SPOTS = [
+    'Left corner', 'Left wing', 'Top of the key',
+    'Right wing', 'Right corner', 'Elbow', 'Free throw'
+  ];
+  var PER_SPOT = 10;
+  var TARGET = SPOTS.length * PER_SPOT;
+
+  var W = 360, H = 440, FLOOR = 400, R = 10;
+  var LX = 62, LY = 330;                 // where the ball sits between shots
+  var RY = 168, RX1 = 250, RX2 = 300;    // rim
+  var BX = 302, BY1 = 82, BY2 = 168;     // backboard
+
+  var cv = document.getElementById('c'), ctx = cv.getContext('2d');
+  var made = [], att = [];
+  for (var i = 0; i < SPOTS.length; i++) { made.push(0); att.push(0); }
+  var spot = 0, streak = 0, best = 0, minBase = 0, startedAt = 0, history = [];
+
+  var ball = { x: LX, y: LY, vx: 0, vy: 0, live: false, made: false, scored: false };
+  var trail = [], parts = [];
+  var netT = 0, shake = 0, flashT = 0, glow = 0, swish = 0, clear = 0, t = 0;
+
+  // Cues, not scoring. The page's job between reps is to send them back up for another.
+  var AFTER_MAKE = ['Same feet. Again.', 'That is the one. Repeat it.', 'Hold the follow through.', 'Do not drift. Again.'];
+  var AFTER_MISS = ['Reset your feet. Next one.', 'Legs, not arms. Again.', 'Short is tired. Bend more.', 'One bad shot is one shot.'];
+
+  // The sky is rolled once, not every frame. A twinkle that re-randomises every frame
+  // reads as television static rather than as stars.
+  var stars = [];
+  for (var s0 = 0; s0 < 44; s0++)
+    stars.push({ x: Math.random() * W, y: Math.random() * 236, r: Math.random() * 1.2 + 0.3,
+                 p: Math.random() * 6.3, s: Math.random() * 0.04 + 0.015 });
+  var sky = [];
+  for (var s1 = 0; s1 < 14; s1++)
+    sky.push({ x: s1 * 28 - 6, w: Math.random() * 20 + 14, h: Math.random() * 50 + 20 });
+
+  function fit() {
+    var d = Math.min(window.devicePixelRatio || 1, 2.5), r = cv.getBoundingClientRect();
+    if (!r.width) return;
+    cv.width = Math.round(r.width * d);
+    cv.height = Math.round(r.width * d * H / W);
+    ctx.setTransform(cv.width / W, 0, 0, cv.width / W, 0, 0);
+  }
+  window.addEventListener('resize', fit);
+  fit();
+
+  // --- logging a rep ---------------------------------------------------------
+  function log(good) {
+    if (!startedAt) startedAt = Date.now();      // the clock starts at the first rep
+    att[spot]++;
+    if (good) {
+      made[spot]++;
+      streak++;
+      if (streak > best) best = streak;
+    } else {
+      streak = 0;
+    }
+    history.push({ spot: spot, good: good, streak: streak });
+    if (history.length > 40) history.shift();
+    fly(good);
+    cue(good ? AFTER_MAKE : AFTER_MISS);
+    if (navigator.vibrate) navigator.vibrate(good ? 18 : 8);
+    advance();
+    sync();
+  }
+
+  /** One step back, because a mis-tap at the gym should not become a false log. */
+  function undo() {
+    var last = history.pop();
+    if (!last) return;
+    spot = last.spot;
+    att[spot] = Math.max(0, att[spot] - 1);
+    if (last.good) made[spot] = Math.max(0, made[spot] - 1);
+    // The streak is whatever it was before that rep, which is the previous entry's.
+    streak = history.length ? history[history.length - 1].streak : 0;
+    ball.live = false;
+    sync();
+  }
+
+  /** Move on when this spot is full. Ten from one place, then somewhere else. */
+  function advance() {
+    if (made[spot] < PER_SPOT) return;
+    var next = -1;
+    for (var i = 1; i <= SPOTS.length; i++) {
+      var k = (spot + i) % SPOTS.length;
+      if (made[k] < PER_SPOT) { next = k; break; }
+    }
+    if (next < 0) {                                // every spot is full: rack cleared
+      clear = 1;
+      burst(W / 2, 150, 46, '#E60C20', 5.5);
+      cueText('Rack cleared. Seventy makes. Come back tomorrow.');
+      return;
+    }
+    spot = next;
+    cueText('Ten down. Move to the ' + SPOTS[next].toLowerCase() + '.');
+  }
+
+  function cue(list) { cueText(list[Math.floor(Math.random() * list.length)]); }
+  function cueText(s) { document.getElementById('cue').textContent = s; }
+
+  // --- the ball, which only ever replays a rep already logged -----------------
+  function fly(good) {
+    // One arc for a make, three ways to miss, so the court answers the log rather
+    // than deciding it. The velocities are tuned against the step() below.
+    var j = (Math.random() - 0.5) * 0.08;
+    if (good) ball = { x: LX, y: LY, vx: 5.325 + j, vy: -12.66 + j, live: true, made: true, scored: false };
+    else {
+      var k = Math.floor(Math.random() * 3);
+      var v = [[4.9, -12.1], [5.9, -12.8], [5.6, -13.6]][k];   // short, long, off the glass
+      ball = { x: LX, y: LY, vx: v[0] + j, vy: v[1] + j, live: true, made: false, scored: false };
+    }
+    trail = [];
+  }
+
+  function step() {
+    if (!ball.live) return;
+    var py = ball.y;
+    ball.vy += 0.42;
+    ball.x += ball.vx;
+    ball.y += ball.vy;
+    trail.push({ x: ball.x, y: ball.y });
+    if (trail.length > 16) trail.shift();
+
+    // Dropping through the rim. On a logged make this is the swish; the count was
+    // already written when the athlete tapped, so nothing here decides anything.
+    if (!ball.scored && py < RY && ball.y >= RY && ball.vy > 0 && ball.x > RX1 + 5 && ball.x < RX2 - 5) {
+      ball.scored = true;
+      if (ball.made) {
+        netT = 1; flashT = 1; swish = 1; glow = 1;
+        burst(RX1 + 25, RY + 18, 26, streak >= 3 ? '#FF7A18' : '#FFD34D', 4.2);
+      }
+    }
+    if (ball.vx > 0 && ball.x + R > BX && ball.y > BY1 && ball.y < BY2) {
+      ball.x = BX - R; ball.vx *= -0.62; shake = 3;
+    }
+    rimHit(RX1);
+    rimHit(RX2);
+
+    if (ball.y + R > FLOOR) {
+      ball.y = FLOOR - R; ball.vy *= -0.48; ball.vx *= 0.82;
+      if (Math.abs(ball.vy) < 1.6) return rest();
+    }
+    if (ball.x < -40 || ball.x > W + 40 || ball.y > H + 60) rest();
+  }
+
+  function rest() {
+    ball.live = false;
+    setTimeout(function () {
+      ball = { x: LX, y: LY, vx: 0, vy: 0, live: false, made: false, scored: false };
+      trail = [];
+    }, 420);
+  }
+
+  function rimHit(rx) {
+    var dx = ball.x - rx, dy = ball.y - RY, d = Math.sqrt(dx * dx + dy * dy);
+    if (d > R + 3 || d === 0) return;
+    var nx = dx / d, ny = dy / d, dot = ball.vx * nx + ball.vy * ny;
+    ball.vx = (ball.vx - 2 * dot * nx) * 0.58;
+    ball.vy = (ball.vy - 2 * dot * ny) * 0.58;
+    ball.x = rx + nx * (R + 3);
+    ball.y = RY + ny * (R + 3);
+    shake = 5;
+    burst(rx, RY, 6, '#9C9CA9', 2.2);
+  }
+
+  function burst(x, y, n, c, sp) {
+    for (var i = 0; i < n; i++) {
+      var a = Math.random() * 6.3, v = Math.random() * sp + 0.8;
+      parts.push({ x: x, y: y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 1, l: 1, c: c,
+                   s: Math.random() * 2.4 + 1.2 });
+    }
+  }
+
+  // --- drawing ---------------------------------------------------------------
+  function draw() {
+    t += 1;
+    step();
+    ctx.save();
+    if (shake > 0.2) {
+      ctx.translate((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake);
+      shake *= 0.86;
+    }
+
+    var g = ctx.createLinearGradient(0, 0, 0, FLOOR);
+    g.addColorStop(0, '#05060B'); g.addColorStop(0.62, '#0E1020'); g.addColorStop(1, '#171425');
+    ctx.fillStyle = g;
+    ctx.fillRect(-10, -10, W + 20, FLOOR + 10);
+
+    for (var i = 0; i < stars.length; i++) {
+      var st = stars[i];
+      ctx.globalAlpha = 0.28 + Math.abs(Math.sin(t * st.s + st.p)) * 0.62;
+      ctx.fillStyle = '#EAEAF6';
+      ctx.beginPath(); ctx.arc(st.x, st.y, st.r, 0, 6.3); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    ctx.fillStyle = '#F2EFE2';                                   // moon
+    ctx.beginPath(); ctx.arc(60, 54, 17, 0, 6.3); ctx.fill();
+    ctx.globalAlpha = 0.18; ctx.fillStyle = '#0B0D18';
+    ctx.beginPath(); ctx.arc(55, 49, 4, 0, 6.3); ctx.fill();
+    ctx.beginPath(); ctx.arc(67, 61, 2.6, 0, 6.3); ctx.fill();
+    ctx.globalAlpha = 1;
+
+    ctx.fillStyle = '#0A0B14';                                   // skyline
+    for (var k = 0; k < sky.length; k++) ctx.fillRect(sky[k].x, 252 - sky[k].h, sky[k].w, sky[k].h);
+
+    beam(28); beam(330);
+
+    ctx.fillStyle = '#1A1726';                                   // court
+    ctx.fillRect(-10, FLOOR, W + 20, H - FLOOR + 10);
+    ctx.strokeStyle = 'rgba(245,243,239,.16)'; ctx.lineWidth = 1.4;
+    ctx.beginPath(); ctx.moveTo(-10, FLOOR); ctx.lineTo(W + 10, FLOOR); ctx.stroke();
+    ctx.beginPath(); ctx.ellipse(276, FLOOR + 10, 108, 16, 0, Math.PI, 0); ctx.stroke();
+
+    if (glow > 0.01) {                                           // the rim lights up
+      ctx.globalAlpha = glow * 0.5;
+      var rg = ctx.createRadialGradient(275, RY, 4, 275, RY, 130);
+      rg.addColorStop(0, '#FF7A18'); rg.addColorStop(1, 'rgba(255,122,24,0)');
+      ctx.fillStyle = rg; ctx.fillRect(140, 45, 230, 250);
+      ctx.globalAlpha = 1; glow *= 0.93;
+    }
+
+    ctx.fillStyle = '#24222E'; ctx.fillRect(BX + 6, BY1, 5, FLOOR - BY1);   // pole
+    ctx.fillStyle = 'rgba(245,243,239,.9)'; ctx.fillRect(BX, BY1, 6, BY2 - BY1);
+    ctx.strokeStyle = '#E60C20'; ctx.lineWidth = 2;
+    ctx.strokeRect(BX - 1, RY - 42, 3, 32);
+
+    net();
+    ctx.strokeStyle = '#E60C20'; ctx.lineWidth = 4; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(RX1, RY); ctx.lineTo(RX2, RY); ctx.stroke();
+
+    player();
+
+    for (var p = 0; p < trail.length; p++) {                     // flaming on a streak
+      var a = p / trail.length;
+      ctx.globalAlpha = a * 0.5;
+      ctx.fillStyle = streak >= 3 ? (p % 2 ? '#FF7A18' : '#FFD34D') : '#E60C20';
+      ctx.beginPath(); ctx.arc(trail[p].x, trail[p].y, R * a * 0.8, 0, 6.3); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    rock();
+
+    for (var q = parts.length - 1; q >= 0; q--) {
+      var o = parts[q];
+      o.x += o.vx; o.y += o.vy; o.vy += 0.16; o.l -= 0.024;
+      if (o.l <= 0) { parts.splice(q, 1); continue; }
+      ctx.globalAlpha = o.l; ctx.fillStyle = o.c;
+      ctx.beginPath(); ctx.arc(o.x, o.y, o.s * o.l, 0, 6.3); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    if (swish > 0.01) {                                          // the word, slamming in
+      var e = 1 - swish;
+      ctx.globalAlpha = Math.min(1, swish * 2.4);
+      ctx.font = '800 ' + (30 + e * 14) + 'px -apple-system,Segoe UI,Roboto,sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#FFD34D';
+      ctx.fillText(streak >= 3 ? 'HEAT CHECK' : 'SWISH', W / 2, 238 - e * 26);
+      ctx.globalAlpha = 1;
+      swish -= 0.022;
+    }
+    if (clear > 0.01) {
+      ctx.globalAlpha = Math.min(1, clear * 2);
+      ctx.font = '800 26px -apple-system,Segoe UI,Roboto,sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#FF3A41';
+      ctx.fillText('RACK CLEARED', W / 2, 292);
+      ctx.globalAlpha = 1;
+      clear -= 0.011;
+    }
+    if (flashT > 0) flashT -= 0.05;
+
+    ctx.restore();
+    requestAnimationFrame(draw);
+  }
+
+  function beam(x) {
+    var a = 0.055 + Math.max(0, flashT) * 0.1 + Math.sin(t * 0.07 + x) * 0.006;
+    var g = ctx.createLinearGradient(x, 86, x, FLOOR);
+    g.addColorStop(0, 'rgba(226,232,255,' + a + ')');
+    g.addColorStop(1, 'rgba(226,232,255,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.moveTo(x - 7, 86); ctx.lineTo(x + 7, 86);
+    ctx.lineTo(x + 74, FLOOR); ctx.lineTo(x - 74, FLOOR);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#24222E'; ctx.fillRect(x - 2, 86, 4, FLOOR - 86);
+    ctx.globalAlpha = 0.75 + Math.max(0, flashT) * 0.25;
+    ctx.fillStyle = '#FFF6D8';
+    ctx.beginPath(); ctx.ellipse(x, 83, 9, 5, 0, 0, 6.3); ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+
+  function net() {
+    ctx.strokeStyle = 'rgba(245,243,239,.55)'; ctx.lineWidth = 1;
+    for (var i = 0; i <= 6; i++) {
+      var x0 = RX1 + (RX2 - RX1) * i / 6;
+      var x1 = RX1 + 9 + (RX2 - RX1 - 18) * i / 6;
+      var w = Math.sin(t * 0.5 + i) * netT * 5;
+      ctx.beginPath();
+      ctx.moveTo(x0, RY);
+      ctx.quadraticCurveTo(x0 + w, RY + 16, x1 + w * 0.6, RY + 30 + netT * 5);
+      ctx.stroke();
+    }
+    for (var r = 1; r < 3; r++) {
+      var y = RY + r * 11, sq = 1 - r * 0.13;
+      ctx.beginPath();
+      ctx.moveTo(RX1 + (RX2 - RX1) * (1 - sq) / 2, y + Math.sin(t * 0.5) * netT * 3);
+      ctx.lineTo(RX2 - (RX2 - RX1) * (1 - sq) / 2, y + Math.sin(t * 0.5 + 1) * netT * 3);
+      ctx.stroke();
+    }
+    if (netT > 0) netT *= 0.93;
+  }
+
+  function player() {
+    ctx.fillStyle = '#08080C';
+    ctx.beginPath(); ctx.arc(LX - 4, LY + 26, 7, 0, 6.3); ctx.fill();
+    ctx.fillRect(LX - 11, LY + 34, 14, 26);
+    ctx.fillRect(LX - 11, LY + 58, 5, FLOOR - LY - 58);
+    ctx.fillRect(LX - 2, LY + 58, 5, FLOOR - LY - 58);
+  }
+
+  function rock() {
+    ctx.save();
+    ctx.translate(ball.x, ball.y);
+    ctx.rotate(ball.live ? ball.vx * 0.06 + t * 0.02 : 0);
+    var g = ctx.createRadialGradient(-3, -4, 1, 0, 0, R);
+    g.addColorStop(0, '#FF9C4A'); g.addColorStop(1, '#C8541A');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(0, 0, R, 0, 6.3); ctx.fill();
+    ctx.strokeStyle = 'rgba(20,10,6,.75)'; ctx.lineWidth = 1.1;
+    ctx.beginPath();
+    ctx.moveTo(-R, 0); ctx.lineTo(R, 0);
+    ctx.moveTo(0, -R); ctx.lineTo(0, R);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // --- the log, and the only part the app ever sees ---------------------------
+  function totals() {
+    var m = 0, a = 0;
+    for (var i = 0; i < SPOTS.length; i++) { m += made[i]; a += att[i]; }
+    return { m: m, a: a };
+  }
+
+  function minutes() {
+    return minBase + (startedAt ? Math.floor((Date.now() - startedAt) / 60000) : 0);
+  }
+
+  function sync() {
+    var tot = totals();
+    for (var i = 0; i < SPOTS.length; i++) {
+      set('ns_m' + i, made[i]);
+      set('ns_a' + i, att[i]);
+    }
+    set('ns_best', best);
+    set('ns_min', minutes());
+
+    text('sMade', tot.m); text('sAtt', tot.a); text('sStreak', streak);
+    text('sBest', best); text('sMin', minutes());
+    text('sPct', tot.a ? Math.round(tot.m / tot.a * 100) + '%' : '0%');
+    document.getElementById('stStreak').className = 'st' + (streak >= 3 ? ' hot' : '');
+    document.getElementById('spotName').textContent = SPOTS[spot];
+    document.getElementById('undo').disabled = history.length === 0;
+    document.getElementById('fill').style.width = Math.round(tot.m / TARGET * 100) + '%';
+    document.getElementById('totTxt').textContent =
+      tot.m >= TARGET ? 'Rack cleared. ' + tot.m + ' makes.' : tot.m + ' of ' + TARGET + ' makes';
+
+    var pips = '';
+    for (var p = 0; p < PER_SPOT; p++) pips += '<i class="pip' + (p < made[spot] ? ' on' : '') + '"></i>';
+    document.getElementById('pips').innerHTML = pips;
+
+    var rows = '<tr><th>Spot</th><th>Makes</th><th>Shots</th></tr>';
+    for (var r = 0; r < SPOTS.length; r++) {
+      var cls = made[r] >= PER_SPOT ? 'full' : r === spot ? 'now' : '';
+      rows += '<tr class="' + cls + '"><td>' + SPOTS[r] + '</td><td>' + made[r] +
+        ' / ' + PER_SPOT + '</td><td>' + att[r] + '</td></tr>';
+    }
+    document.getElementById('grid').innerHTML = rows;
+  }
+
+  function el(k) { return document.querySelector('[data-k="' + k + '"]'); }
+  function set(k, v) {
+    var e = el(k);
+    if (!e) {                                  // the per-spot inputs are made on demand
+      e = document.createElement('input');
+      e.type = 'hidden';
+      e.setAttribute('data-k', k);
+      document.body.appendChild(e);
+    }
+    e.value = String(v);
+  }
+  function num(k) { var e = el(k); return e ? (+e.value || 0) : 0; }
+  function text(id, v) { document.getElementById(id).textContent = v; }
+
+  // The app restores saved answers into the inputs and fires one change event on the
+  // document. Reading them back here is what lets a rack be finished tomorrow.
+  function pull() {
+    var changed = false;
+    for (var i = 0; i < SPOTS.length; i++) {
+      var m = num('ns_m' + i), a = num('ns_a' + i);
+      if (m !== made[i] || a !== att[i]) { made[i] = m; att[i] = a; changed = true; }
+    }
+    var b = num('ns_best'), mn = num('ns_min');
+    if (b !== best) { best = b; changed = true; }
+    if (mn !== minutes()) { minBase = mn; startedAt = 0; changed = true; }
+    if (!changed) return;
+    // Pick up where the athlete left off rather than at the first spot.
+    for (var k = 0; k < SPOTS.length; k++) if (made[k] < PER_SPOT) { spot = k; break; }
+    history = [];
+    sync();
+  }
+  document.addEventListener('change', pull);
+
+  document.getElementById('made').addEventListener('click', function () { log(true); });
+  document.getElementById('miss').addEventListener('click', function () { log(false); });
+  document.getElementById('undo').addEventListener('click', undo);
+
+  // The clock is real elapsed time, so it keeps ticking on the page while the athlete
+  // is shooting rather than only moving when something is tapped.
+  setInterval(function () { if (startedAt) sync(); }, 20000);
+
+  sync();
+  draw();
+})();
+</script>
+</body>

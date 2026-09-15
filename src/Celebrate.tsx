@@ -1,0 +1,208 @@
+import { useEffect, useState } from 'react';
+import { StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import Animated, {
+  Easing,
+  interpolate,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withTiming,
+  type SharedValue,
+} from 'react-native-reanimated';
+import { color } from './theme';
+
+/**
+ * The thing that goes off when an athlete marks work done.
+ *
+ * Six variants, unlocked in src/rewards.ts, all driven by ONE shared value. The whole
+ * animation runs on the UI thread: a burst that stutters because JavaScript was busy
+ * writing the completion to Firestore would undercut the only moment this screen has.
+ *
+ * Shards are a fixed 28 components whatever the variant asks for, because hooks cannot
+ * be called in a loop whose length changes. The surplus ones render at zero opacity.
+ */
+
+interface Spec {
+  colors: string[];
+  word: string;
+  /** How many of the 28 shards this variant actually throws. */
+  shards: number;
+  /** How far they travel, in points, before gravity takes them. */
+  spread: number;
+  ms: number;
+  /** A long thin streak instead of a round spark. */
+  bar?: boolean;
+  /** An expanding shockwave ring. */
+  ring?: boolean;
+  /** A full-screen flash behind everything. */
+  flash?: string;
+}
+
+export const SPECS: Record<string, Spec> = {
+  spark: { colors: [color.fastRed, color.redHot, '#FFD34D'], word: 'DONE', shards: 14, spread: 150, ms: 850, ring: true },
+  swish: { colors: ['#FFD34D', '#FFF1C2', color.fastRed], word: 'SWISH', shards: 18, spread: 190, ms: 950, bar: true, ring: true },
+  fire: { colors: ['#FF7A18', '#FFD34D', color.fastRed], word: 'HEAT CHECK', shards: 22, spread: 220, ms: 1050, bar: true, flash: 'rgba(255,122,24,0.30)' },
+  quake: { colors: ['#F5F3EF', color.redHot, '#8E8E9B'], word: 'POSTER', shards: 16, spread: 260, ms: 1050, ring: true, flash: 'rgba(245,243,239,0.22)' },
+  bolt: { colors: ['#8FD8FF', '#FFFFFF', color.miamiTeal], word: 'LIGHTS OUT', shards: 20, spread: 280, ms: 1100, bar: true, flash: 'rgba(143,216,255,0.34)' },
+  nova: { colors: ['#FFFFFF', '#FFD34D', color.redHot], word: 'SUPERNOVA', shards: 28, spread: 320, ms: 1250, ring: true, flash: 'rgba(255,255,255,0.40)' },
+};
+
+const MAX_SHARDS = 28;
+
+/** Deterministic per-shard jitter. A real random would re-roll on every render and
+ *  make the burst twitch mid-flight. */
+const rnd = (i: number, salt: number) => {
+  const v = Math.sin(i * 12.9898 + salt * 78.233) * 43758.5453;
+  return v - Math.floor(v);
+};
+
+export function Celebrate({
+  id,
+  nonce,
+  label,
+  onDone,
+}: {
+  /** A key from SPECS. Anything unknown falls back to the free one. */
+  id: string;
+  /** Bump this to play. Zero plays nothing, which is the mounted-but-idle state. */
+  nonce: number;
+  /** Optional line under the word, e.g. what was just finished. */
+  label?: string;
+  onDone?: () => void;
+}) {
+  const spec = SPECS[id] ?? SPECS.spark;
+  const { width, height } = useWindowDimensions();
+  const reduce = useReducedMotion();
+  const [playing, setPlaying] = useState(false);
+  const t = useSharedValue(0);
+
+  useEffect(() => {
+    if (!nonce) return;
+    setPlaying(true);
+    t.value = 0;
+    t.value = withTiming(1, { duration: spec.ms, easing: Easing.out(Easing.quad) });
+    const done = setTimeout(() => {
+      setPlaying(false);
+      onDone?.();
+    }, spec.ms + 120);
+    return () => clearTimeout(done);
+    // Deliberately keyed on the nonce alone: re-running this because a parent
+    // re-rendered would restart the burst halfway through.
+  }, [nonce]);
+
+  const flash = useAnimatedStyle(() => ({
+    opacity: interpolate(t.value, [0, 0.08, 0.5, 1], [0, 1, 0.35, 0]),
+  }));
+
+  const ring = useAnimatedStyle(() => ({
+    opacity: interpolate(t.value, [0, 0.1, 1], [0, 0.9, 0]),
+    transform: [{ scale: reduce ? 1 : interpolate(t.value, [0, 1], [0.15, 2.4]) }],
+  }));
+
+  const word = useAnimatedStyle(() => ({
+    opacity: interpolate(t.value, [0, 0.08, 0.72, 1], [0, 1, 1, 0]),
+    transform: reduce
+      ? []
+      : [
+          { scale: interpolate(t.value, [0, 0.16, 0.8, 1], [1.9, 1, 1, 1.12]) },
+          { translateY: interpolate(t.value, [0, 1], [10, -26]) },
+        ],
+  }));
+
+  if (!playing) return null;
+
+  const cx = width / 2;
+  const cy = height / 2;
+
+  return (
+    <View style={StyleSheet.absoluteFill} pointerEvents="none" accessibilityElementsHidden>
+      {spec.flash ? (
+        <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: spec.flash }, flash]} />
+      ) : null}
+
+      {spec.ring ? (
+        <Animated.View
+          style={[
+            s.ring,
+            { left: cx - 90, top: cy - 90, borderColor: spec.colors[0] },
+            ring,
+          ]}
+        />
+      ) : null}
+
+      {Array.from({ length: MAX_SHARDS }, (_, i) => (
+        <Shard key={i} i={i} t={t} spec={spec} cx={cx} cy={cy} still={reduce} />
+      ))}
+
+      <Animated.View style={[s.wordBox, { top: cy - 60, width }, word]}>
+        <Text style={[s.word, { color: spec.colors[0] }]}>{spec.word}</Text>
+        {label ? <Text style={s.label}>{label}</Text> : null}
+      </Animated.View>
+    </View>
+  );
+}
+
+function Shard({
+  i,
+  t,
+  spec,
+  cx,
+  cy,
+  still,
+}: {
+  i: number;
+  t: SharedValue<number>;
+  spec: Spec;
+  cx: number;
+  cy: number;
+  still: boolean;
+}) {
+  const on = i < spec.shards;
+  const angle = (i / spec.shards) * Math.PI * 2 + rnd(i, 3) * 0.5;
+  const dist = spec.spread * (0.55 + rnd(i, 7) * 0.65);
+  const dx = Math.cos(angle) * dist;
+  const dy = Math.sin(angle) * dist;
+  const spin = (rnd(i, 11) - 0.5) * 720;
+  const size = spec.bar ? 4 : 7 + rnd(i, 5) * 5;
+  const long = spec.bar ? 22 + rnd(i, 9) * 20 : size;
+
+  const st = useAnimatedStyle(() => {
+    if (!on || still) return { opacity: 0 };
+    const p = t.value;
+    return {
+      opacity: interpolate(p, [0, 0.06, 0.75, 1], [0, 1, 0.9, 0]),
+      transform: [
+        { translateX: dx * p },
+        // Gravity: they fly out fast and fall away, rather than drifting outward
+        // forever, which is what makes a burst read as explosive rather than as fog.
+        { translateY: dy * p + p * p * 120 },
+        { rotate: `${angle * 57.3 + spin * p}deg` },
+        { scale: interpolate(p, [0, 0.2, 1], [0.4, 1.15, 0.5]) },
+      ],
+    };
+  });
+
+  return (
+    <Animated.View
+      style={[
+        {
+          position: 'absolute',
+          left: cx - long / 2,
+          top: cy - size / 2,
+          width: long,
+          height: size,
+          borderRadius: spec.bar ? 2 : size,
+          backgroundColor: spec.colors[i % spec.colors.length],
+        },
+        st,
+      ]}
+    />
+  );
+}
+
+const s = StyleSheet.create({
+  ring: { position: 'absolute', width: 180, height: 180, borderRadius: 90, borderWidth: 4 },
+  wordBox: { position: 'absolute', alignItems: 'center' },
+  word: { fontSize: 34, fontWeight: '900', letterSpacing: 1.5 },
+  label: { marginTop: 6, fontSize: 13, fontWeight: '700', color: color.chalk, letterSpacing: 0.4 },
+});

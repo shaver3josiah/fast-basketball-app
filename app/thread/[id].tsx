@@ -18,11 +18,11 @@ import { useSession, useNames } from '../../src/session';
 import { canPostIn, sendMessage, subscribeMessages } from '../../src/data';
 import type { Athlete, Message, Thread } from '../../src/types';
 import { Banner } from '../../src/ui';
-import { color, radius, semantic, type } from '../../src/theme';
+import { bubbleColor, color, radius, semantic, type } from '../../src/theme';
 
 export default function ThreadScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { user, role, athlete, athletesById, consent } = useSession();
+  const { user, role, athlete, athletesById, consent, prefs } = useSession();
   const [thread, setThread] = useState<Thread | null>(null);
   const names = useNames(thread?.athleteId);
   const insets = useSafeAreaInsets();
@@ -49,6 +49,9 @@ export default function ThreadScreen() {
     return subscribeMessages(id, setMessages);
   }, [id]);
 
+  // The account's own bubble colour, picked on the You tab. Everyone else's stays
+  // the neutral card, so a thread never turns into two people shouting in colour.
+  const mineBg = bubbleColor(prefs.chatColor);
   const monitoring = !!thread && !!user && !thread.participants.includes(user.uid);
   const canPost = !!thread && !!user && canPostIn(thread, user.uid, threadAthlete);
   const title = monitoring
@@ -134,6 +137,7 @@ export default function ThreadScreen() {
               message={item}
               previous={messages[index - 1]}
               mine={item.senderUid === user?.uid}
+              mineBg={mineBg}
               showAuthor={monitoring || role === 'coach'}
               athlete={threadAthlete}
               names={names}
@@ -192,6 +196,7 @@ function Bubble({
   message,
   previous,
   mine,
+  mineBg,
   showAuthor,
   athlete,
   names,
@@ -199,6 +204,7 @@ function Bubble({
   message: Message;
   previous?: Message;
   mine: boolean;
+  mineBg: string;
   showAuthor: boolean;
   athlete: Athlete | null;
   names: { coach: string; parent: string; player: string };
@@ -217,7 +223,7 @@ function Bubble({
   return (
     <View>
       {newDay && <Text style={s.daySep}>{dayLabel(d!)}</Text>}
-      <View style={[s.bubble, mine ? s.mine : s.theirs]}>
+      <View style={[s.bubble, mine ? [s.mine, { backgroundColor: mineBg }] : s.theirs]}>
         {showAuthor && !mine && <Text style={s.who}>{who}</Text>}
         <Text style={s.text}>{message.text}</Text>
         <Text style={s.stamp}>
@@ -251,6 +257,8 @@ const s = StyleSheet.create({
     marginVertical: 14,
   },
   bubble: { maxWidth: '84%', borderRadius: 16, paddingHorizontal: 13, paddingVertical: 10, marginBottom: 8 },
+  // The background is painted at render time from the account's pick; this is the
+  // fallback for anyone who has never opened the picker.
   mine: { alignSelf: 'flex-end', backgroundColor: color.redDeep, borderBottomRightRadius: 5 },
   theirs: {
     alignSelf: 'flex-start',

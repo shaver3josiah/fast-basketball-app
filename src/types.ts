@@ -138,6 +138,19 @@ export interface SavedWorkflow {
 export interface UserPrefs {
   mutedThreads: string[];
   displayName?: string;
+  /** A key from CHAT_COLORS in theme.ts. Paints this account's own message bubbles. */
+  chatColor?: string;
+  /** Streaks, workout count and the celebration picked. See src/rewards.ts — the
+   *  shape is its RewardState, optional here because every field has a default and a
+   *  document written before any of this existed must keep loading. */
+  streak?: number;
+  bestStreak?: number;
+  lastDay?: string;
+  workouts?: number;
+  doneEvents?: string[];
+  celebration?: string;
+  /** Streak reminders. Absent means on, so an account that predates them gets them. */
+  remind?: boolean;
 }
 
 // --- workouts ---------------------------------------------------------------

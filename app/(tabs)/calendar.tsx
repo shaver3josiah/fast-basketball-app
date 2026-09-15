@@ -340,7 +340,14 @@ export default function CalendarScreen() {
           gridOrigin={gridOrigin}
           cellRects={cellRects}
           hoverDay={hoverDay}
-          onOpen={() => router.push({ pathname: '/schedule', params: { eventId: e.id } })}
+          // The coach opens a session to change it. Everyone else opens it to do it.
+          onOpen={() =>
+            router.push(
+              isCoach
+                ? { pathname: '/schedule', params: { eventId: e.id } }
+                : { pathname: '/train/[id]', params: { id: e.id } }
+            )
+          }
           onCopy={() => {
             setClipboard({ from: selected, events: [e] });
             setFlash('Session copied');
