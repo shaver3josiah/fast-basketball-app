@@ -10,7 +10,7 @@
     "backgroundColor": "#0A0A0C",
     "primaryColor": "#E60C20",
     "ios": {
-      "supportsTablet": true,
+      "supportsTablet": false,
       "bundleIdentifier": "com.fastbasketball.app",
       "buildNumber": "1",
       "infoPlist": {
