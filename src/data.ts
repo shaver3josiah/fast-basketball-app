@@ -13,10 +13,16 @@ import {
   setDoc,
   updateDoc,
   where,
+  writeBatch,
+  Timestamp,
   type Unsubscribe,
 } from 'firebase/firestore';
 import { db, COACH_UID } from './firebase';
 import { parseSubmissionId, periodKey, submissionId } from './period';
+import { clockLabel, projectDates } from './schedule';
+
+export { projectDates } from './schedule';
+import type { SessionType } from './theme';
 import type {
   Athlete,
   Message,
@@ -26,6 +32,9 @@ import type {
   Thread,
   UserPrefs,
   Workflow,
+  WorkoutBlock,
+  WorkoutKind,
+  WorkoutTemplate,
 } from './types';
 
 /**
@@ -475,4 +484,261 @@ export function setMuted(uid: string, prefs: UserPrefs, threadId: string, muted:
  */
 export function deletePrefs(uid: string) {
   return deleteDoc(doc(db, 'users', uid));
+}
+
+// --- workout templates ------------------------------------------------------
+
+/**
+ * The Workout Builder's library. Coach-only in both directions, so there is no
+ * query shape to be careful about here: the rule does not look at the document.
+ */
+export function subscribeTemplates(cb: (t: WorkoutTemplate[]) => void): Unsubscribe {
+  return onSnapshot(
+    collection(db, 'workoutTemplates'),
+    (snap) => {
+      const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as WorkoutTemplate);
+      list.sort((a, b) => a.name.localeCompare(b.name));
+      cb(list);
+    },
+    err('workoutTemplates')
+  );
+}
+
+export const totalMinutes = (blocks: WorkoutBlock[]) =>
+  blocks.reduce((n, b) => n + (Number(b.minutes) || 0), 0);
+
+/** Create or overwrite. Returns the id so a fresh template can be selected at once. */
+export async function saveTemplate(t: Omit<WorkoutTemplate, 'updatedAt'>): Promise<string> {
+  const body = {
+    name: t.name.trim(),
+    type: t.type,
+    kind: t.kind,
+    // Strip undefined: Firestore rejects it, and an empty note is absence, not a value.
+    blocks: t.blocks.map((b) => ({
+      id: b.id,
+      name: b.name.trim(),
+      minutes: Number(b.minutes) || 0,
+      ...(b.notes?.trim() ? { notes: b.notes.trim() } : {}),
+    })),
+    totalMinutes: totalMinutes(t.blocks),
+    updatedAt: serverTimestamp(),
+  };
+  if (t.id) {
+    await setDoc(doc(db, 'workoutTemplates', t.id), body);
+    return t.id;
+  }
+  const ref = await addDoc(collection(db, 'workoutTemplates'), body);
+  return ref.id;
+}
+
+export function deleteTemplate(id: string) {
+  return deleteDoc(doc(db, 'workoutTemplates', id));
+}
+
+// --- scheduling -------------------------------------------------------------
+
+/**
+ * Firestore commits at most 500 writes in one batch. A coached session projected
+ * out is athletes x occurrences, which reaches 500 faster than it looks: six
+ * athletes every week for a season is 312. Callers are told the number before they
+ * confirm, so this is a backstop rather than the thing that enforces the limit.
+ */
+export const MAX_SCHEDULED = 480;
+
+/**
+ * A unique id, generated on the client. Hermes has no global crypto.randomUUID, so
+ * this borrows Firestore's own id generator, which is the one part of the SDK that
+ * exists to mint collision-resistant ids offline. The document it names is never
+ * created; only its id is taken.
+ */
+const newId = () => doc(collection(db, "ids")).id;
+
+export interface ScheduleInput {
+  /** One id for individual work. Several fans out one event per athlete. */
+  athleteIds: string[];
+  type: SessionType;
+  name: string;
+  location: string;
+  startsAt: Date;
+  kind: WorkoutKind;
+  blocks: WorkoutBlock[];
+  durationMin: number;
+  notes?: string;
+  templateId?: string;
+  /** 1 writes a single session. */
+  occurrences: number;
+  everyWeeks: number;
+}
+
+/**
+ * Write a workout onto one or more calendars, projected out as far as asked.
+ *
+ * A coached session becomes one event PER ATHLETE rather than one shared event.
+ * That is deliberate: /events is read with `isGuardian(resource.data.athleteId)`,
+ * so a shared document would need an array-membership rule and a get() per athlete
+ * to decide a read. Fanning out keeps the existing rule exactly as it is, and each
+ * family sees their own row with their own cancellation state.
+ */
+export async function scheduleWorkout(input: ScheduleInput): Promise<number> {
+  const dates = projectDates(input.startsAt, input.occurrences, input.everyWeeks);
+  const total = dates.length * input.athleteIds.length;
+  if (total === 0) return 0;
+  if (total > MAX_SCHEDULED) {
+    throw new Error(
+      `That would write ${total} sessions. The limit is ${MAX_SCHEDULED} in one go.`
+    );
+  }
+
+  const batch = writeBatch(db);
+  const seriesId = dates.length > 1 ? newId() : undefined;
+  const blocks = input.blocks.map((b) => ({
+    id: b.id,
+    name: b.name,
+    minutes: b.minutes,
+    ...(b.notes ? { notes: b.notes } : {}),
+  }));
+
+  for (const date of dates) {
+    // One groupId per OCCURRENCE, shared by that occurrence's athlete copies, so
+    // "move Tuesday's group session" can find the copies without also moving next
+    // Tuesday's.
+    const groupId = input.athleteIds.length > 1 ? newId() : undefined;
+    for (const athleteId of input.athleteIds) {
+      batch.set(doc(collection(db, 'events')), {
+        athleteId,
+        type: input.type,
+        name: input.name.trim(),
+        location: input.location.trim(),
+        startsAt: Timestamp.fromDate(date),
+        timeLabel: clockLabel(date, input.type),
+        kind: input.kind,
+        blocks,
+        durationMin: input.durationMin,
+        ...(input.notes?.trim() ? { notes: input.notes.trim() } : {}),
+        ...(input.templateId ? { templateId: input.templateId } : {}),
+        ...(groupId ? { groupId } : {}),
+        ...(seriesId ? { seriesId } : {}),
+      });
+    }
+  }
+  await batch.commit();
+  return total;
+}
+
+/** Edit one session in place. startsAt is handled by moveEvent, which also has to
+ *  rewrite the stored clock label. */
+export function updateEvent(id: string, patch: Partial<SessionEvent>) {
+  return updateDoc(doc(db, 'events', id), patch as Record<string, unknown>);
+}
+
+/**
+ * Drag and drop, and the time field on the editor, both land here.
+ *
+ * `keepTime` is what a drag across the month grid means: the same session, a
+ * different day. Dropping a 4pm Tuesday onto Thursday must not silently move it to
+ * midnight, which is what writing the target day alone would do.
+ */
+export function moveEvent(e: SessionEvent, to: Date, keepTime = true) {
+  const from = e.startsAt.toDate();
+  const next = new Date(to);
+  if (keepTime) next.setHours(from.getHours(), from.getMinutes(), 0, 0);
+  return updateDoc(doc(db, 'events', e.id), {
+    startsAt: Timestamp.fromDate(next),
+    timeLabel: clockLabel(next, e.type),
+  });
+}
+
+/**
+ * Edit one session, its time included, in a single write.
+ *
+ * startsAt and the stored clock label always move together. Two writes could leave a
+ * row showing 4:00 PM on a session that is now at 5:00, and the calendar prints the
+ * label in preference to the timestamp, so that row would lie until someone noticed.
+ */
+export function editEvent(
+  id: string,
+  when: Date,
+  patch: Omit<Partial<SessionEvent>, "id" | "startsAt" | "timeLabel"> & { type: SessionType }
+) {
+  return updateDoc(doc(db, "events", id), {
+    ...patch,
+    startsAt: Timestamp.fromDate(when),
+    timeLabel: clockLabel(when, patch.type),
+  } as Record<string, unknown>);
+}
+
+export function deleteEvent(id: string) {
+  return deleteDoc(doc(db, 'events', id));
+}
+
+/**
+ * Apply one change to every event sharing a field, which is how "this and every
+ * following session" works without a second data model. `after` keeps it to the
+ * occurrences from this one onward, because moving a whole series backwards in time
+ * including the ones already played is never what anyone means.
+ */
+export async function applyToSeries(
+  events: SessionEvent[],
+  seriesId: string,
+  after: Date | null,
+  op: (e: SessionEvent) => Record<string, unknown> | null
+): Promise<number> {
+  const members = events.filter(
+    (e) => e.seriesId === seriesId && (!after || e.startsAt.toDate() >= after)
+  );
+  if (!members.length) return 0;
+  const batch = writeBatch(db);
+  let n = 0;
+  for (const e of members.slice(0, MAX_SCHEDULED)) {
+    const patch = op(e);
+    if (!patch) continue;
+    batch.update(doc(db, 'events', e.id), patch);
+    n++;
+  }
+  await batch.commit();
+  return n;
+}
+
+export async function deleteSeries(events: SessionEvent[], seriesId: string, after: Date | null) {
+  const members = events.filter(
+    (e) => e.seriesId === seriesId && (!after || e.startsAt.toDate() >= after)
+  );
+  const batch = writeBatch(db);
+  members.slice(0, MAX_SCHEDULED).forEach((e) => batch.delete(doc(db, 'events', e.id)));
+  await batch.commit();
+  return members.length;
+}
+
+/**
+ * Paste. Copies whole sessions onto another day, keeping each one's time of day and
+ * its ordering within the day, so pasting a Tuesday onto a Thursday reproduces
+ * Tuesday's shape rather than stacking everything at one hour.
+ */
+export async function pasteEvents(events: SessionEvent[], onto: Date): Promise<number> {
+  if (!events.length) return 0;
+  if (events.length > MAX_SCHEDULED) throw new Error('Too many sessions to paste at once.');
+  const batch = writeBatch(db);
+  for (const e of events) {
+    const from = e.startsAt.toDate();
+    const next = new Date(onto);
+    next.setHours(from.getHours(), from.getMinutes(), 0, 0);
+    batch.set(doc(collection(db, 'events')), {
+      athleteId: e.athleteId,
+      type: e.type,
+      name: e.name,
+      location: e.location,
+      startsAt: Timestamp.fromDate(next),
+      timeLabel: clockLabel(next, e.type),
+      ...(e.kind ? { kind: e.kind } : {}),
+      ...(e.blocks ? { blocks: e.blocks } : {}),
+      ...(e.durationMin ? { durationMin: e.durationMin } : {}),
+      ...(e.notes ? { notes: e.notes } : {}),
+      ...(e.templateId ? { templateId: e.templateId } : {}),
+      // A pasted copy is a new session, not a member of the original's series.
+      // Inheriting seriesId would make "cancel the series" reach into a day the
+      // coach copied it to by hand, which is not what he asked for.
+    });
+  }
+  await batch.commit();
+  return events.length;
 }

@@ -25,6 +25,8 @@ export default function RootLayout() {
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="roster" options={{ title: 'Roster' }} />
           <Stack.Screen name="delete-account" options={{ title: 'Delete account' }} />
+          <Stack.Screen name="schedule" options={{ title: 'Add to the calendar' }} />
+          <Stack.Screen name="athlete" options={{ title: 'Athlete' }} />
           <Stack.Screen name="thread/[id]" options={{ title: 'Messages' }} />
           <Stack.Screen name="workflow/[id]" options={{ title: 'Workflow' }} />
         </Stack>

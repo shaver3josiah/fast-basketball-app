@@ -9,7 +9,8 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { Stack, useLocalSearchParams } from 'expo-router';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../src/firebase';
@@ -25,6 +26,7 @@ export default function ThreadScreen() {
   const [thread, setThread] = useState<Thread | null>(null);
   const names = useNames(thread?.athleteId);
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const listRef = useRef<FlatList<Message>>(null);
 
   // The athlete this THREAD is about, which for a coach with more than one on the
@@ -77,7 +79,30 @@ export default function ThreadScreen() {
 
   return (
     <View style={s.page}>
-      <Stack.Screen options={{ title }} />
+      <Stack.Screen
+        options={{
+          title,
+          // The coach schedules from inside the conversation, because that is where he
+          // decides to. Everyone else has no profile to open: a family sees one athlete,
+          // their own, and the calendar tab already shows them everything about them.
+          headerRight:
+            role === 'coach' && thread?.athleteId
+              ? () => (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Open this athlete and schedule a workout"
+                    onPress={() =>
+                      router.push({ pathname: '/athlete', params: { athleteId: thread.athleteId } })
+                    }
+                    hitSlop={8}
+                    style={{ paddingHorizontal: 4, minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}
+                  >
+                    <Ionicons name="calendar-outline" size={21} color={color.chalk} />
+                  </Pressable>
+                )
+              : undefined,
+        }}
+      />
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}

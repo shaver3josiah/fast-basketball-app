@@ -25,7 +25,7 @@ export default function Messages() {
       {role === 'parent' && (
         <Banner tone="watch" title="You see everything">
           Every message between Coach Kingsley and {names.player.split(' ')[0]} appears here. You can
-          read it — you cannot post into it.
+          read it. You cannot post into it.
         </Banner>
       )}
       {role === 'player' && !consent && (
@@ -51,7 +51,7 @@ export default function Messages() {
 
       {threads === null && <Text style={type.meta}>Loading…</Text>}
       {threads?.length === 0 && (
-        <Empty icon="▤">No conversations yet.{'\n'}Coach Kingsley opens these.</Empty>
+        <Empty icon="chatbubbles-outline">No conversations yet.{'\n'}Coach Kingsley opens these.</Empty>
       )}
 
       {threads?.map((t) => (
@@ -114,7 +114,7 @@ function ThreadRow({
           <Text style={s.rowName} numberOfLines={1}>
             {title}
           </Text>
-          <Text style={s.rowTime}>{locked ? '—' : timeOf(last)}</Text>
+          <Text style={s.rowTime}>{locked ? '–' : timeOf(last)}</Text>
         </View>
         <Text style={s.rowPrev} numberOfLines={2}>
           {locked ? 'Locked until consent' : (last?.text ?? 'No messages yet.')}

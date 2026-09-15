@@ -245,6 +245,30 @@ service cloud.firestore {
     }
 
     // ---------------------------------------------------------------
+    // Workout templates — the Workout Builder library
+    // ---------------------------------------------------------------
+    // Coach-only in BOTH directions, unlike /workflows. A template is the coach's
+    // working material, not something a family is meant to browse: what an athlete
+    // needs to see is the session on their own calendar, and scheduling copies the
+    // blocks onto that event rather than pointing at this document. So there is no
+    // reason for a family to read here, and a read they do not need is a read that
+    // can leak another family's plan.
+    match /workoutTemplates/{wid} {
+      allow read: if isCoach();
+
+      // Bounded so a client cannot use the template library as free storage. 60
+      // blocks is about four hours at five minutes each, well past any real session.
+      allow create, update: if isCoach()
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 120
+        && request.resource.data.blocks is list
+        && request.resource.data.blocks.size() <= 60;
+
+      allow delete: if isCoach();
+    }
+
+    // ---------------------------------------------------------------
     // Private per-user preferences (notification mutes)
     // ---------------------------------------------------------------
     // The spec gives the guardian a per-thread mute the player cannot override.

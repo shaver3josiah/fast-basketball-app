@@ -59,6 +59,26 @@ export interface SessionEvent {
   canceled?: boolean;
   /** Empty for rest/film days, which have no clock time. */
   timeLabel?: string;
+
+  // Everything below is OPTIONAL on purpose. Events written before the workout
+  // builder existed carry none of it and must keep rendering exactly as they did.
+
+  /** Individual work or a coached session. A coached session is fanned out to one
+   *  event per athlete, so this is per-athlete even when the session is shared. */
+  kind?: WorkoutKind;
+  /** A COPY of the template blocks taken at scheduling time, not a reference.
+   *  Editing a template must not silently rewrite what a family was told to do
+   *  three weeks ago, and reading it here costs no second document. */
+  blocks?: WorkoutBlock[];
+  durationMin?: number;
+  notes?: string;
+  /** Provenance only. Nothing reads through it. */
+  templateId?: string;
+  /** Shared by every athlete copy of one coached session. */
+  groupId?: string;
+  /** Shared by every occurrence projected out of one scheduling action, so the
+   *  whole run can be moved or cancelled together. */
+  seriesId?: string;
 }
 
 export interface Workflow {
@@ -99,4 +119,38 @@ export interface SavedWorkflow {
 export interface UserPrefs {
   mutedThreads: string[];
   displayName?: string;
+}
+
+// --- workouts ---------------------------------------------------------------
+
+/**
+ * One line in a workout: what to do and for how long. Deliberately not a drill
+ * library. Blake types what he wants and moves on; a catalogue of canonical drills
+ * is a second product and nobody has asked for it.
+ */
+export interface WorkoutBlock {
+  /** Local id. Stable across a reorder so React keys and drag state survive it. */
+  id: string;
+  name: string;
+  minutes: number;
+  notes?: string;
+}
+
+/** Who the workout is for. Drives fan-out: a coached session writes one event per
+ *  athlete, an individual one writes a single event. */
+export type WorkoutKind = 'individual' | 'coached';
+
+/**
+ * A reusable workout the coach builds once in the Workout Builder and schedules
+ * many times. Coach-only, both directions, in firebase/firestore.rules.
+ */
+export interface WorkoutTemplate {
+  id: string;
+  name: string;
+  type: import('./theme').SessionType;
+  kind: WorkoutKind;
+  blocks: WorkoutBlock[];
+  /** Denormalised sum of the blocks so a list can show it without adding up. */
+  totalMinutes: number;
+  updatedAt: Timestamp | null;
 }

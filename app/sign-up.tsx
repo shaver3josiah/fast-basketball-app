@@ -79,7 +79,7 @@ export default function SignUp() {
           sign in.
         </Text>
         <Text style={s.small}>
-          Confirming the address is what connects you to your athlete — until then the app has
+          Confirming the address is what connects you to your athlete. Until then the app has
           nothing to show you. If the link has not arrived in a few minutes, check spam.
         </Text>
         <View style={{ height: 22 }} />
@@ -144,7 +144,7 @@ export default function SignUp() {
         <Button label="Create account" onPress={submit} busy={busy} disabled={!email || !password} />
 
         <Text style={s.small}>
-          For athletes under 13, use the parent’s account only — do not create a separate login for
+          For athletes under 13, use the parent’s account only. Do not create a separate login for
           the player.
         </Text>
 

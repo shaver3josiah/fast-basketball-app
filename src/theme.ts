@@ -4,6 +4,8 @@
  * #E60C20 and nothing in here is allowed to drift from it.
  */
 
+import Ionicons from '@expo/vector-icons/Ionicons';
+
 export const color = {
   courtBlack: '#0A0A0C',
   ink: '#131318',
@@ -63,17 +65,22 @@ export const radius = {
 
 export const space = (n: number) => n * 4;
 
+/** Every icon in the app comes from Ionicons, which ships with @expo/vector-icons and
+ *  already draws the tab bar. Unicode glyphs used to stand in here; they render at the
+ *  mercy of whichever font the platform substitutes, which is not an icon system. */
+export type IconName = keyof typeof Ionicons.glyphMap;
+
 /**
  * Session types. Color is NEVER the only signal — every consumer must render the
  * label and the icon too (WCAG 1.4.1). Roughly 8 in 100 boys in the 11-18 target
  * are red-green colorblind and this app's primary accent is red.
  */
 export const SESSION_TYPES = {
-  skills: { label: 'Skills', icon: '⚡', color: color.redHot },
-  shoot: { label: 'Shooting', icon: '◎', color: color.miamiTeal },
-  team: { label: 'Small Group', icon: '▣', color: color.chalk },
-  rest: { label: 'Rest / Film', icon: '○', color: '#9C9CA9' },
-} as const;
+  skills: { label: 'Skills', icon: 'flash-outline', color: color.redHot },
+  shoot: { label: 'Shooting', icon: 'locate-outline', color: color.miamiTeal },
+  team: { label: 'Small Group', icon: 'people-outline', color: color.chalk },
+  rest: { label: 'Rest / Film', icon: 'film-outline', color: '#9C9CA9' },
+} as const satisfies Record<string, { label: string; icon: IconName; color: string }>;
 
 export type SessionType = keyof typeof SESSION_TYPES;
 

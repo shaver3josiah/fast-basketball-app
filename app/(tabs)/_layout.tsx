@@ -23,7 +23,7 @@ function useThreadCount() {
 }
 
 export default function TabsLayout() {
-  const { user, ready, needsVerification, notInvited } = useSession();
+  const { user, ready, needsVerification, notInvited, role } = useSession();
   const threads = useThreadCount();
 
   if (!ready) return <Loading />;
@@ -66,6 +66,19 @@ export default function TabsLayout() {
         options={{
           title: 'Calendar',
           tabBarIcon: ({ color: c, size }) => <Ionicons name="calendar-outline" size={size} color={c} />,
+        }}
+      />
+      <Tabs.Screen
+        name="builder"
+        options={{
+          title: 'Workout Builder',
+          tabBarLabel: 'Workouts',
+          tabBarIcon: ({ color: c, size }) => <Ionicons name="barbell-outline" size={size} color={c} />,
+          // Only the coach has a workout library, and the rules say so too: a read of
+          // /workoutTemplates from a family account is denied. href null removes the
+          // tab without removing the route, so a stale deep link still resolves and
+          // the screen itself redirects.
+          href: role === 'coach' ? undefined : null,
         }}
       />
       <Tabs.Screen

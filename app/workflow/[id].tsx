@@ -183,10 +183,10 @@ function hintFor({
   heading: string;
   names: { player: string };
 }): string {
-  if (role === 'coach') return `${heading} — the athlete's own answers.`;
+  if (role === 'coach') return `${heading}. The athlete's own answers.`;
   if (!isCurrentPeriod) return `${heading}. Past entries are a record, not a draft.`;
   if (!mayWrite) return `${names.player.split(' ')[0]}’s answers. You can read them, not change them.`;
-  return saved ? 'Saved earlier — pick up where you left off.' : 'Your answers save to your account, not the coach’s file.';
+  return saved ? 'Saved earlier. Pick up where you left off.' : 'Your answers save to your account, not the coach’s file.';
 }
 
 const s = StyleSheet.create({

@@ -46,9 +46,9 @@ export default function DeleteAccount() {
       <ScrollView style={s.page} contentContainerStyle={s.pad}>
         <Banner tone="lock" title="Not from here">
           This is the coach account. The security rules identify it by id, so deleting it
-          would leave every family signed in with nobody to message — and no button in
-          the app can put it back. Delete it from the Firebase console, and redeploy the
-          rules with the new account's id, if that is really what you want.
+          would leave every family signed in with nobody to message. No button in the app
+          can put it back. Delete it from the Firebase console, and redeploy the rules
+          with the new account's id, if that is really what you want.
         </Banner>
       </ScrollView>
     );
@@ -89,7 +89,7 @@ export default function DeleteAccount() {
               : // The password errors above all happen before anything is written. This
                 // one can land after consent has already been revoked, so it must not
                 // promise that nothing changed.
-                'Could not finish deleting the account. Your login is still there — try again, or ask Coach Kingsley.'
+                'Could not finish deleting the account. Your login is still there. Try again, or ask Coach Kingsley.'
       );
     } finally {
       setBusy(false);
@@ -101,7 +101,7 @@ export default function DeleteAccount() {
       <ScrollView contentContainerStyle={s.pad} keyboardShouldPersistTaps="handled">
         <Banner tone="lock" title="This cannot be undone">
           Deleting your account signs you out for good and removes your login from
-          {' '}{user?.email ?? 'this app'}. There is no way to restore it — Coach Kingsley would
+          {' '}{user?.email ?? 'this app'}. There is no way to restore it. Coach Kingsley would
           have to invite you again.
         </Banner>
 
@@ -118,9 +118,9 @@ export default function DeleteAccount() {
         <Card>
           <CardTitle>What stays</CardTitle>
           <Body>
-            Messages already sent stay where they are. Nobody can delete one — not you,
-            not Coach Kingsley — because a conversation a guardian was promised she could
-            read is worth nothing if either side can edit it afterwards.
+            Messages already sent stay where they are. Nobody can delete one, not you and
+            not Coach Kingsley. A conversation a guardian was promised she could read is
+            worth nothing if either side can edit it afterwards.
             {'\n\n'}
             {names.player.split(' ')[0]}’s athlete record belongs to the coach. Ask him to
             remove it, and everything on it goes with it.

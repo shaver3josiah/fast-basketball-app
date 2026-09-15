@@ -95,7 +95,7 @@ export default function You() {
                   title={label}
                   description={
                     muted
-                      ? 'Muted — messages still arrive, your phone stays quiet.'
+                      ? 'Muted. Messages still arrive, your phone stays quiet.'
                       : 'Notify me about new messages in this thread.'
                   }
                   value={!muted}
@@ -131,7 +131,7 @@ export default function You() {
                   They read this thread too
                 </Text>
               ) : null}
-              {consent ? ' — that is not a punishment, it is how the app works until you are 18.' : ''}
+              {consent ? '. That is not a punishment. It is how the app works until you are 18.' : ''}
             </Body>
           </Card>
           <Card>
@@ -175,7 +175,7 @@ export default function You() {
             <CardTitle>What parents see</CardTitle>
             <Body>
               Every message you send an athlete is visible to their guardian, and no message can be
-              edited or deleted afterwards — by them or by you. Write like it is on the record.
+              edited or deleted afterwards, by them or by you. Write like it is on the record.
             </Body>
           </Card>
         </>

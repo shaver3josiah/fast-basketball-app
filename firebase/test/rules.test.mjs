@@ -746,6 +746,38 @@ describe('the coach inviting a family', () => {
   });
 });
 
+describe('workout templates', () => {
+  // The Workout Builder writes here. Unlike /workflows, which any signed-in account
+  // may read, a template is the coach's own material and a family has no reason to
+  // see another family's plan. Scheduling copies the blocks onto the event, so
+  // nothing a parent or athlete needs is behind this rule.
+  const TPL = { name: 'Tuesday skills', type: 'skills', kind: 'individual', blocks: [], totalMinutes: 0 };
+
+  test('only the coach can read or write a template', async () => {
+    await seed();
+    await assertSucceeds(setDoc(doc(as(COACH), 'workoutTemplates', 't1'), TPL));
+    await assertSucceeds(getDoc(doc(as(COACH), 'workoutTemplates', 't1')));
+
+    await assertFails(getDoc(doc(as(PARENT), 'workoutTemplates', 't1')));
+    await assertFails(getDoc(doc(as(PLAYER), 'workoutTemplates', 't1')));
+    await assertFails(setDoc(doc(as(PARENT), 'workoutTemplates', 't2'), TPL));
+    await assertFails(deleteDoc(doc(as(PLAYER), 'workoutTemplates', 't1')));
+  });
+
+  test('a template is not free storage', async () => {
+    await seed();
+    // No name at all, and a blocks list past the ceiling: both are rejected, so a
+    // client cannot park arbitrary documents in the library.
+    await assertFails(setDoc(doc(as(COACH), 'workoutTemplates', 'bad'), { ...TPL, name: '' }));
+    await assertFails(
+      setDoc(doc(as(COACH), 'workoutTemplates', 'big'), {
+        ...TPL,
+        blocks: Array.from({ length: 61 }, (_, i) => ({ id: String(i), name: 'x', minutes: 5 })),
+      })
+    );
+  });
+});
+
 describe('notification mutes', () => {
   test('a mute lives under its owner’s uid and nobody else can reach it', async () => {
     await seed();

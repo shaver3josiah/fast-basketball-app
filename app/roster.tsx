@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
-import { Redirect, Stack } from 'expo-router';
+import { Redirect, Stack, useRouter } from 'expo-router';
 import { useSession } from '../src/session';
 import { createThreadsFor, hasConsent, inviteAthlete, subscribeThreads } from '../src/data';
 import type { Athlete, Thread } from '../src/types';
-import { Banner, Body, Button, Card, CardTitle, Eyebrow, Screen, Tag } from '../src/ui';
+import { Banner, Body, Button, Card, CardTitle, Eyebrow, GhostButton, Screen, Tag } from '../src/ui';
 import { color, radius, semantic, type } from '../src/theme';
 
 /**
@@ -73,6 +73,7 @@ function AthleteCard({
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const router = useRouter();
 
   const parentIn = Boolean(athlete.guardianUid);
   const playerInvited = Boolean(athlete.playerEmail);
@@ -114,13 +115,22 @@ function AthleteCard({
         <Row label="Athlete" who={athlete.playerName} email={athlete.playerEmail} joined={playerIn} />
       ) : (
         <Text style={s.note}>
-          No athlete login — the family uses the parent’s account. That is the right shape under 13.
+          No athlete login. The family uses the parent’s account. That is the right shape under 13.
         </Text>
       )}
 
       <View style={s.foot}>
         {hasThreads ? (
-          <Text style={s.ok}>✓ Threads open</Text>
+          <View style={s.footRow}>
+            <Text style={s.ok}>Threads open</Text>
+            <GhostButton
+              label="Schedule"
+              icon="calendar-outline"
+              onPress={() =>
+                router.push({ pathname: '/athlete', params: { athleteId: athlete.id } })
+              }
+            />
+          </View>
         ) : parentIn ? (
           <Button label={busy ? 'Opening…' : 'Open threads'} onPress={open} busy={busy} />
         ) : (
@@ -210,7 +220,7 @@ function InviteForm() {
         keyboardType="email-address"
       />
       <Field
-        label="Athlete's email — leave blank if under 13"
+        label="Athlete's email (leave blank if under 13)"
         value={playerEmail}
         onChange={setPlayerEmail}
         placeholder="marcus@example.com"
@@ -279,6 +289,7 @@ const s = StyleSheet.create({
   },
   rowWho: { fontSize: 14, fontWeight: '600', color: color.textLede },
   note: { ...type.meta, paddingVertical: 9, lineHeight: 17 },
+  footRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
   foot: { marginTop: 12 },
   waiting: { ...type.meta, lineHeight: 17 },
   ok: { color: color.miamiTeal, fontSize: 13.5, fontWeight: '700', marginTop: 10 },

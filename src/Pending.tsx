@@ -47,12 +47,12 @@ export function Pending() {
           </Text>
           <Text style={s.small}>
             Confirming the address is what connects you to your athlete. It is also what stops
-            someone else claiming your place using an address that is not theirs — so there is no
+            someone else claiming your place using an address that is not theirs. There is no
             way past this step.
           </Text>
           <View style={{ height: 20 }} />
           <Button
-            label={sent ? 'Sent — check your inbox' : 'Resend the link'}
+            label={sent ? 'Sent, check your inbox' : 'Resend the link'}
             onPress={resend}
             busy={busy}
             disabled={sent}
@@ -66,7 +66,7 @@ export function Pending() {
           </Text>
           <Text style={s.small}>
             He connects each family by email address. If you signed up with a different address from
-            the one you gave him, sign out and create your account with that one instead — or text
+            the one you gave him, sign out and create your account with that one instead. Or text
             him on (503) 686-8371.
           </Text>
         </>
@@ -81,7 +81,7 @@ export function Pending() {
       <View style={s.diag}>
         <Text style={s.diagLabel}>Your account id</Text>
         <Text selectable style={s.diagValue}>
-          {user?.uid ?? '—'}
+          {user?.uid ?? '–'}
         </Text>
         {COACH_UID && user?.uid && user.uid !== COACH_UID ? (
           <Text style={s.diagNote}>

@@ -51,7 +51,7 @@ export default function Locker() {
         // The athlete is told, in the same plain terms the messaging banner uses. A form
         // his coach assigns and his guardian reads must never look private to him.
         <Banner tone="watch" title="Coach Kingsley and your parent read these">
-          What you write here is not private. That is the point — it is how the two of them
+          What you write here is not private. That is the point. It is how the two of them
           see the work you are putting in.
         </Banner>
       )}
@@ -60,7 +60,7 @@ export default function Locker() {
 
       {workflows === null && <Text style={type.meta}>Loading…</Text>}
       {workflows?.length === 0 && (
-        <Empty icon="▤">Nothing published yet.{'\n'}Coach Kingsley posts workflows here.</Empty>
+        <Empty icon="document-text-outline">Nothing published yet.{'\n'}Coach Kingsley posts workflows here.</Empty>
       )}
 
       {workflows?.map((w) => (
@@ -82,7 +82,7 @@ export default function Locker() {
       {role === 'coach' ? (
         <>
           <Eyebrow style={{ marginTop: 22 }}>Submissions</Eyebrow>
-          {rosterIds.length === 0 && <Empty icon="▤">No athletes on the roster yet.</Empty>}
+          {rosterIds.length === 0 && <Empty icon="people-outline">No athletes on the roster yet.</Empty>}
           {rosterIds.map((aid) => {
             const subs = sortSubmissions(roster[aid] ?? {});
             return (
@@ -115,7 +115,7 @@ export default function Locker() {
             {role === 'parent' ? `${names.player.split(' ')[0]}’s submissions` : 'My submissions'}
           </Eyebrow>
           {sortSubmissions(mine).length === 0 ? (
-            <Empty icon="▤">
+            <Empty icon="document-text-outline">
               Nothing saved yet.{'\n'}Open a workflow, fill it in, hit Save.
             </Empty>
           ) : (

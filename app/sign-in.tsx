@@ -62,7 +62,7 @@ export default function SignIn() {
         <Text style={s.bolt}>⚡</Text>
         <Text style={s.wordmark}>FAST</Text>
         <Text style={s.sub}>BASKETBALL</Text>
-        <Text style={s.lede}>Coach, parent, and athlete — one place. Sign in with the account Coach Kingsley set up for you.</Text>
+        <Text style={s.lede}>Coach, parent, and athlete in one place. Sign in with the account Coach Kingsley set up for you.</Text>
 
         {backend.kind === 'emulator' && (
           <View style={s.notice}>

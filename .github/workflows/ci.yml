@@ -47,6 +47,12 @@ jobs:
       - name: Period key self-check
         run: npm run test:period
 
+      # projectDates decides which days a projected run of sessions lands on. Its
+      # daylight-saving case is the kind of thing that silently moves a 4pm Tuesday to
+      # 3pm for the rest of the season.
+      - name: Schedule arithmetic self-check
+        run: npm run test:schedule
+
       - name: Typecheck
         run: npx tsc --noEmit
 

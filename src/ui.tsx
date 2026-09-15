@@ -9,7 +9,17 @@ import {
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
-import { color, radius, roleTint, semantic, type } from './theme';
+import Ionicons from '@expo/vector-icons/Ionicons';
+import {
+  SESSION_TYPES,
+  color,
+  radius,
+  roleTint,
+  semantic,
+  type,
+  type IconName,
+  type SessionType,
+} from './theme';
 import type { Role } from './types';
 
 /** Page scaffold: court-black ground, consistent gutters. */
@@ -161,9 +171,11 @@ export function Setting({
   );
 }
 
-export const Empty = ({ icon, children }: { icon: string; children: React.ReactNode }) => (
+/** An empty state says what is missing and who fills it. The mark above it is a real
+ *  drawn icon, not a box-drawing character standing in for one. */
+export const Empty = ({ icon, children }: { icon: IconName; children: React.ReactNode }) => (
   <View style={s.empty}>
-    <Text style={{ fontSize: 32, color: color.textLabel, marginBottom: 10 }}>{icon}</Text>
+    <Ionicons name={icon} size={30} color={color.textLabel} style={{ marginBottom: 10 }} />
     <Text style={[type.body, { textAlign: 'center', color: color.textDim }]}>{children}</Text>
   </View>
 );
@@ -202,6 +214,154 @@ export function Button({
       ) : (
         <Text style={s.btnLabel}>{label.toUpperCase()}</Text>
       )}
+    </Pressable>
+  );
+}
+
+
+/**
+ * A choice between two to four options, always visible. A picker would hide the
+ * options behind a tap and a sheet; these sets are short enough that showing them
+ * costs one row and saves the coach a round trip on every single session.
+ */
+export function Segmented<T extends string>({
+  options,
+  value,
+  onChange,
+  label,
+}: {
+  options: { value: T; label: string; icon?: IconName }[];
+  value: T;
+  onChange: (v: T) => void;
+  label?: string;
+}) {
+  return (
+    <View
+      style={s.segWrap}
+      accessibilityRole="radiogroup"
+      accessibilityLabel={label}
+    >
+      {options.map((o) => {
+        const on = o.value === value;
+        return (
+          <Pressable
+            key={o.value}
+            accessibilityRole="radio"
+            accessibilityState={{ selected: on }}
+            accessibilityLabel={o.label}
+            onPress={() => onChange(o.value)}
+            style={({ pressed }) => [
+              s.seg,
+              on && s.segOn,
+              pressed && !on && { backgroundColor: color.inkHover },
+            ]}
+          >
+            {o.icon ? (
+              <Ionicons name={o.icon} size={14} color={on ? color.bone : color.textDim} />
+            ) : null}
+            <Text style={[s.segLabel, on && s.segLabelOn]} numberOfLines={1}>
+              {o.label}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+/**
+ * Minutes, mostly. Typing a number on a phone means summoning a keypad and
+ * dismissing it again; a coach setting 45 minutes wants two taps. The value is still
+ * announced as text so a screen reader user is not left guessing.
+ */
+export function Stepper({
+  value,
+  onChange,
+  step = 5,
+  min = 0,
+  max = 240,
+  suffix = 'min',
+  label,
+}: {
+  value: number;
+  onChange: (n: number) => void;
+  step?: number;
+  min?: number;
+  max?: number;
+  suffix?: string;
+  label: string;
+}) {
+  const clamp = (n: number) => Math.min(max, Math.max(min, n));
+  return (
+    <View style={s.stepWrap} accessibilityLabel={`${label}: ${value} ${suffix}`}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Less ${label.toLowerCase()}`}
+        disabled={value <= min}
+        onPress={() => onChange(clamp(value - step))}
+        style={({ pressed }) => [s.stepBtn, pressed && { backgroundColor: color.inkHover }, value <= min && { opacity: 0.35 }]}
+      >
+        <Ionicons name="remove" size={18} color={color.chalk} />
+      </Pressable>
+      <Text style={s.stepValue}>
+        {value}
+        <Text style={s.stepSuffix}> {suffix}</Text>
+      </Text>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`More ${label.toLowerCase()}`}
+        disabled={value >= max}
+        onPress={() => onChange(clamp(value + step))}
+        style={({ pressed }) => [s.stepBtn, pressed && { backgroundColor: color.inkHover }, value >= max && { opacity: 0.35 }]}
+      >
+        <Ionicons name="add" size={18} color={color.chalk} />
+      </Pressable>
+    </View>
+  );
+}
+
+/** The session type, as an icon and a word. Never the colour on its own: roughly 8 in
+ *  100 boys in this age range cannot separate the red from the grey. */
+export function TypeChip({ type, compact }: { type: SessionType; compact?: boolean }) {
+  const t = SESSION_TYPES[type];
+  return (
+    <View style={[s.chip, compact && { paddingVertical: 2 }]}>
+      <Ionicons name={t.icon} size={compact ? 11 : 13} color={t.color} />
+      <Text style={[s.chipText, { color: t.color }, compact && { fontSize: 10 }]}>{t.label}</Text>
+    </View>
+  );
+}
+
+/** A quiet action. The filled red Button is for the one thing a screen is for; a
+ *  screen with six red buttons has no primary action at all. */
+export function GhostButton({
+  label,
+  icon,
+  onPress,
+  disabled,
+  tone = 'default',
+}: {
+  label: string;
+  icon?: IconName;
+  onPress: () => void;
+  disabled?: boolean;
+  tone?: 'default' | 'danger';
+}) {
+  const fg = tone === 'danger' ? color.redHot : color.chalk;
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      disabled={disabled}
+      onPress={onPress}
+      style={({ pressed }) => [
+        s.ghost,
+        pressed && { backgroundColor: color.inkHover },
+        disabled && { opacity: 0.4 },
+      ]}
+    >
+      {icon ? <Ionicons name={icon} size={15} color={fg} /> : null}
+      <Text style={[s.ghostLabel, { color: fg }]}>{label}</Text>
     </Pressable>
   );
 }
@@ -264,4 +424,71 @@ const s = StyleSheet.create({
     paddingHorizontal: 22,
   },
   btnLabel: { color: color.bone, fontWeight: '800', letterSpacing: 1.4, fontSize: 13.5 },
+
+  segWrap: {
+    flexDirection: 'row',
+    backgroundColor: semantic.surfaceInput,
+    borderWidth: 1,
+    borderColor: semantic.border,
+    borderRadius: radius.card,
+    padding: 3,
+    gap: 3,
+  },
+  seg: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    minHeight: 40,
+    borderRadius: radius.chip,
+    paddingHorizontal: 6,
+  },
+  segOn: { backgroundColor: color.fastRed },
+  segLabel: { fontSize: 12.5, fontWeight: '700', color: color.textDim },
+  segLabelOn: { color: color.bone },
+
+  stepWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    backgroundColor: semantic.surfaceInput,
+    borderWidth: 1,
+    borderColor: semantic.border,
+    borderRadius: radius.card,
+    padding: 3,
+    gap: 2,
+  },
+  stepBtn: {
+    width: 44,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.chip,
+  },
+  stepValue: { minWidth: 74, textAlign: 'center', fontSize: 15, fontWeight: '800', color: color.chalk },
+  stepSuffix: { fontSize: 12, fontWeight: '600', color: color.textDim },
+
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    alignSelf: 'flex-start',
+    paddingVertical: 3,
+  },
+  chipText: { fontSize: 11, fontWeight: '800', letterSpacing: 0.7, textTransform: 'uppercase' },
+
+  ghost: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+    minHeight: 44,
+    paddingHorizontal: 14,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: semantic.border,
+    backgroundColor: semantic.surfaceCard,
+  },
+  ghostLabel: { fontSize: 13.5, fontWeight: '700' },
 });
