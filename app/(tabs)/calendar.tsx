@@ -502,6 +502,20 @@ function SessionCard({
   const ty = useSharedValue(0);
   const lift = useSharedValue(0);
 
+  // The parent re-renders the instant a drag begins, because scrollEnabled is React
+  // state. That hands this component three fresh callbacks, and without the ref the
+  // gesture would be rebuilt underneath a gesture that is already running. One stable
+  // entry point, read through a ref, so the gesture object is built exactly once.
+  const cb = useRef({ onDragState, onBuzz, onDrop });
+  cb.current = { onDragState, onBuzz, onDrop };
+  const notify = useCallback((what: 'on' | 'off' | 'pick' | 'move' | 'drop', day = 0) => {
+    const c = cb.current;
+    if (what === 'on') c.onDragState(true);
+    else if (what === 'off') c.onDragState(false);
+    else if (what === 'drop') c.onDrop(day);
+    else c.onBuzz(what);
+  }, []);
+
   const pan = useMemo(
     () =>
       Gesture.Pan()
@@ -517,8 +531,8 @@ function SessionCard({
           const m = measure(gridRef);
           if (m) gridOrigin.value = { x: m.pageX, y: m.pageY };
           lift.value = withTiming(1, { duration: 120 });
-          runOnJS(onDragState)(true);
-          runOnJS(onBuzz)('pick');
+          runOnJS(notify)('on');
+          runOnJS(notify)('pick');
         })
         .onUpdate((e) => {
           'worklet';
@@ -539,13 +553,13 @@ function SessionCard({
           // One tick per day crossed, not one per frame.
           if (found !== hoverDay.value) {
             hoverDay.value = found;
-            if (found > 0) runOnJS(onBuzz)('move');
+            if (found > 0) runOnJS(notify)('move');
           }
         })
         .onEnd(() => {
           'worklet';
           const day = hoverDay.value;
-          if (day > 0) runOnJS(onDrop)(day);
+          if (day > 0) runOnJS(notify)('drop', day);
         })
         .onFinalize(() => {
           'worklet';
@@ -560,22 +574,11 @@ function SessionCard({
             tx.value = withSpring(0, { damping: 15, stiffness: 180 });
             ty.value = withSpring(0, { damping: 15, stiffness: 180 });
           }
-          runOnJS(onDragState)(false);
+          runOnJS(notify)('off');
         }),
-    [
-      draggable,
-      reduceMotion,
-      gridRef,
-      gridOrigin,
-      cellRects,
-      hoverDay,
-      tx,
-      ty,
-      lift,
-      onDragState,
-      onBuzz,
-      onDrop,
-    ]
+    // Every one of these is stable for the life of the card, so the gesture is
+    // constructed once and never swapped mid-drag.
+    [draggable, reduceMotion, gridRef, gridOrigin, cellRects, hoverDay, tx, ty, lift, notify]
   );
 
   const card = useAnimatedStyle(() => ({
