@@ -94,6 +94,24 @@ function Test-ReleaseSecrets {
     }
     $names = @($listed | ForEach-Object { ([string] $_).Trim() } | Where-Object { $_ })
 
+    # ENV_FILE is the one that is not optional. .env is gitignored and Expo inlines
+    # EXPO_PUBLIC_* into the bundle at build time, so without it BOTH jobs build an app
+    # with no Firebase config -- it installs, opens, and dead-ends on "unconfigured".
+    # Both workflows now refuse to continue without it, so a tag placed now would burn
+    # a version number and produce nothing. There is no Android-only fallback to offer.
+    if ($names -notcontains 'ENV_FILE') {
+        Write-Host ""
+        Write-Host "ENV_FILE is not set, and nothing can be released without it." -ForegroundColor Red
+        Write-Host "      It is the whole of .env, which the builds cannot read from your" -ForegroundColor Red
+        Write-Host "      machine. Set it and run this again:" -ForegroundColor Red
+        Write-Host ""
+        Write-Host "  gh secret set ENV_FILE --repo shaver3josiah/fast-basketball-app < .env"
+        Write-Host ""
+        Write-Host "Stopped before tagging. No tag was created or pushed." -ForegroundColor Red
+        return $false
+    }
+    Write-Host "ENV_FILE present, so the builds will carry the Firebase config." -ForegroundColor Green
+
     # Android keystore secrets are optional on purpose: android-apk.yml falls back
     # to a debug-signed APK, and getting an .apk onto a phone must never be blocked
     # on keystore setup.
