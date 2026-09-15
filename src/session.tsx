@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useMemo, useState } from '
 import {
   onAuthStateChanged,
   sendEmailVerification,
+  sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signOut as fbSignOut,
   type User,
@@ -16,6 +17,7 @@ import {
   findInvite,
   claimInvite,
 } from './data';
+import { resetOutcome, type ResetOutcome } from './authMessages';
 import type { Athlete, Role, UserPrefs } from './types';
 
 interface Session {
@@ -35,6 +37,10 @@ interface Session {
   /** Signed in and verified, but no athlete record names this address. */
   notInvited: boolean;
   resendVerification: () => Promise<void>;
+  /** Ask Firebase to email a reset link. Resolves with the outcome to show rather than
+   *  throwing, because the one case that must NOT be distinguishable from success is
+   *  an error code, and a caller that catches is a caller that can leak it. */
+  resetPassword: (email: string) => Promise<ResetOutcome>;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
 }
@@ -128,6 +134,18 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       notInvited: Boolean(user && user.emailVerified && role !== 'coach' && !athlete),
       resendVerification: async () => {
         if (auth.currentUser) await sendEmailVerification(auth.currentUser);
+      },
+      resetPassword: async (email) => {
+        const addr = email.trim().toLowerCase();
+        if (!addr) return resetOutcome('auth/missing-email');
+        try {
+          // Firebase sends the mail and hosts the reset page itself. There is no
+          // endpoint to write, no token to store, and no expiry to get wrong.
+          await sendPasswordResetEmail(auth, addr);
+          return resetOutcome('');
+        } catch (e) {
+          return resetOutcome((e as { code?: string })?.code ?? 'unknown');
+        }
       },
       signIn: async (email, password) => {
         await signInWithEmailAndPassword(auth, email.trim(), password);

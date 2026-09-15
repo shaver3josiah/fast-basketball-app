@@ -19,7 +19,7 @@ import { Button } from '../src/ui';
 import { color, radius, semantic, type } from '../src/theme';
 
 export default function SignIn() {
-  const { user, signIn } = useSession();
+  const { user, signIn, resetPassword } = useSession();
   const insets = useSafeAreaInsets();
   // The lockup carries 9% clear space on each side, so the mark itself gets the
   // remaining 1/1.18 of the gutter-to-gutter width.
@@ -28,8 +28,22 @@ export default function SignIn() {
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [resetSent, setResetSent] = useState(false);
 
   if (user) return <Redirect href="/(tabs)" />;
+
+  async function forgotPassword() {
+    setBusy(true);
+    setError(null);
+    const out = await resetPassword(email);
+    setBusy(false);
+    if (out.kind === 'sent') {
+      setResetSent(true);
+      return;
+    }
+    setResetSent(false);
+    setError(out.message);
+  }
 
   async function submit() {
     setBusy(true);
@@ -119,6 +133,26 @@ export default function SignIn() {
           returnKeyType="go"
         />
 
+        {resetSent ? (
+          <View style={s.reset} accessibilityLiveRegion="polite">
+            <Text style={s.resetText}>
+              If there is an account for {email.trim().toLowerCase()}, a reset link is on
+              its way. Open it on this phone, choose a new password, then come back and
+              sign in. Check spam if it is not there in a couple of minutes.
+            </Text>
+          </View>
+        ) : (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Email me a password reset link"
+            onPress={forgotPassword}
+            disabled={busy}
+            style={s.forgotRow}
+          >
+            <Text style={s.forgot}>Forgot your password?</Text>
+          </Pressable>
+        )}
+
         {error ? (
           <Text style={s.error} accessibilityLiveRegion="polite">
             {error}
@@ -175,6 +209,17 @@ const s = StyleSheet.create({
     marginBottom: 8,
   },
   noticeText: { color: color.textBody, fontSize: 12.5, lineHeight: 18 },
+  forgotRow: { minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' },
+  forgot: { fontSize: 13.5, fontWeight: '700', color: color.redHot },
+  reset: {
+    marginTop: 12,
+    padding: 12,
+    borderRadius: radius.card,
+    borderWidth: 1,
+    borderColor: color.tealLine,
+    backgroundColor: color.tealTint,
+  },
+  resetText: { fontSize: 13, lineHeight: 18.5, color: color.chalk },
   linkRow: { minHeight: 44, justifyContent: 'center', alignItems: 'center', marginTop: 18 },
   link: { color: color.redHot, fontSize: 14, fontWeight: '700' },
   foot: { ...type.meta, marginTop: 14, textAlign: 'center' },

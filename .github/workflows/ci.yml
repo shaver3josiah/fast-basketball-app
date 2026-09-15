@@ -53,6 +53,12 @@ jobs:
       - name: Schedule arithmetic self-check
         run: npm run test:schedule
 
+      # The password reset must answer an unknown address exactly as it answers a
+      # known one, or the screen becomes a way to ask whether a given family trains
+      # here. That is one line away from being helpfully improved into a leak.
+      - name: Auth message self-check
+        run: npm run test:auth
+
       - name: Typecheck
         run: npx tsc --noEmit
 
