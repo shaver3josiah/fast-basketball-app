@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { BrandIcon } from './Logo';
 import { Platform, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSession } from './session';
@@ -37,7 +38,7 @@ export function Pending() {
 
   return (
     <View style={[s.page, { paddingTop: insets.top + 72, paddingBottom: insets.bottom + 24 }]}>
-      <Text style={s.bolt}>⚡</Text>
+      <BrandIcon size={46} />
 
       {needsVerification ? (
         <>
@@ -104,7 +105,6 @@ export function Pending() {
 
 const s = StyleSheet.create({
   page: { flex: 1, backgroundColor: semantic.surfacePage, paddingHorizontal: 24 },
-  bolt: { fontSize: 30, color: color.fastRed, marginBottom: 10 },
   h1: { fontSize: 30, fontWeight: '900', color: color.bone, letterSpacing: -0.5, marginBottom: 12 },
   body: { ...type.body, fontSize: 16, lineHeight: 23, marginBottom: 16 },
   small: { ...type.meta, lineHeight: 18 },

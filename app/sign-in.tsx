@@ -8,17 +8,22 @@ import {
   Text,
   TextInput,
   View,
+  useWindowDimensions,
 } from 'react-native';
 import { Link, Redirect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSession } from '../src/session';
 import { backend, isConfigured } from '../src/firebase';
+import { Logo } from '../src/Logo';
 import { Button } from '../src/ui';
 import { color, radius, semantic, type } from '../src/theme';
 
 export default function SignIn() {
   const { user, signIn } = useSession();
   const insets = useSafeAreaInsets();
+  // The lockup carries 9% clear space on each side, so the mark itself gets the
+  // remaining 1/1.18 of the gutter-to-gutter width.
+  const win = useWindowDimensions();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
@@ -59,9 +64,10 @@ export default function SignIn() {
         contentContainerStyle={[s.inner, { paddingTop: insets.top + 48, paddingBottom: insets.bottom + 24 }]}
         keyboardShouldPersistTaps="handled"
       >
-        <Text style={s.bolt}>⚡</Text>
-        <Text style={s.wordmark}>FAST</Text>
-        <Text style={s.sub}>BASKETBALL</Text>
+        {/* The real lockup, and the site's own intro build. What was here was a
+            lightning-bolt emoji over FAST and BASKETBALL set in type, and the design
+            system forbids setting the wordmark in type in as many words. */}
+        <Logo width={(win.width - 48) / 1.18} />
         <Text style={s.lede}>Coach, parent, and athlete in one place. Sign in with the account Coach Kingsley set up for you.</Text>
 
         {backend.kind === 'emulator' && (
@@ -139,22 +145,6 @@ export default function SignIn() {
 const s = StyleSheet.create({
   page: { flex: 1, backgroundColor: semantic.surfacePage },
   inner: { paddingHorizontal: 24 },
-  bolt: { fontSize: 30, color: color.fastRed, marginBottom: 6 },
-  wordmark: {
-    fontSize: 46,
-    lineHeight: 48,
-    fontWeight: '900',
-    color: color.bone,
-    letterSpacing: -1,
-    fontStyle: 'italic',
-  },
-  sub: {
-    fontSize: 13,
-    fontWeight: '700',
-    letterSpacing: 6,
-    color: color.redHot,
-    marginBottom: 18,
-  },
   lede: { ...type.body, marginBottom: 26 },
   label: {
     fontSize: 11,

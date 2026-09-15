@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { BrandIcon } from '../src/Logo';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -72,7 +73,7 @@ export default function SignUp() {
   if (sent) {
     return (
       <View style={[s.page, s.inner, { paddingTop: insets.top + 64 }]}>
-        <Text style={s.bolt}>⚡</Text>
+        <BrandIcon size={46} />
         <Text style={s.h1}>Check your email</Text>
         <Text style={s.lede}>
           We sent a confirmation link to {email.trim().toLowerCase()}. Open it, then come back and
@@ -97,7 +98,7 @@ export default function SignUp() {
         ]}
         keyboardShouldPersistTaps="handled"
       >
-        <Text style={s.bolt}>⚡</Text>
+        <BrandIcon size={46} />
         <Text style={s.h1}>Create your account</Text>
         <Text style={s.lede}>
           Use the same email address you gave Coach Kingsley. That is how the app knows which
@@ -161,7 +162,6 @@ export default function SignUp() {
 const s = StyleSheet.create({
   page: { flex: 1, backgroundColor: semantic.surfacePage },
   inner: { paddingHorizontal: 24 },
-  bolt: { fontSize: 30, color: color.fastRed, marginBottom: 10 },
   h1: { fontSize: 30, fontWeight: '900', color: color.bone, letterSpacing: -0.5, marginBottom: 10 },
   lede: { ...type.body, marginBottom: 20 },
   label: {
