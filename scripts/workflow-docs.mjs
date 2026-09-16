@@ -262,7 +262,7 @@ const BODIES = {
     // A shooting log the athlete fills in AT the hoop, one tap per real rep. The court
     // on it only animates the shot that was just logged, so nothing in it can be earned
     // on the couch.
-    name: 'Night Session: 70 Makes',
+    name: 'Shot Tracker',
     cadence: 'daily',
     file: 'night-shots.html',
   },

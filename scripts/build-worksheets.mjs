@@ -23,7 +23,7 @@ const OUT = join(HERE, '..', 'src', 'worksheets.generated.ts');
 
 /** id and cadence per file. Anything not listed here is not shipped. */
 const SHIPPED = {
-  'night-shots.html': { id: 'builtin-night-shots', name: 'Night Session: 70 Makes', cadence: 'daily' },
+  'night-shots.html': { id: 'builtin-night-shots', name: 'Shot Tracker', cadence: 'daily' },
 };
 
 export function render() {
