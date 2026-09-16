@@ -4,26 +4,31 @@
  * This is a STATIC check, on purpose: there is no simulator on the machine this repo is
  * developed on, so the next best thing is to pin the things that were actually wrong.
  *
- * THE HISTORY MATTERS, because the wrong fix looks right in a diff.
+ * THE HISTORY MATTERS, because every wrong fix looked right in a diff.
  *
- * Attempt one passed `behavior={Platform.OS === 'ios' ? 'padding' : undefined}`, which is
- * no avoidance at all on Android. Attempt two changed that to `behavior="padding"` on both
- * platforms with a hand-computed header offset, and it ALSO did nothing, on both phones.
+ * 1. `behavior={Platform.OS === 'ios' ? 'padding' : undefined}` on five screens: no
+ *    avoidance at all on Android.
+ * 2. `behavior="padding"` on both platforms with a hand-computed header offset: still
+ *    nothing, because React Native's own KeyboardAvoidingView cannot work here at all.
+ *    From Android 15 (target SDK 35) edge to edge is forced, the window never resizes
+ *    under the keyboard, and that component has nothing left to measure. It is
+ *    facebook/react-native#49759 and it is still open.
+ * 3. react-native-keyboard-controller, but with a 24dp `bottomOffset`. The phone moved
+ *    the form and the field was STILL mostly hidden, because `bottomOffset` is the gap
+ *    between the keyboard and the CARET, not the bottom of the box. On a multiline
+ *    field the caret starts on the first line, so the first line cleared the keyboard
+ *    and the other two thirds of the box did not. And the message composer used the
+ *    library's KeyboardAvoidingView, whose padding is computed from window height, a
+ *    measured frame and a header offset, and on that phone came out short.
  *
- * The reason is that React Native's own KeyboardAvoidingView cannot work in this app.
- * From Android 15 (target SDK 35) edge to edge is forced, the window no longer resizes
- * under the keyboard, and that component has nothing left to measure. It is
- * facebook/react-native#49759 and it is still open. Expo SDK 54 and up cannot opt out of
- * edge to edge on Android 16 at all.
- *
- * So the fix is react-native-keyboard-controller, which tracks the keyboard itself, and
- * the rules below exist to stop anyone quietly going back to the built-in one.
- *
- * There are two containers, because lifting and scrolling are different problems:
- *   KeyboardPad  wraps a fixed bar over a list, the message composer.
- *   KeyboardForm and Screen scroll the focused field INTO VIEW, which padding alone
- *   cannot do. That is what left "Notes for the family" under the keyboard: the form was
- *   padded, so there was room below, but nothing ever moved the field up into it.
+ * So the rules below pin the shape that survived all of that:
+ *   - Forms scroll their field into view: `Screen` or `KeyboardForm`, both on
+ *     KeyboardAwareScrollView, with a caret gap big enough to clear a multiline box.
+ *   - The thread's composer sticks to the keyboard with KeyboardStickyView, which moves
+ *     by the one number the keyboard actually reports and nothing else.
+ *   - Nothing anywhere reaches React Native's KeyboardAvoidingView, and the retired
+ *     KeyboardPad wrapper does not come back under either name.
+ *   - KeyboardProvider wraps the root, or none of the above moves at all.
  */
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
@@ -37,61 +42,78 @@ const walk = (dir) =>
 const rel = (p) => p.replace(/\\/g, '/');
 const screens = walk('app').map(rel);
 const problems = [];
-const CONTAINERS = /<(KeyboardPad|KeyboardForm|Screen)[\s>]/;
+const CONTAINERS = /<(KeyboardForm|Screen|KeyboardStickyView)[\s>]/;
+
+/** The smallest caret gap that clears the tallest multiline field in the app (the
+ *  88dp notes box on the schedule screen) with the caret on its first line. */
+const MIN_GAP = 72;
+
+for (const f of [...screens, 'src/ui.tsx']) {
+  const src = readFileSync(f, 'utf8');
+
+  // The built-in component, by any route. Comments name it, so only imports count.
+  if (
+    /import\s*\{[^}]*\bKeyboardAvoidingView\b[^}]*\}\s*from\s*'react-native'/s.test(src) ||
+    /^\s*KeyboardAvoidingView,\s*$/m.test(src)
+  ) {
+    problems.push(
+      `${f}: imports KeyboardAvoidingView from react-native. That one does not work on ` +
+        `Android 15 and up. Forms use <KeyboardForm> or <Screen>; a bar over a list uses ` +
+        `<KeyboardStickyView>.`
+    );
+  }
+  if (/\bKeyboardPad\b/.test(src.replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, ''))) {
+    problems.push(`${f}: KeyboardPad is retired. It was a padding wrapper and it came out short on a real phone twice.`);
+  }
+}
 
 for (const f of screens) {
   const src = readFileSync(f, 'utf8');
-
-  // The built-in component, by any route. Comments name it, so only imports and JSX count.
-  const importsBuiltIn =
-    /import\s*\{[^}]*\bKeyboardAvoidingView\b[^}]*\}\s*from\s*'react-native'/s.test(src) ||
-    /^\s*KeyboardAvoidingView,\s*$/m.test(src);
-  if (importsBuiltIn) {
-    problems.push(
-      `${f}: imports KeyboardAvoidingView from react-native. That one does not work on ` +
-        `Android 15 and up. Use <KeyboardPad> or <KeyboardForm> from src/ui.`
-    );
-  }
-
   if (/<TextInput[\s>]/.test(src) && !CONTAINERS.test(src)) {
     problems.push(
-      `${f}: has a TextInput but no <KeyboardPad>, <KeyboardForm> or <Screen>, so the ` +
-        `keyboard will cover it.`
+      `${f}: has a TextInput but no <KeyboardForm>, <Screen> or <KeyboardStickyView>, ` +
+        `so the keyboard will cover it.`
     );
   }
 }
 
-// The two containers, and the provider that makes either of them move at all.
+// The form scrollers, and the one number that decides whether a multiline box clears.
 const ui = readFileSync('src/ui.tsx', 'utf8');
 if (!/from\s*'react-native-keyboard-controller'/.test(ui)) {
-  problems.push('src/ui.tsx: must take its keyboard components from react-native-keyboard-controller.');
+  problems.push('src/ui.tsx: must take KeyboardAwareScrollView from react-native-keyboard-controller.');
 }
-const pad = ui.slice(ui.indexOf('export function KeyboardPad'), ui.indexOf('export function KeyboardForm'));
-if (!/behavior="padding"/.test(pad)) {
-  problems.push('src/ui.tsx: KeyboardPad must pass behavior="padding" literally, on both platforms.');
-}
-if (!/automaticOffset/.test(pad)) {
+const gapMatch = ui.match(/const KEYBOARD_GAP = (\d+);/);
+const gap = gapMatch ? Number(gapMatch[1]) : 0;
+if (gap < MIN_GAP) {
   problems.push(
-    'src/ui.tsx: KeyboardPad must pass automaticOffset. Without it the navigation header ' +
-      'is unaccounted for and the bottom of the screen stays hidden.'
+    `src/ui.tsx: KEYBOARD_GAP is ${gap}; it must be at least ${MIN_GAP}. bottomOffset is ` +
+      `measured to the CARET, and below this the notes box on the schedule screen sits ` +
+      `mostly under the keyboard while its first line peeks out. That is the bug Blake saw.`
   );
 }
-if (/Platform\.OS/.test(pad)) {
-  problems.push('src/ui.tsx: KeyboardPad must not branch on platform. Android needs the same treatment as iOS.');
+for (const name of ['Screen', 'KeyboardForm']) {
+  const start = ui.indexOf(`export function ${name}(`);
+  const body = start === -1 ? '' : ui.slice(start, ui.indexOf('\nexport ', start + 1));
+  if (!/<KeyboardAwareScrollView/.test(body)) {
+    problems.push(`src/ui.tsx: ${name} must scroll with KeyboardAwareScrollView, or a field low on a long form is never moved out from under the keyboard.`);
+  }
+  if (!/bottomOffset=\{KEYBOARD_GAP\}/.test(body)) {
+    problems.push(`src/ui.tsx: ${name} must pass bottomOffset={KEYBOARD_GAP}, not a literal, so the gap is decided once.`);
+  }
 }
-if (!/KeyboardAwareScrollView/.test(ui.slice(ui.indexOf('export function Screen')))) {
-  problems.push(
-    'src/ui.tsx: Screen must scroll with KeyboardAwareScrollView, or a field low on a long ' +
-      'form is never moved out from under the keyboard.'
-  );
+
+// The thread: a composer over a list, which is the one shape a scroller cannot serve.
+const thread = readFileSync('app/thread/[id].tsx', 'utf8');
+if (!/<KeyboardStickyView[\s>]/.test(thread)) {
+  problems.push("app/thread/[id].tsx: the composer must sit inside <KeyboardStickyView>. A padding wrapper here came out short on a real phone.");
+}
+if (!/useReanimatedKeyboardAnimation\(\)/.test(thread) || !/ListFooterComponent=/.test(thread)) {
+  problems.push('app/thread/[id].tsx: the list needs a keyboard-height spacer (useReanimatedKeyboardAnimation + ListFooterComponent), or the bar covers the newest messages when it lifts.');
 }
 
 const layout = readFileSync('app/_layout.tsx', 'utf8');
 if (!/<KeyboardProvider>/.test(layout)) {
-  problems.push(
-    'app/_layout.tsx: KeyboardProvider must wrap the app. Without it every keyboard-aware ' +
-      'component renders normally and simply never moves.'
-  );
+  problems.push('app/_layout.tsx: KeyboardProvider must wrap the app. Without it every keyboard-aware component renders normally and simply never moves.');
 }
 
 const wrapped = screens.filter((f) => CONTAINERS.test(readFileSync(f, 'utf8')));
@@ -101,6 +123,6 @@ if (problems.length) {
   process.exit(1);
 }
 console.log(
-  `keyboard: ${wrapped.length} screens go through KeyboardPad/KeyboardForm/Screen, ` +
-    `none reach the built-in KeyboardAvoidingView`
+  `keyboard: ${wrapped.length} screens go through KeyboardForm/Screen/KeyboardStickyView ` +
+    `(caret gap ${gap}dp), none reach the built-in KeyboardAvoidingView`
 );

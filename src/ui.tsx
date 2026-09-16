@@ -10,10 +10,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import {
-  KeyboardAvoidingView,
-  KeyboardAwareScrollView,
-} from 'react-native-keyboard-controller';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import {
   SESSION_TYPES,
   color,
@@ -34,11 +31,19 @@ import type { Role } from './types';
  * alone cannot do that: it makes room under the keyboard but never moves the form, so
  * the last field on a page stays exactly where it was, underneath it.
  *
- * `bottomOffset` is the gap left between the focused field and the top of the keyboard.
- * Without it the field lands flush against the keyboard and reads as clipped.
+ * KEYBOARD_GAP is the distance the library keeps between the keyboard and the CARET,
+ * not the bottom of the field. That distinction is the whole reason it is 80 and not
+ * the 24 it shipped with. On a multiline box the caret starts on the first line, so a
+ * 24dp gap scrolled the box until its first line peeked over the keyboard and left the
+ * other two thirds of it underneath: the form moved, visibly, and still looked broken.
+ * That is exactly what Blake photographed on "Notes for the family" (minHeight 88).
+ * 80 clears that box with room to spare, and on a single-line field it just sits a
+ * little higher than flush, which reads as intentional.
  *
  * Harmless on the screens here that hold no input at all: it only reacts to focus.
  */
+const KEYBOARD_GAP = 80;
+
 export function Screen({
   children,
   scroll = true,
@@ -53,7 +58,7 @@ export function Screen({
     <KeyboardAwareScrollView
       style={s.page}
       contentContainerStyle={[s.pad, contentStyle]}
-      bottomOffset={24}
+      bottomOffset={KEYBOARD_GAP}
       keyboardShouldPersistTaps="handled"
     >
       {children}
@@ -62,41 +67,15 @@ export function Screen({
 }
 
 /**
- * The keyboard wrapper for a screen with a FIXED bottom bar over a list, which in this
- * app means the message thread and its composer. A screen that is just a form wants
- * `Screen` instead: it scrolls the focused field into view, which padding alone cannot.
- *
- * This is react-native-keyboard-controller's KeyboardAvoidingView, NOT the one in
- * react-native, and the swap is the whole fix. From Android 15 (target SDK 35) edge to
- * edge is forced and the window no longer resizes under the keyboard, so React Native's
- * built-in component has nothing left to measure and simply stops working. That is
- * facebook/react-native#49759, it is still open, and it is why the first attempt here
- * (`behavior="padding"` plus a hand-computed header offset) looked right in the diff and
- * did nothing on a real phone. Expo's own keyboard guide points at this library for
- * anything beyond a prototype.
- *
- * `automaticOffset` is the other half. The library measures where the view actually sits
- * on screen, including the navigation header, so there is no header height to guess at
- * and no platform branch. The 44px constant this component used to carry is gone.
- */
-export function KeyboardPad({
-  children,
-  style,
-}: {
-  children: React.ReactNode;
-  style?: StyleProp<ViewStyle>;
-}) {
-  return (
-    <KeyboardAvoidingView style={style ?? { flex: 1 }} behavior="padding" automaticOffset>
-      {children}
-    </KeyboardAvoidingView>
-  );
-}
-
-/**
  * The scroller for a screen that is a form and brings its own styles, where `Screen`'s
  * fixed gutters do not fit. Same component `Screen` uses underneath, so the gap left
  * above the keyboard is decided in one place rather than drifting across five files.
+ *
+ * There is deliberately no keyboard-avoiding wrapper exported from here any more. Every
+ * screen is either a form, which scrolls its field into view through this or `Screen`,
+ * or the message thread, whose composer sticks to the keyboard with the library's own
+ * KeyboardStickyView. Two attempts at a padding wrapper looked right in the diff and
+ * came out short on a real phone; see app/thread/[id].tsx for the reasoning.
  */
 export function KeyboardForm({
   children,
@@ -111,7 +90,7 @@ export function KeyboardForm({
     <KeyboardAwareScrollView
       style={style}
       contentContainerStyle={contentContainerStyle}
-      bottomOffset={24}
+      bottomOffset={KEYBOARD_GAP}
       keyboardShouldPersistTaps="handled"
     >
       {children}

@@ -10,12 +10,14 @@ import {
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Animated, { useAnimatedStyle } from 'react-native-reanimated';
+import { KeyboardStickyView, useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../src/firebase';
 import { useSession, useNames } from '../../src/session';
 import { canPostIn, sendMessage, subscribeMessages } from '../../src/data';
 import type { Athlete, Message, Thread } from '../../src/types';
-import { Banner, KeyboardPad } from '../../src/ui';
+import { Banner } from '../../src/ui';
 import { bubbleColor, color, radius, semantic, type } from '../../src/theme';
 
 export default function ThreadScreen() {
@@ -26,6 +28,14 @@ export default function ThreadScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const listRef = useRef<FlatList<Message>>(null);
+
+  // The composer below the list rides the keyboard up by exactly its height, and in
+  // doing so covers the bottom of the list. This spacer grows the list by the same
+  // amount on the same frames, so the newest message stays above the bar; the list's
+  // own scrollToEnd on content-size change is what carries it there. The library's
+  // `height` is a translateY, negative while the keyboard is open, hence the sign.
+  const keyboard = useReanimatedKeyboardAnimation();
+  const spacer = useAnimatedStyle(() => ({ height: -keyboard.height.value }));
 
   // The athlete this THREAD is about, which for a coach with more than one on the
   // roster is not the same as "the" athlete on the session.
@@ -104,46 +114,53 @@ export default function ThreadScreen() {
               : undefined,
         }}
       />
-      {/* A fixed composer over a list, so this one lifts rather than scrolls. The form
-          screens use KeyboardForm instead. Both live in src/ui.tsx. */}
-      <KeyboardPad>
-        <FlatList
-          ref={listRef}
-          data={messages}
-          keyExtractor={(m) => m.id}
-          contentContainerStyle={s.list}
-          onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
-          // Send without dismissing first: a tap on the button while the keyboard is
-          // open would otherwise be swallowed closing it.
-          keyboardShouldPersistTaps="handled"
-          ListHeaderComponent={
-            <View>
-              {monitoring && (
-                <Banner tone="watch" title="Monitored thread">
-                  Read-only for you. {names.player.split(' ')[0]} and Coach Kingsley both know you can
-                  see it.
-                </Banner>
-              )}
-              {role === 'player' && consent && (
-                <Banner tone="watch" title="Your parent can see this conversation">
-                  {names.parent.split(' ')[0]} reads every message here.
-                </Banner>
-              )}
-            </View>
-          }
-          renderItem={({ item, index }) => (
-            <Bubble
-              message={item}
-              previous={messages[index - 1]}
-              mine={item.senderUid === user?.uid}
-              mineBg={mineBg}
-              showAuthor={monitoring || role === 'coach'}
-              athlete={threadAthlete}
-              names={names}
-            />
-          )}
-        />
+      <FlatList
+        ref={listRef}
+        data={messages}
+        keyExtractor={(m) => m.id}
+        contentContainerStyle={s.list}
+        ListFooterComponent={<Animated.View style={spacer} />}
+        onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
+        // Send without dismissing first: a tap on the button while the keyboard is
+        // open would otherwise be swallowed closing it.
+        keyboardShouldPersistTaps="handled"
+        ListHeaderComponent={
+          <View>
+            {monitoring && (
+              <Banner tone="watch" title="Monitored thread">
+                Read-only for you. {names.player.split(' ')[0]} and Coach Kingsley both know you can
+                see it.
+              </Banner>
+            )}
+            {role === 'player' && consent && (
+              <Banner tone="watch" title="Your parent can see this conversation">
+                {names.parent.split(' ')[0]} reads every message here.
+              </Banner>
+            )}
+          </View>
+        }
+        renderItem={({ item, index }) => (
+          <Bubble
+            message={item}
+            previous={messages[index - 1]}
+            mine={item.senderUid === user?.uid}
+            mineBg={mineBg}
+            showAuthor={monitoring || role === 'coach'}
+            athlete={threadAthlete}
+            names={names}
+          />
+        )}
+      />
 
+      {/*
+        The composer sticks to the top of the keyboard. This is the library's own
+        KeyboardStickyView, which translates the bar by the keyboard height it measures
+        natively, and nothing else: no window height, no frame measurement, no header
+        offset. The earlier KeyboardAvoidingView here computed its padding from all
+        three, and on a real phone that came out short. A bar that moves by the one
+        number the keyboard actually reports cannot come out short by any of them.
+      */}
+      <KeyboardStickyView>
         {error ? (
           <Text style={s.error} accessibilityLiveRegion="polite">
             {error}
@@ -208,7 +225,7 @@ export default function ThreadScreen() {
             </Text>
           </View>
         )}
-      </KeyboardPad>
+      </KeyboardStickyView>
     </View>
   );
 }
