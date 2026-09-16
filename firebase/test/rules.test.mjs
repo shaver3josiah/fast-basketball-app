@@ -923,3 +923,109 @@ describe('notification mutes', () => {
     );
   });
 });
+
+describe('the workout log — what the coach is allowed to see', () => {
+  const log = (db, aid, eid, over = {}) =>
+    setDoc(doc(db, 'athletes', aid, 'workoutLog', eid), {
+      eventId: eid,
+      name: 'Tuesday skills',
+      completedAt: serverTimestamp(),
+      minutes: 42,
+      blocksDone: 4,
+      blocksTotal: 5,
+      ...over,
+    });
+
+  // The whole reason this collection exists: the reward counters on /users are private
+  // to the account, so before this the coach had no readable record of what an athlete
+  // had actually trained.
+  test('the family writes it and the coach reads it', async () => {
+    await seed();
+    await assertSucceeds(log(as(PLAYER), ATHLETE, 'ev_1'));
+    await assertSucceeds(log(as(PARENT), ATHLETE, 'ev_2'));
+    await assertSucceeds(getDoc(doc(as(COACH), 'athletes', ATHLETE, 'workoutLog', 'ev_1')));
+  });
+
+  // He is the monitored party. He may read the log and must not be able to write one:
+  // a coach who can mark sessions done for a family can manufacture a training record.
+  test('the coach cannot forge a completion', async () => {
+    await seed();
+    await assertFails(log(as(COACH), ATHLETE, 'ev_3'));
+  });
+
+  test('a stranger gets nothing, either way', async () => {
+    await seed();
+    await assertSucceeds(log(as(PLAYER), ATHLETE, 'ev_1'));
+    await assertFails(getDoc(doc(as(STRANGER), 'athletes', ATHLETE, 'workoutLog', 'ev_1')));
+    await assertFails(log(as(STRANGER), ATHLETE, 'ev_4'));
+  });
+
+  // The id IS the event id, which is what makes finishing twice idempotent instead of
+  // a duplicate, so a row must not be filed under a session it does not belong to.
+  test('the row is pinned to the session it claims', async () => {
+    await seed();
+    await assertFails(log(as(PLAYER), ATHLETE, 'ev_5', { eventId: 'somewhere_else' }));
+  });
+
+  // Same guard the messages rule uses. Without it a log can be backdated into a week
+  // the athlete did not train, which is exactly the number the coach reads.
+  test('the clock is the server’s', async () => {
+    await seed();
+    await assertFails(log(as(PLAYER), ATHLETE, 'ev_6', { completedAt: new Date('2020-01-01') }));
+  });
+
+  test('the fields are bounded and closed', async () => {
+    await seed();
+    await assertFails(log(as(PLAYER), ATHLETE, 'ev_7', { minutes: 9999 }));
+    await assertFails(log(as(PLAYER), ATHLETE, 'ev_8', { minutes: 12.5 }));
+    await assertFails(log(as(PLAYER), ATHLETE, 'ev_9', { grade: 'A+' }));
+    await assertFails(log(as(PLAYER), ATHLETE, 'ev_10', { name: 'x'.repeat(141) }));
+  });
+
+  test('a family can remove its own row', async () => {
+    await seed();
+    await assertSucceeds(log(as(PLAYER), ATHLETE, 'ev_1'));
+    await assertFails(deleteDoc(doc(as(COACH), 'athletes', ATHLETE, 'workoutLog', 'ev_1')));
+    await assertSucceeds(deleteDoc(doc(as(PLAYER), 'athletes', ATHLETE, 'workoutLog', 'ev_1')));
+  });
+});
+
+describe('the reward counters a workout writes', () => {
+  // THE REGRESSION THIS PINS. The app shipped with these keys written by the Finish
+  // button while the DEPLOYED ruleset still carried the old two-key allowlist, so every
+  // write came back permission-denied and the athlete was told to check their
+  // connection. The rules file being right is not the same as the rules being right.
+  test('finishing a workout writes streak and workout keys', async () => {
+    await seed();
+    const loaded = {
+      mutedThreads: [],
+      chatColor: 'ocean',
+      celebration: 'swish',
+      streak: 4,
+      bestStreak: 9,
+      lastDay: '2026-09-15',
+      workouts: 2,
+      doneEvents: ['ev_a'],
+      remind: true,
+    };
+    await assertSucceeds(setDoc(doc(as(PLAYER), 'users', PLAYER), loaded, { merge: true }));
+    await assertSucceeds(
+      setDoc(
+        doc(as(PLAYER), 'users', PLAYER),
+        { ...loaded, workouts: 3, doneEvents: ['ev_a', 'ev_b'] },
+        { merge: true }
+      )
+    );
+  });
+
+  test('the done list is capped where the client clamps it', async () => {
+    await seed();
+    const ids = (n) => Array.from({ length: n }, (_, i) => `e${i}`);
+    await assertSucceeds(
+      setDoc(doc(as(PLAYER), 'users', PLAYER), { mutedThreads: [], doneEvents: ids(60) })
+    );
+    await assertFails(
+      setDoc(doc(as(PLAYER), 'users', PLAYER), { mutedThreads: [], doneEvents: ids(61) })
+    );
+  });
+});

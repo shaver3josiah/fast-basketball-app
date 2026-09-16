@@ -311,6 +311,53 @@ service cloud.firestore {
     }
 
     // ---------------------------------------------------------------
+    // The workout log — what the athlete actually DID
+    // ---------------------------------------------------------------
+    //
+    // The reward counters on /users are a PRIVATE scoreboard: nobody else reads them and
+    // the rule there deliberately does not police whether they are honest. Completion is
+    // a different thing, because the coach trains on it, so it is recorded here instead.
+    //
+    // This is a SELF-REPORT, exactly like a saved workflow, and it deliberately carries
+    // the same three identities as the block above rather than inventing a second shape:
+    // the coach reads, the family writes its own. An athlete can therefore log a workout
+    // he did not do, the same way he can type anything into a worksheet. What the rule
+    // guarantees is narrower and worth stating plainly: only that family can write it,
+    // only these fields, and the timestamp is the server's.
+    //
+    // The document id is the EVENT id. That makes a second Finish idempotent instead of
+    // a duplicate, and makes "did they do Tuesday" a single document read. A coached
+    // session is ONE shared /events row for up to eight athletes, so per-athlete
+    // completion has to live under the athlete; putting it on the event would make the
+    // coach's own schedule row family-writable and spend a get per athlete on every tap.
+    match /athletes/{aid}/workoutLog/{eid} {
+      allow read: if isCoach() || isGuardian(aid) || isPlayer(aid);
+
+      allow create, update: if (isGuardian(aid) || isPlayer(aid))
+        && request.resource.data.keys().hasOnly(
+             ['eventId', 'name', 'completedAt', 'minutes', 'blocksDone', 'blocksTotal'])
+        // Pin the row to the session it claims to be, so one workout cannot be filed
+        // under another session's id.
+        && request.resource.data.eventId == eid
+        && request.resource.data.name is string
+        && request.resource.data.name.size() <= 140
+        && request.resource.data.minutes is int
+        && request.resource.data.minutes >= 0
+        && request.resource.data.minutes <= 600
+        && request.resource.data.blocksDone is int
+        && request.resource.data.blocksDone >= 0
+        && request.resource.data.blocksDone <= 60
+        && request.resource.data.blocksTotal is int
+        && request.resource.data.blocksTotal >= 0
+        && request.resource.data.blocksTotal <= 60
+        // Same guard the messages rule uses: the clock is the server's, so a log cannot
+        // be backdated into a week the athlete did not train.
+        && request.resource.data.completedAt == request.time;
+
+      allow delete: if isGuardian(aid) || isPlayer(aid);
+    }
+
+    // ---------------------------------------------------------------
     // Workout templates — the Workout Builder library
     // ---------------------------------------------------------------
     // Coach-only in BOTH directions, unlike /workflows. A template is the coach's

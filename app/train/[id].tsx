@@ -14,7 +14,7 @@ import Animated, {
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../src/firebase';
 import { useSession } from '../../src/session';
-import { savePrefs } from '../../src/data';
+import { logWorkoutDone, savePrefs } from '../../src/data';
 import { Celebrate } from '../../src/Celebrate';
 import {
   CELEBRATIONS,
@@ -40,7 +40,7 @@ const MIN_TIMED_SECONDS = 60;
  */
 export default function Train() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { user, prefs } = useSession();
+  const { user, role, athlete, prefs } = useSession();
   const reduceMotion = useReducedMotion();
 
   const [event, setEvent] = useState<SessionEvent | null | undefined>(undefined);
@@ -141,25 +141,79 @@ export default function Train() {
     if (next >= 0) setIdx(next);
   }
 
+  /**
+   * Close the session out. TWO records are written, and they are deliberately independent.
+   *
+   * 1. /athletes/{aid}/workoutLog/{eventId} — the shared one. This is what the coach reads,
+   *    so it is the record that matters, and it is written even if the private counters fail.
+   * 2. /users/{uid} — the athlete's own streak and workout count. A private scoreboard.
+   *
+   * The previous version ran one write with `.catch(() => setNote('...check your connection'))`,
+   * which had two faults that together produced the reported bug: it THREW THE REAL ERROR AWAY,
+   * so nobody could see what actually failed, and a single failure claimed the whole workout
+   * was lost. Now each write is settled on its own, the real error code reaches both the console
+   * and the note, and the note says exactly which half did not land.
+   */
   async function finish() {
     setRunning(false);
     setFinished(true);
     buzz('win');
     setBurst((n) => n + 1);
-    if (!user || !id) return;
-    const patch = finishWorkout(state, id);
-    if (!patch) {
-      setNote('This session was already counted. The work still counts.');
+
+    // useLocalSearchParams types this as string, but a router that ever hands back an array
+    // would put an array inside doneEvents, and Firestore rejects a nested array — a whole
+    // class of "it did not save" that costs one line to make impossible.
+    const eventId = Array.isArray(id) ? id[0] : id;
+    if (!user || !eventId || !event) return;
+
+    const patch = finishWorkout(state, eventId);
+    const minutes = Math.round(timedSec / 60);
+    const blocksDone = blocks.filter((b) => doneRef.current[b.id]).length;
+
+    const [logged, scored] = await Promise.allSettled([
+      // The coach's copy. Only a family writes it: the coach opening his own athlete's
+      // session must not be able to mark it done for them, and the rules say so too.
+      role === 'coach' || !athlete?.id
+        ? Promise.resolve('skipped')
+        : logWorkoutDone(
+            athlete.id,
+            { id: eventId, name: event.name },
+            { minutes, blocksDone, blocksTotal: blocks.length }
+          ),
+      // finishWorkout returns null when this session already paid out, so re-finishing
+      // does not double-count. That is not a failure.
+      patch ? savePrefs(user.uid, prefs, patch) : Promise.resolve('already'),
+    ]);
+
+    for (const r of [logged, scored]) {
+      if (r.status === 'rejected') console.warn('[fastbb] finish() write failed:', r.reason);
+    }
+
+    const why = (r: PromiseSettledResult<unknown>) =>
+      r.status === 'rejected' ? String((r.reason as { code?: string })?.code ?? r.reason) : '';
+
+    if (logged.status === 'rejected') {
+      // The half the coach needs is the half that failed, so say that and nothing cheerier.
+      setNote(`That did not reach Coach Kingsley (${why(logged)}). Your work is done, try Finish again when you have signal.`);
+      setFinished(false);
       return;
     }
+    if (scored.status === 'rejected') {
+      setNote(`Logged for Coach Kingsley. Your streak did not update (${why(scored)}); it will next time you open the app.`);
+      return;
+    }
+    if (!patch) {
+      setNote('Already counted. Logged for Coach Kingsley again anyway.');
+      return;
+    }
+
     const after = { ...state, ...patch };
     const fresh = CELEBRATIONS.find((c) => !isUnlocked(c, state) && isUnlocked(c, after));
     setNote(
       fresh
         ? `Workout ${after.workouts} logged. You unlocked ${fresh.label}. Pick it on the You tab.`
-        : `Workout ${after.workouts} logged. Day ${state.streak} of your streak.`
+        : `Workout ${after.workouts} logged, and Coach Kingsley can see it. Day ${state.streak} of your streak.`
     );
-    await savePrefs(user.uid, prefs, patch).catch(() => setNote('Logged here, but it did not save. Check your connection.'));
   }
 
   if (event === undefined) return <Loading label="Opening the session…" />;

@@ -153,7 +153,14 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
 
       const before = readState(saved);
       const patch = visit(before, new Date());
-      if (patch) await savePrefs(uid, saved, patch).catch(() => {});
+      // NOT an empty catch. A permission-denied here is silent and fatal to the whole
+      // feature: the streak simply never persists, and the only visible symptom turns up
+      // later and somewhere else. That is exactly how a stale deployed ruleset hid for a
+      // day. If this ever logs, check that firestore.rules is DEPLOYED, not just correct.
+      if (patch)
+        await savePrefs(uid, saved, patch).catch((e) =>
+          console.warn('[fastbb] streak write refused:', (e as { code?: string })?.code ?? e)
+        );
 
       // Re-planned here rather than on every snapshot, for the same reason: the streak
       // this is warning about has just been settled, and nothing later in the session

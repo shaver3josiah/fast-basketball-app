@@ -38,6 +38,7 @@ import type {
   Workflow,
   WorkoutBlock,
   WorkoutKind,
+  WorkoutLogEntry,
   WorkoutTemplate,
 } from './types';
 
@@ -569,6 +570,67 @@ export function savePrefs(uid: string, prefs: UserPrefs, patch: Partial<UserPref
  */
 export function deletePrefs(uid: string) {
   return deleteDoc(doc(db, 'users', uid));
+}
+
+// --- the workout log -------------------------------------------------------
+
+/**
+ * One completed session, written by the family, read by the coach.
+ *
+ * The reward counters in /users are private to the account and the coach cannot read
+ * them by design. This is the shared half: a self-report, the same shape of trust as a
+ * saved worksheet, filed under the athlete so a coached session (ONE shared /events row
+ * for up to eight athletes) still records who actually did it.
+ *
+ * The document id is the EVENT id, so finishing twice overwrites rather than duplicates.
+ */
+export function logWorkoutDone(
+  athleteId: string,
+  event: Pick<SessionEvent, 'id' | 'name'>,
+  stats: { minutes: number; blocksDone: number; blocksTotal: number }
+) {
+  return setDoc(doc(db, 'athletes', athleteId, 'workoutLog', event.id), {
+    eventId: event.id,
+    // Denormalised so the coach's list reads without a second fetch per row, and so it
+    // still says what was done after the session itself is deleted from the calendar.
+    name: (event.name ?? 'Workout').slice(0, 140),
+    completedAt: serverTimestamp(),
+    // The rule pins these to whole numbers in range; clamping here turns a would-be
+    // permission error into a save that works.
+    minutes: Math.max(0, Math.min(600, Math.round(stats.minutes))),
+    blocksDone: Math.max(0, Math.min(60, Math.round(stats.blocksDone))),
+    blocksTotal: Math.max(0, Math.min(60, Math.round(stats.blocksTotal))),
+  });
+}
+
+export function subscribeWorkoutLog(
+  athleteId: string,
+  cb: (byEvent: Record<string, WorkoutLogEntry>) => void
+): Unsubscribe {
+  return onSnapshot(
+    collection(db, 'athletes', athleteId, 'workoutLog'),
+    (snap) => {
+      const byEvent: Record<string, WorkoutLogEntry> = {};
+      snap.docs.forEach((d) => (byEvent[d.id] = { id: d.id, ...d.data() } as WorkoutLogEntry));
+      cb(byEvent);
+    },
+    err('workout log')
+  );
+}
+
+/** The whole roster's logs, keyed by athlete. Same shape as subscribeRosterSubmissions. */
+export function subscribeRosterWorkoutLogs(
+  athleteIds: string[],
+  cb: (byAthlete: Record<string, Record<string, WorkoutLogEntry>>) => void
+): Unsubscribe {
+  const acc: Record<string, Record<string, WorkoutLogEntry>> = {};
+  const unsubs = athleteIds.map((aid) =>
+    subscribeWorkoutLog(aid, (log) => {
+      acc[aid] = log;
+      cb({ ...acc });
+    })
+  );
+  return () => unsubs.forEach((u) => u());
 }
 
 // --- workout templates ------------------------------------------------------

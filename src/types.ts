@@ -168,6 +168,24 @@ export interface WorkoutBlock {
   notes?: string;
 }
 
+/**
+ * One finished session, under /athletes/{aid}/workoutLog/{eventId}.
+ *
+ * Field names are load-bearing: firebase/firestore.rules validates them by name.
+ */
+export interface WorkoutLogEntry {
+  /** The document id, which is also the event id. */
+  id: string;
+  eventId: string;
+  name: string;
+  /** serverTimestamp() on write; the rule requires completedAt == request.time. */
+  completedAt: Timestamp | null;
+  /** Minutes the athlete actually ran the built-in timer for. */
+  minutes: number;
+  blocksDone: number;
+  blocksTotal: number;
+}
+
 /** Who the workout is for. Drives fan-out: a coached session writes one event per
  *  athlete, an individual one writes a single event. */
 export type WorkoutKind = 'individual' | 'coached';

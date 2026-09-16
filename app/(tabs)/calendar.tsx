@@ -16,7 +16,7 @@ import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSession } from '../../src/session';
-import { moveEvent, pasteEvents, subscribeEvents } from '../../src/data';
+import { deleteEvent, moveEvent, pasteEvents, subscribeEvents } from '../../src/data';
 import type { SessionEvent } from '../../src/types';
 import { Empty, Eyebrow, GhostButton } from '../../src/ui';
 import { SESSION_TYPES, color, radius, semantic, type } from '../../src/theme';
@@ -61,6 +61,9 @@ export default function CalendarScreen() {
   const [flash, setFlash] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
+  /** Which card is armed for deletion. One at a time, deliberately: a list of sessions
+   *  each showing its own confirm row is a list nobody can read. */
+  const [confirmId, setConfirmId] = useState<string | null>(null);
 
   // Direct manipulation is never decoration, so the drag itself always works. What
   // Reduce Motion turns off is the spring: the card snaps home instead of overshooting.
@@ -279,6 +282,9 @@ export default function CalendarScreen() {
           {selected.toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' })}
         </Text>
         {sameDay(selected, today) ? null : (
+          // A bare red word "Today" beside the date read as a LABEL for the day on screen,
+          // which is the opposite of what it means: it only appears when the day shown is
+          // NOT today. It says what it does now, inside a control that looks like one.
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Go to today"
@@ -286,8 +292,10 @@ export default function CalendarScreen() {
               setCursor(today);
               setSelected(today);
             }}
+            style={({ pressed }) => [s.todayBtn, pressed && { backgroundColor: color.inkHover }]}
           >
-            <Text style={s.todayLink}>Today</Text>
+            <Ionicons name="return-up-back" size={14} color={color.redHot} />
+            <Text style={s.todayLink}>Go to today</Text>
           </Pressable>
         )}
       </View>
@@ -352,6 +360,19 @@ export default function CalendarScreen() {
             setClipboard({ from: selected, events: [e] });
             setFlash('Session copied');
           }}
+          onDelete={() => setConfirmId(confirmId === e.id ? null : e.id)}
+          confirming={confirmId === e.id}
+          onConfirmDelete={async () => {
+            setError(null);
+            try {
+              await deleteEvent(e.id);
+              setConfirmId(null);
+              setFlash('Session deleted');
+            } catch {
+              setError('That did not delete. Check your connection and try again.');
+            }
+          }}
+          onCancelDelete={() => setConfirmId(null)}
           onDragState={setDragging}
           onBuzz={buzz}
           onDrop={(day) => drop(e, day)}
@@ -480,6 +501,10 @@ function SessionCard({
   hoverDay,
   onOpen,
   onCopy,
+  onDelete,
+  confirming,
+  onConfirmDelete,
+  onCancelDelete,
   onDragState,
   onBuzz,
   onDrop,
@@ -493,6 +518,12 @@ function SessionCard({
   cellRects: SharedValue<CellRect[]>;
   hoverDay: SharedValue<number>;
   onOpen: () => void;
+  /** Coach only. Arms the confirm row below the card rather than deleting on the tap:
+   *  one stray thumb should never remove a family's session. */
+  onDelete: () => void;
+  confirming: boolean;
+  onConfirmDelete: () => void;
+  onCancelDelete: () => void;
   onCopy: () => void;
   onDragState: (on: boolean) => void;
   onBuzz: (kind: 'pick' | 'move' | 'drop') => void;
@@ -648,17 +679,45 @@ function SessionCard({
           </View>
 
           {draggable && (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`Copy ${event.name}`}
-              onPress={onCopy}
-              hitSlop={8}
-              style={s.evCopy}
-            >
-              <Ionicons name="copy-outline" size={16} color={color.textDim} />
-            </Pressable>
+            <View style={s.evActions}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Copy ${event.name}`}
+                onPress={onCopy}
+                hitSlop={6}
+                style={s.evCopy}
+              >
+                <Ionicons name="copy-outline" size={16} color={color.textDim} />
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Delete ${event.name}`}
+                accessibilityState={{ expanded: confirming }}
+                onPress={onDelete}
+                hitSlop={6}
+                style={s.evCopy}
+              >
+                <Ionicons
+                  name={confirming ? 'close' : 'trash-outline'}
+                  size={16}
+                  color={confirming ? color.chalk : color.textDim}
+                />
+              </Pressable>
+            </View>
           )}
         </Pressable>
+
+        {confirming && (
+          <View style={s.evConfirm}>
+            <Text style={s.evConfirmText}>
+              Delete this session? The family loses it from their calendar too.
+            </Text>
+            <View style={s.evConfirmRow}>
+              <GhostButton label="Delete it" icon="trash-outline" tone="danger" onPress={onConfirmDelete} />
+              <GhostButton label="Keep it" onPress={onCancelDelete} />
+            </View>
+          </View>
+        )}
       </Animated.View>
     </GestureDetector>
   );
@@ -758,6 +817,16 @@ const s = StyleSheet.create({
     marginBottom: 10,
   },
   dayTitle: { fontSize: 17, fontWeight: '800', color: color.chalk },
+  todayBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    minHeight: 44,
+    paddingHorizontal: 11,
+    borderWidth: 1,
+    borderColor: semantic.borderStrong,
+    borderRadius: radius.pill,
+  },
   todayLink: { fontSize: 13, fontWeight: '700', color: color.redHot },
   dayTools: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 14 },
 
@@ -810,6 +879,17 @@ const s = StyleSheet.create({
   evName: { fontSize: 15, fontWeight: '600', color: color.chalk, marginTop: 3 },
   evMeta: { ...type.meta, marginTop: 2 },
   evBlocks: { fontSize: 12, color: color.textDim, marginTop: 5 },
+  evActions: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  evConfirm: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: semantic.border,
+    paddingHorizontal: 13,
+    paddingTop: 10,
+    paddingBottom: 12,
+    gap: 10,
+  },
+  evConfirmText: { ...type.meta, lineHeight: 18 },
+  evConfirmRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
   evCopy: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', marginTop: -4, marginRight: -6 },
   struck: { textDecorationLine: 'line-through', color: color.textDim },
 

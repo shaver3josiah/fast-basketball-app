@@ -77,10 +77,79 @@ export function bridgeScript(saved: Record<string, unknown> | undefined): string
 /** Injected on demand when the athlete taps Save. */
 export const COLLECT_SCRIPT = 'window.__fbCollect && window.__fbCollect(); true;';
 
-/** A one-line summary for the Locker list, matching the preview's saved-pill copy. */
+const num = (v: unknown): number => (typeof v === 'number' ? v : Number(v)) || 0;
+
+/**
+ * The night-shots worksheet, read back as a shooting line.
+ *
+ * Detected by KEY SHAPE rather than by workflow id, so it also works for a submission
+ * saved before the id was denormalised onto the document, and so a copy of the worksheet
+ * published under another id still summarizes properly.
+ *
+ * Every value the page saves is a STRING (its set() writes String(v)), which is why the
+ * generic summary below was useless here: nothing is ever `true`, and counting keys just
+ * reported how many boxes exist.
+ */
+function nightShots(a: Record<string, unknown>): string | null {
+  if (a.ns_m0 === undefined && a.ns_a0 === undefined) return null;
+  let makes = 0;
+  let shots = 0;
+  for (let i = 0; i < 7; i++) {
+    makes += num(a[`ns_m${i}`]);
+    shots += num(a[`ns_a${i}`]);
+  }
+  const pct = shots ? Math.round((makes / shots) * 100) : 0;
+  const best = num(a.ns_best);
+  const mins = num(a.ns_min);
+  return (
+    `${makes} of 70 makes · ${pct}% on ${shots} shots` +
+    (best ? ` · best run ${best}` : '') +
+    (mins ? ` · ${mins} min` : '')
+  );
+}
+
+/**
+ * A one-line summary for the Locker list, matching the preview's saved-pill copy.
+ *
+ * This is what the COACH reads down his roster, so a worksheet whose shape is known gets
+ * a real line. Anything else falls back to the generic count, which is honest about
+ * knowing nothing rather than inventing a number.
+ */
 export function summarize(answers: Record<string, unknown>): string {
+  const known = nightShots(answers);
+  if (known) return known;
   const done = Object.values(answers).filter((v) => v === true).length;
   const filled = Object.keys(answers).length;
   if (done) return `${done} of the blocks done`;
   return `${filled} field${filled === 1 ? '' : 's'} filled`;
+}
+
+/** Self-check. `npm run test:bridge`. */
+export function demo(): string {
+  const eq = (got: unknown, want: unknown, what: string) => {
+    if (String(got) !== String(want)) throw new Error(`${what}: got ${got}, wanted ${want}`);
+  };
+
+  // The shape the worksheet actually saves: strings, including zeros.
+  const rack: Record<string, unknown> = { ns_best: '6', ns_min: '25', ns_notes: 'short left' };
+  for (let i = 0; i < 7; i++) {
+    rack[`ns_m${i}`] = String(i < 4 ? 10 : 0);
+    rack[`ns_a${i}`] = String(i < 4 ? 14 : 0);
+  }
+  eq(summarize(rack), '40 of 70 makes · 71% on 56 shots · best run 6 · 25 min', 'a part-done rack');
+
+  // THE REGRESSION THIS EXISTS FOR: before the known-shape branch, the line above came
+  // out as "17 fields filled", which told the coach nothing at all.
+  if (summarize(rack).includes('fields filled')) throw new Error('night-shots fell through to the generic summary');
+
+  // A rack with no attempts must not divide by zero.
+  const empty: Record<string, unknown> = { ns_m0: '0', ns_a0: '0' };
+  eq(summarize(empty), '0 of 70 makes · 0% on 0 shots', 'an untouched rack');
+
+  // Checkbox worksheets keep the old behaviour exactly.
+  eq(summarize({ Week10: true, Week11: true, notes: 'x' }), '2 of the blocks done', 'checkboxes');
+  eq(summarize({ opponent: 'Dillard', pts: '12' }), '2 fields filled', 'a typed form');
+  eq(summarize({}), '0 fields filled', 'nothing saved');
+
+  return 'workflowBridge.ts: all checks passed';
 }

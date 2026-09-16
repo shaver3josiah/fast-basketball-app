@@ -42,7 +42,8 @@
           "backgroundColor": "#0A0A0C",
           "imageWidth": 180
         }
-      ]
+      ],
+      "expo-audio"
     ]
   }
 }

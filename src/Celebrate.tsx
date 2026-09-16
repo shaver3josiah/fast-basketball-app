@@ -10,6 +10,7 @@ import Animated, {
   type SharedValue,
 } from 'react-native-reanimated';
 import { color } from './theme';
+import { playSfx } from './sfx';
 
 /**
  * The thing that goes off when an athlete marks work done.
@@ -32,22 +33,26 @@ interface Spec {
   ms: number;
   /** A long thin streak instead of a round spark. */
   bar?: boolean;
-  /** An expanding shockwave ring. */
-  ring?: boolean;
+  /** How many shockwave rings. More rings read as more force, so this climbs with the
+   *  unlock order: the last one an athlete earns should not look like the first. */
+  rings: number;
   /** A full-screen flash behind everything. */
   flash?: string;
 }
 
 export const SPECS: Record<string, Spec> = {
-  spark: { colors: [color.fastRed, color.redHot, '#FFD34D'], word: 'DONE', shards: 14, spread: 150, ms: 850, ring: true },
-  swish: { colors: ['#FFD34D', '#FFF1C2', color.fastRed], word: 'SWISH', shards: 18, spread: 190, ms: 950, bar: true, ring: true },
-  fire: { colors: ['#FF7A18', '#FFD34D', color.fastRed], word: 'HEAT CHECK', shards: 22, spread: 220, ms: 1050, bar: true, flash: 'rgba(255,122,24,0.30)' },
-  quake: { colors: ['#F5F3EF', color.redHot, '#8E8E9B'], word: 'POSTER', shards: 16, spread: 260, ms: 1050, ring: true, flash: 'rgba(245,243,239,0.22)' },
-  bolt: { colors: ['#8FD8FF', '#FFFFFF', color.miamiTeal], word: 'LIGHTS OUT', shards: 20, spread: 280, ms: 1100, bar: true, flash: 'rgba(143,216,255,0.34)' },
-  nova: { colors: ['#FFFFFF', '#FFD34D', color.redHot], word: 'SUPERNOVA', shards: 28, spread: 320, ms: 1250, ring: true, flash: 'rgba(255,255,255,0.40)' },
+  spark: { colors: [color.fastRed, color.redHot, '#FFD34D'], word: 'DONE', shards: 14, spread: 150, ms: 850, rings: 1 },
+  swish: { colors: ['#FFD34D', '#FFF1C2', color.fastRed], word: 'SWISH', shards: 18, spread: 190, ms: 950, bar: true, rings: 2 },
+  fire: { colors: ['#FF7A18', '#FFD34D', color.fastRed], word: 'HEAT CHECK', shards: 22, spread: 220, ms: 1050, bar: true, rings: 3, flash: 'rgba(255,122,24,0.30)' },
+  quake: { colors: ['#F5F3EF', color.redHot, '#8E8E9B'], word: 'POSTER', shards: 16, spread: 260, ms: 1050, rings: 4, flash: 'rgba(245,243,239,0.22)' },
+  bolt: { colors: ['#8FD8FF', '#FFFFFF', color.miamiTeal], word: 'LIGHTS OUT', shards: 20, spread: 280, ms: 1100, bar: true, rings: 5, flash: 'rgba(143,216,255,0.34)' },
+  nova: { colors: ['#FFFFFF', '#FFD34D', color.redHot], word: 'SUPERNOVA', shards: 28, spread: 320, ms: 1250, rings: 7, flash: 'rgba(255,255,255,0.40)' },
 };
 
 const MAX_SHARDS = 28;
+/** Same trick as the shards: a fixed component count, because hooks cannot live in a loop
+ *  whose length changes between renders. The surplus rings render at zero opacity. */
+const MAX_RINGS = 7;
 
 /** Deterministic per-shard jitter. A real random would re-roll on every render and
  *  make the burst twitch mid-flight. */
@@ -79,6 +84,9 @@ export function Celebrate({
   useEffect(() => {
     if (!nonce) return;
     setPlaying(true);
+    // Sound is not motion, so it plays even under Reduce Motion: someone who has turned
+    // animation down has not asked to stop being told the work landed.
+    playSfx(id);
     t.value = 0;
     t.value = withTiming(1, { duration: spec.ms, easing: Easing.out(Easing.quad) });
     const done = setTimeout(() => {
@@ -92,11 +100,6 @@ export function Celebrate({
 
   const flash = useAnimatedStyle(() => ({
     opacity: interpolate(t.value, [0, 0.08, 0.5, 1], [0, 1, 0.35, 0]),
-  }));
-
-  const ring = useAnimatedStyle(() => ({
-    opacity: interpolate(t.value, [0, 0.1, 1], [0, 0.9, 0]),
-    transform: [{ scale: reduce ? 1 : interpolate(t.value, [0, 1], [0.15, 2.4]) }],
   }));
 
   const word = useAnimatedStyle(() => ({
@@ -120,15 +123,9 @@ export function Celebrate({
         <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: spec.flash }, flash]} />
       ) : null}
 
-      {spec.ring ? (
-        <Animated.View
-          style={[
-            s.ring,
-            { left: cx - 90, top: cy - 90, borderColor: spec.colors[0] },
-            ring,
-          ]}
-        />
-      ) : null}
+      {Array.from({ length: MAX_RINGS }, (_, i) => (
+        <Ring key={i} i={i} t={t} spec={spec} cx={cx} cy={cy} still={reduce} />
+      ))}
 
       {Array.from({ length: MAX_SHARDS }, (_, i) => (
         <Shard key={i} i={i} t={t} spec={spec} cx={cx} cy={cy} still={reduce} />
@@ -196,6 +193,51 @@ function Shard({
         },
         st,
       ]}
+    />
+  );
+}
+
+/**
+ * One shockwave ring. They are staggered rather than concentric-at-once: each starts a beat
+ * after the one before and travels further, so six rings read as a blast wave instead of a
+ * dartboard. Under Reduce Motion only the innermost shows, as a fading circle that does not
+ * travel.
+ */
+function Ring({
+  i,
+  t,
+  spec,
+  cx,
+  cy,
+  still,
+}: {
+  i: number;
+  t: SharedValue<number>;
+  spec: Spec;
+  cx: number;
+  cy: number;
+  still: boolean;
+}) {
+  const on = i < spec.rings;
+  const start = i * 0.07;
+  const reach = 1.9 + i * 0.3;
+  const tint = spec.colors[i % spec.colors.length];
+
+  const st = useAnimatedStyle(() => {
+    if (!on) return { opacity: 0 };
+    if (still) return i === 0 ? { opacity: interpolate(t.value, [0, 0.1, 1], [0, 0.5, 0]) } : { opacity: 0 };
+    // Each ring runs its own 0..1 over what is left of the timeline after its start.
+    const q = Math.max(0, Math.min(1, (t.value - start) / (1 - start)));
+    return {
+      opacity: interpolate(q, [0, 0.08, 1], [0, Math.max(0.2, 0.85 - i * 0.09), 0]),
+      transform: [{ scale: interpolate(q, [0, 1], [0.12, reach]) }],
+    };
+  });
+
+  return (
+    <Animated.View
+      style={[s.ring, { left: cx - 90, top: cy - 90, borderColor: tint }, st]}
+      pointerEvents="none"
     />
   );
 }

@@ -3,11 +3,16 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSession, useNames } from '../../src/session';
-import { subscribeWorkflows, subscribeSubmissions, subscribeRosterSubmissions } from '../../src/data';
+import {
+  subscribeWorkflows,
+  subscribeSubmissions,
+  subscribeRosterSubmissions,
+  subscribeRosterWorkoutLogs,
+} from '../../src/data';
 import { periodLabel } from '../../src/period';
 import { summarize } from '../../src/workflowBridge';
 import { isBuiltin } from '../../src/worksheets.generated';
-import type { SavedWorkflow, Workflow } from '../../src/types';
+import type { SavedWorkflow, Workflow, WorkoutLogEntry } from '../../src/types';
 import { Banner, Empty, Eyebrow, Screen } from '../../src/ui';
 import { color, radius, semantic, type } from '../../src/theme';
 
@@ -25,6 +30,7 @@ export default function Locker() {
   const [workflows, setWorkflows] = useState<Workflow[] | null>(null);
   const [mine, setMine] = useState<Record<string, SavedWorkflow>>({});
   const [roster, setRoster] = useState<Record<string, Record<string, SavedWorkflow>>>({});
+  const [logs, setLogs] = useState<Record<string, Record<string, WorkoutLogEntry>>>({});
 
   useEffect(() => subscribeWorkflows(setWorkflows), []);
 
@@ -38,6 +44,13 @@ export default function Locker() {
   useEffect(() => {
     if (role !== 'coach' || rosterIds.length === 0) return;
     return subscribeRosterSubmissions(rosterIds, setRoster);
+  }, [role, rosterIds.join(',')]);
+
+  // The other half of "how is this athlete doing": what they actually trained. Same
+  // per-athlete fan-out as the submissions above, and the same rule identity allows it.
+  useEffect(() => {
+    if (role !== 'coach' || rosterIds.length === 0) return;
+    return subscribeRosterWorkoutLogs(rosterIds, setLogs);
   }, [role, rosterIds.join(',')]);
 
   const byWorkflow = useMemo(() => indexByWorkflow(workflows ?? []), [workflows]);
@@ -83,13 +96,39 @@ export default function Locker() {
 
       {role === 'coach' ? (
         <>
-          <Eyebrow style={{ marginTop: 22 }}>Submissions</Eyebrow>
+          <Eyebrow style={{ marginTop: 22 }}>Progress</Eyebrow>
           {rosterIds.length === 0 && <Empty icon="people-outline">No athletes on the roster yet.</Empty>}
           {rosterIds.map((aid) => {
             const subs = sortSubmissions(roster[aid] ?? {});
+            const done = sortLog(logs[aid] ?? {});
             return (
-              <View key={aid} style={{ marginBottom: 14 }}>
+              <View key={aid} style={{ marginBottom: 18 }}>
                 <Text style={s.rosterName}>{athletesById[aid]?.playerName ?? aid}</Text>
+
+                {/* What they trained. The athlete writes this when they finish a session
+                    on the timer; it is the only completion record the coach can read. */}
+                <Text style={s.progLabel}>
+                  {done.length === 0
+                    ? 'No workouts finished on the timer yet'
+                    : `${done.length} workout${done.length === 1 ? '' : 's'} finished on the timer`}
+                </Text>
+                {done.slice(0, 3).map((w) => (
+                  <View key={w.id} style={s.logRow}>
+                    <Ionicons name="checkmark-circle" size={15} color={color.miamiTeal} />
+                    <Text style={s.logName} numberOfLines={1}>
+                      {w.name}
+                    </Text>
+                    <Text style={s.logMeta}>
+                      {w.blocksTotal ? `${w.blocksDone}/${w.blocksTotal} blocks · ` : ''}
+                      {w.minutes} min{when(w.completedAt) ? ` · ${when(w.completedAt)}` : ''}
+                    </Text>
+                  </View>
+                ))}
+                {done.length > 3 ? (
+                  <Text style={s.progMore}>and {done.length - 3} more</Text>
+                ) : null}
+
+                <Text style={s.progLabel}>Worksheets</Text>
                 {subs.length === 0 ? (
                   <Text style={[type.meta, { marginTop: 4 }]}>Nothing submitted yet.</Text>
                 ) : (
@@ -139,6 +178,24 @@ export default function Locker() {
       )}
     </Screen>
   );
+}
+
+/** Newest first, by the server clock the rule pinned. */
+const sortLog = (log: Record<string, WorkoutLogEntry>): WorkoutLogEntry[] =>
+  Object.values(log).sort(
+    (a, b) => (b.completedAt?.toMillis() ?? 0) - (a.completedAt?.toMillis() ?? 0)
+  );
+
+/** "today" / "yesterday" / a date, for a coach scanning a column of them. */
+function when(ts: WorkoutLogEntry['completedAt']): string {
+  const d = ts?.toDate?.();
+  if (!d) return '';
+  const day = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const days = Math.round((day(new Date()) - day(d)) / 86400000);
+  if (days <= 0) return 'today';
+  if (days === 1) return 'yesterday';
+  if (days < 7) return `${days} days ago`;
+  return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
 }
 
 const indexByWorkflow = (ws: Workflow[]): Record<string, Workflow> =>
@@ -272,6 +329,16 @@ const s = StyleSheet.create({
   },
   pillText: { fontSize: 10.5, fontWeight: '700', color: color.miamiTeal },
   chev: { fontSize: 22, color: color.textDim, paddingHorizontal: 2 },
+  progLabel: {
+    ...type.eyebrow,
+    fontSize: 10,
+    marginTop: 10,
+    marginBottom: 4,
+  },
+  logRow: { flexDirection: 'row', alignItems: 'center', gap: 7, paddingVertical: 4 },
+  logName: { flex: 1, fontSize: 13.5, fontWeight: '700', color: color.chalk },
+  logMeta: { fontSize: 11.5, color: color.textDim },
+  progMore: { ...type.meta, marginTop: 2 },
   rosterName: {
     fontSize: 13,
     fontWeight: '800',
