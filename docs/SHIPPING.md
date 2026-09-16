@@ -26,7 +26,9 @@ These need your Apple account or your private keys. Nobody can do them for you.
 - Accept the App Store Connect agreements.
 - Add TestFlight testers.
 - Generate the Android upload keystore (it is your signing identity).
-- Paste all eight values into GitHub as repository secrets.
+- Paste every secret in the §4 table into GitHub as a repository secret, `ENV_FILE`
+  included. That one is not an Apple or Android key and is easy to skip, and skipping it
+  gives you a green build of an app that dead-ends on "unconfigured".
 
 Everything after that is automatic.
 
@@ -46,6 +48,10 @@ then App.
 
 - Description: `Fast Basketball`
 - Bundle ID: **Explicit**, set to `com.fastbasketball.app`
+- Capabilities: tick **Push Notifications**. The app never sends a push, but
+  `expo-notifications` is what draws the streak reminders and it puts the push
+  entitlement on every iOS build. Without the tick the export fails, about twenty
+  minutes into the run.
 
 This string must match `ios.bundleIdentifier` in `app.json` exactly. It is already
 set to `com.fastbasketball.app` there, so use that unless you change both.
@@ -263,8 +269,15 @@ consequence is silent, and it lands on the families, not on you.
 | `Project must have a 'ios.bundleIdentifier' set` | `app.json` was edited | Restore `ios.bundleIdentifier` and `android.package` |
 | Android build succeeds, APK will not install over the old one | Signature changed, debug to release or a new keystore | Uninstall the old app first |
 | `No profiles were found` | Bundle ID in `app.json` does not match the App ID | Make step 2.2 and `app.json` agree |
+| `doesn't include the aps-environment entitlement`, or a push entitlement mismatch at export | `expo-notifications` puts a Push Notifications entitlement on every iOS build, even though this app only schedules local reminders | Turn **Push Notifications** on for the App ID in step 2.2. `app.json` already pins `mode: production`, which is what an App Store build has to carry |
 | iOS build number rejected as duplicate | Two runs produced the same build number | Push a new tag; the build number is the GitHub run number |
 
-Version numbers: the user-visible version comes from `expo.version` in `app.json`.
-The build number is the GitHub run number, so it always increases on its own and
-you never need to bump it by hand.
+Version numbers: on a `v*` tag build, **the tag is the version a tester reads**, not
+`expo.version` in `app.json`. Both workflows strip the `v` and stamp what is left over
+whatever `app.json` produced, iOS into `CFBundleShortVersionString` and Android into
+`versionName`, because `Ship.ps1` tags a release without editing `app.json` and the two
+would otherwise disagree. The iOS job also insists the tag reads `vX.Y.Z`, and stops
+right after the prebuild if it does not, rather than letting Apple reject the upload half
+an hour later. A run started by hand and the monthly keep-alive have no tag to read, so
+those keep `expo.version`. The build number is the GitHub run number either way, so it
+always increases on its own and you never need to bump it by hand.

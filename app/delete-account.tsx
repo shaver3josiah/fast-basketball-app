@@ -120,8 +120,8 @@ export default function DeleteAccount() {
             not Coach Kingsley. A conversation a guardian was promised she could read is
             worth nothing if either side can edit it afterwards.
             {'\n\n'}
-            {names.player.split(' ')[0]}’s athlete record belongs to the coach. Ask him to
-            remove it, and everything on it goes with it.
+            {names.player.split(' ')[0]}’s athlete record stays on Coach Kingsley’s roster.
+            It is his document, and nothing in the app deletes it.
           </Body>
         </Card>
 

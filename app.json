@@ -43,7 +43,22 @@
           "imageWidth": 180
         }
       ],
-      "expo-audio"
+      [
+        "expo-audio",
+        {
+          "microphonePermission": false,
+          "recordAudioAndroid": false,
+          "enableBackgroundPlayback": false
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/android-icon-monochrome.png",
+          "color": "#E60C20",
+          "mode": "production"
+        }
+      ]
     ]
   }
 }

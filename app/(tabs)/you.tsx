@@ -285,15 +285,15 @@ export default function You() {
               {role === 'parent' &&
                 threads.map((t) => {
                   const muted = (prefs.mutedThreads ?? []).includes(t.id);
+                  // The only notifications this app sends are the local streak reminders
+                  // in src/notify.ts. Nothing alerts on a message, so the description
+                  // names the one thing muting does today, the tag on the thread row in
+                  // Messages, and promises nothing about the phone.
                   return (
                     <Setting
                       key={t.id}
                       title={t.kind === 'coach-parent' ? 'Coach ↔ you' : `Coach ↔ ${player}`}
-                      description={
-                        muted
-                          ? 'Muted. Messages still arrive, your phone stays quiet.'
-                          : 'Notify me about new messages in this thread.'
-                      }
+                      description={`${muted ? 'Muted, and tagged that way in Messages' : 'Not muted'}. The app sends no message alerts, so your phone stays quiet either way.`}
                       value={!muted}
                       onChange={(on) => toggleMute(t.id, !on)}
                     />
@@ -363,7 +363,7 @@ function Streak({ streak, best, workouts }: { streak: number; best: number; work
           <>
             <Text style={s.streakLead}>No streak yet</Text>
             <Text style={s.rowHint}>
-              Finish a workout on the timer and day one is on the board.
+              Opening the app counts the day. Come back tomorrow and it becomes a run.
               {workouts > 0 ? ` ${workouts} logged so far.` : ''}
             </Text>
           </>

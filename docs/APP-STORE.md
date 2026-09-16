@@ -54,7 +54,8 @@ no third-party analytics, a parental gate on everything — and this app is buil
 > - Direct messaging with your coach
 > - The training calendar for your athlete
 > - The Locker: workouts and evaluations the coach publishes, filled in on your phone
-> - Per-conversation notification settings, controlled by the guardian
+> - A workout timer that logs the minutes your athlete actually trained
+> - Streak reminders on your own phone, with a switch to turn them off
 >
 > Accounts are created by Coach Kingsley for families training with FAST Basketball.
 > Signing up needs an invitation to your email address.
@@ -115,12 +116,20 @@ in this app — Firebase Auth and Firestore are the whole backend.
 | Name | Yes | The coach records the athlete's and the guardian's names |
 | Other user content | Yes | The messages, and the workflow answers an athlete fills in |
 | User ID | Yes | The Firebase Auth uid every record is keyed on |
+| Fitness | Yes | The workout timer files minutes trained and blocks finished under the athlete (`logWorkoutDone` in `src/data.ts`), and the account's own record keeps a training streak and a workout count |
+| Other data | Yes | The athlete's age, an optional whole number the coach types on the Roster when he invites a family (`age` in `src/types.ts`) |
 
 Answer **No** to tracking, advertising data, location, contacts, photos, health, financial
 info, browsing history and diagnostics. Nothing in the app collects them.
 
-One question needs care: Apple asks whether each type is used for "App Functionality" or
-for "Analytics". It is functionality only.
+Two answers on that form are easy to get wrong here, so read them twice:
+
+- **Health is No, Fitness is Yes.** Apple splits them. Nothing medical or clinical is
+  collected. Minutes trained and blocks finished are exercise data, and they are shared
+  with the coach, so they are declared.
+- **Analytics is No, including for the streak.** Keeping a streak means the account's own
+  record holds the date it was last opened. It stays on that account, the coach cannot read
+  it, and it exists to run the feature. That is App Functionality, not Analytics.
 
 Account deletion is offered in the app — You tab, Delete my account — which is what
 Guideline 5.1.1(v) requires.

@@ -3,27 +3,35 @@
 The app is built, tested, and both build pipelines work. Everything below needs
 **your** accounts or your private keys, so nobody else can do it for you.
 
-Three sessions. **Only Session A is required to have a working app** — B and C are
-about getting it onto other people's phones properly.
+**Only Session C is still outstanding.** A and B are done and are kept here as the
+runbook: what was set up, and how to do it again if the backend is ever rebuilt.
 
-| Session | Time | What it unblocks | Required? |
+| Session | Time | What it unblocks | State |
 | --- | --- | --- | --- |
-| **A. Firebase** | ~20 min | The app can sign in and send messages at all | **Yes** |
-| **B. Android keystore** | ~5 min | APKs that can be upgraded in place | Before real testers |
-| **C. Apple** | ~45 min | iPhones, via TestFlight | Only for iOS |
-
-Do **A before C**. There is no point putting a build on an iPhone before it has a
-backend to sign in against.
+| **A. Firebase** | ~20 min | The app can sign in and send messages at all | **Done** |
+| **B. Android keystore** | ~5 min | APKs that can be upgraded in place | **Done, 15 Sep 2026** |
+| **C. Apple** | ~45 min | iPhones, via TestFlight | **Outstanding**, only for iOS |
 
 Commands below are Windows PowerShell 5.1. Each block is one command — copy the whole
 block. They all start with a `cd`, so they work from any directory.
 
 ---
 
-## Session A — Firebase (required)
+## Session A: Firebase (done)
 
-Right now the app runs against a local emulator on this machine. A phone cannot reach
-that. This gives it a real backend.
+The app runs against the real project. `fast-basketball-b3ebe` exists, email sign-in is
+on, the database is created, the security rules are deployed carrying Blake's real
+account, and `.env` on this machine points at it with no emulator line and no
+`.env.local` shadowing it. Signing in through the app against that project was checked on
+15 September 2026: a real uid comes back and the "confirm your email" gate behaves.
+
+A1 to A7 below are the record of how that was done, so it can be redone against a new
+project. **A8 and A9 are not one-time steps.** They are what you do for each new family,
+so read those two whenever you add one.
+
+> **Read the hazard in A6 before you deploy rules again.** `npm run seed` rewrites the
+> coach uid in the rules file to a demo value, and deploying after a seed locks Blake out
+> of his own app.
 
 ### A1. Create the project
 
@@ -70,8 +78,9 @@ quietly keeps talking to an emulator that is not even running:
 Remove-Item "C:\Users\shave\Documents\Claude\Projects\Fast Basketball\fast-basketball-app\.env.local" -ErrorAction SilentlyContinue
 ```
 
-Going back to the emulator later is just `npm run seed`, which recreates it — and to
-come back to your real project afterwards:
+Going back to the emulator later is just `npm run seed`, which recreates it. Read the
+hazard box in A6 first, because that same command edits the rules file. To come back to
+your real project afterwards:
 
 ```powershell
 npm run use-cloud
@@ -98,9 +107,25 @@ gh secret set ENV_FILE --repo shaver3josiah/fast-basketball-app < "C:/Users/shav
 
 ### A6. Deploy the security rules — the step that matters most
 
-Until this runs, your database denies everything and none of the consent or
-parent-monitoring logic is in force. The rules exist and are tested, but a copy in a
-repository protects nobody.
+**Already deployed.** The live rules on `fast-basketball-b3ebe` carry Blake's real
+account and the consent and parent-monitoring logic is in force. What follows is the
+command to run again after you change `firebase/firestore.rules`.
+
+> **Never run this straight after `npm run seed`.** Seeding rewrites `coachUid()` in
+> `firebase/firestore.rules` to `coach_demo_uid` for the local demo. Deploying that value
+> tells the live project that Blake is a stranger: no threads, no roster, no way back in
+> from inside the app. Check the file first, and put the real uid back with
+> `git checkout firebase/firestore.rules` before deploying.
+>
+> ```powershell
+> Select-String -Path "C:\Users\shave\Documents\Claude\Projects\Fast Basketball\fast-basketball-app\firebase\firestore.rules" -Pattern "coachUid"
+> ```
+>
+> If that prints `coach_demo_uid` or `REPLACE_WITH_BLAKE_AUTH_UID`, stop and restore the
+> file. Deploy only when it prints his real uid.
+
+Run the deploy from this directory. `firebase-tools` is installed here and nowhere else,
+and `--config firebase/firebase.json` resolves relative to where you are standing:
 
 ```powershell
 cd "C:\Users\shave\Documents\Claude\Projects\Fast Basketball\fast-basketball-app"
@@ -116,6 +141,9 @@ npx firebase deploy --only firestore:rules --project fast-basketball-b3ebe --con
 
 ### A7. Create Blake's account and point the rules at it
 
+**Already done.** His account exists and both the live rules and `.env` carry its uid.
+Do this again only for a new project, or if his account is ever recreated.
+
 **Authentication → Users → Add user.** Enter his email and a password. Copy the
 **User UID** that appears in the table.
 
@@ -130,7 +158,7 @@ once more so the rules pick up the change.
 sees no threads and no roster. That is exactly why there is a script instead of a
 hand-edit.
 
-### A8. Invite the first family
+### A8. Invite a family, which you do for every new one
 
 Do this **in the app**, not in the Firebase console. Sign in as Blake, go to the
 **You** tab, and tap **Add or manage athletes**.
@@ -246,9 +274,12 @@ and it lands on the families, not on you.
 
 Stated plainly so none of it is a surprise later:
 
-- **Push notifications.** Sending one requires server-side code, and Cloud Functions
-  need Firebase's paid Blaze plan. The per-thread mute toggle is built and saves, so
-  the setting is ready — but until push exists it governs nothing.
+- **Push notifications.** Nothing on a server can reach a phone: sending a push requires
+  server-side code, and Cloud Functions need Firebase's paid Blaze plan. So there is no
+  new-message alert. The per-thread mute toggle is built and saves, so the setting is
+  ready, but until push exists it governs nothing. The streak reminders on the You tab are
+  a different thing and do work: the phone's own clock fires those, with no server
+  involved.
 - **A signup flow.** Blake creates accounts by hand (A8).
 - **Unread badges are approximate.** The Messages badge counts visible threads, not
   unread messages.

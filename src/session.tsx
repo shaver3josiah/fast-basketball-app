@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { AppState } from 'react-native';
 import {
   onAuthStateChanged,
   sendEmailVerification,
@@ -19,7 +20,7 @@ import {
   findInvite,
   claimInvite,
 } from './data';
-import { readState, visit } from './rewards';
+import { readState, visit, dayKey } from './rewards';
 import { syncReminders } from './notify';
 import { resetOutcome, type ResetOutcome } from './authMessages';
 import type { Athlete, Role, UserPrefs } from './types';
@@ -122,37 +123,44 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   }, [user?.uid]);
 
   /**
-   * The daily streak, counted ONCE per sign-in.
+   * The daily streak, counted at sign-in and again every time the app comes back to
+   * the foreground.
    *
    * It used to run on every prefs snapshot, and that was the bug: Firestore answers a
    * cold listener from cache first, and for a document it has never cached the answer
    * is "does not exist". As a UserPrefs that is an account with no lastDay, which
-   * `visit()` reads as a first-ever open and writes `streak: 1` — clobbering the real
+   * `visit()` reads as a first-ever open and writes `streak: 1`, clobbering the real
    * streak arriving from the server a moment later. Every launch was a coin flip.
    *
-   * So: one read, at sign-in, and nothing at all unless Firestore actually confirmed
-   * what it found. The ref keeps it to once per account even if this effect is torn
-   * down and rebuilt, and `visit()` still returns null on a day already counted, so
-   * signing in twice in an evening writes nothing.
+   * So: one read, and nothing at all unless Firestore actually confirmed what it found.
+   * `visit()` returns null on a day already counted, so a launch on a day already on the
+   * board costs one read and no write, and a resume on that day costs nothing at all.
    */
   const streakChecked = useRef<string | null>(null);
+  /** The day the last confirmed check settled, so a resume inside it does no work. */
+  const checkedDay = useRef('');
   useEffect(() => {
     const uid = user?.uid;
     // Cleared on sign-out so signing back in is a fresh login and checks again.
     if (!uid) {
       streakChecked.current = null;
+      checkedDay.current = '';
       return;
     }
-    if (streakChecked.current === uid) return;
-    streakChecked.current = uid;
     let cancelled = false;
 
-    (async () => {
+    const check = async () => {
       const { prefs: saved, confirmed } = await readPrefsOnce(uid);
       if (cancelled || !confirmed) return;
 
+      // Stamped only once the read came back confirmed, so a check that found nothing it
+      // could trust (offline, cold cache) is retried on the next resume rather than
+      // written off for the whole day.
+      const now = new Date();
+      checkedDay.current = dayKey(now);
+
       const before = readState(saved);
-      const patch = visit(before, new Date());
+      const patch = visit(before, now);
       // NOT an empty catch. A permission-denied here is silent and fatal to the whole
       // feature: the streak simply never persists, and the only visible symptom turns up
       // later and somewhere else. That is exactly how a stale deployed ruleset hid for a
@@ -166,10 +174,35 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       // this is warning about has just been settled, and nothing later in the session
       // changes it. The You tab re-plans when the switch is toggled.
       await syncReminders({ ...before, ...patch }, saved.remind !== false);
-    })().catch((e) => console.warn('[fastbb] streak check failed:', e));
+    };
+    const run = () => check().catch((e) => console.warn('[fastbb] streak check failed:', e));
+
+    // The ref guards the mount call only, so a teardown and rebuild of this effect on
+    // the same account does not read twice.
+    if (streakChecked.current !== uid) {
+      streakChecked.current = uid;
+      run();
+    }
+
+    // A phone resumes from the switcher far more often than it cold launches, and this
+    // provider is mounted at the root and never remounts, so without this the day was
+    // only ever counted on a cold start: the athlete opened the app, the broken-streak
+    // reminder fired at him in the morning anyway, and the next cold launch saw the gap
+    // and reset him to 1. This call must NOT go through the ref guard above, which is
+    // already spent on the mount call, or it is a silent no-op and the bug is still here.
+    const sub = AppState.addEventListener('change', (state) => {
+      // Only when the calendar day may have turned over. `visit()` writes nothing on a
+      // day already counted and `reminderPlan` dates everything off today, so a second
+      // pass inside one day is a read and a full cancel-and-reschedule for an identical
+      // result. On Android it is worse than waste: asking for notification permission
+      // pauses the app, so a dialog the athlete swipes away instead of answering leaves
+      // `canAskAgain` true, and the resume it causes would ask again, and again.
+      if (state === 'active' && checkedDay.current !== dayKey(new Date())) run();
+    });
 
     return () => {
       cancelled = true;
+      sub.remove();
     };
   }, [user?.uid]);
 

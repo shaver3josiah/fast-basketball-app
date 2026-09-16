@@ -113,7 +113,7 @@ app/                     expo-router file routes
   _layout.tsx            SessionProvider + themed Stack
   index.tsx              auth gate
   sign-in.tsx
-  (tabs)/                Messages · Calendar · Locker · You
+  (tabs)/                Messages · Calendar · Workouts (coach only) · Locker · You
   thread/[id].tsx        conversation, with the monitoring banner
   workflow/[id].tsx      sandboxed WebView for a coach-published HTML doc
 src/
@@ -125,10 +125,10 @@ src/
   workflowBridge.ts      the script injected into workflow WebViews
 firebase/
   firestore.rules        the security model
-  test/rules.test.mjs    32 assertions that pin it
+  test/rules.test.mjs    the cases that pin it, one per rule it must not lose
 scripts/
   seed.mjs               demo data for the emulator
-  workflow-docs.mjs      the three training documents
+  workflow-docs.mjs      the training documents the seed publishes
   set-coach-uid.mjs      keeps EXPO_PUBLIC_COACH_UID and the rules constant in sync
 .github/workflows/       CI, Android APK, iOS TestFlight
 ```
