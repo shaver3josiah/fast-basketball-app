@@ -1,7 +1,5 @@
 import { useState } from 'react';
 import {
-  KeyboardAvoidingView,
-  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -13,7 +11,7 @@ import { EmailAuthProvider, deleteUser, reauthenticateWithCredential } from 'fir
 import { auth } from '../src/firebase';
 import { useSession, useNames } from '../src/session';
 import { deletePrefs, setConsent } from '../src/data';
-import { Banner, Body, Button, Card, CardTitle } from '../src/ui';
+import { Banner, Body, Button, Card, CardTitle, KeyboardPad } from '../src/ui';
 import { color, radius, semantic } from '../src/theme';
 
 /**
@@ -97,7 +95,7 @@ export default function DeleteAccount() {
   }
 
   return (
-    <KeyboardAvoidingView style={s.page} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardPad header style={s.page}>
       <ScrollView contentContainerStyle={s.pad} keyboardShouldPersistTaps="handled">
         <Banner tone="lock" title="This cannot be undone">
           Deleting your account signs you out for good and removes your login from
@@ -158,7 +156,7 @@ export default function DeleteAccount() {
         <View style={{ height: 10 }} />
         <Button label="Keep my account" onPress={() => router.back()} />
       </ScrollView>
-    </KeyboardAvoidingView>
+    </KeyboardPad>
   );
 }
 

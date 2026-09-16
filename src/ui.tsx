@@ -1,6 +1,8 @@
 import React from 'react';
 import {
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -10,6 +12,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   SESSION_TYPES,
   color,
@@ -39,6 +42,57 @@ export function Screen({
     </ScrollView>
   );
 }
+
+/**
+ * The keyboard wrapper every text-entry screen goes through.
+ *
+ * Two things here are load-bearing and were each a real bug before this component
+ * existed, on five screens at once:
+ *
+ * 1. `behavior="padding"` on BOTH platforms. Expo's own keyboard guide still says to
+ *    pass `undefined` on Android, which relies on the WINDOW RESIZING under the
+ *    keyboard. This app draws edge to edge, so the window does not resize and the
+ *    field being typed into stays underneath the keyboard. On a build where the
+ *    window did resize, "padding" computes an overlap of zero and adds nothing, so
+ *    it is the safe answer in both directions.
+ *
+ * 2. `header` for a screen sitting under a native navigation header.
+ *    KeyboardAvoidingView measures its own frame with onLayout, which is relative to
+ *    its PARENT — the scene below the header — not to the window. So on a header
+ *    screen it under-pads by exactly the header's height and the keyboard still
+ *    covers the last field. Passing the header height back as the offset cancels it.
+ *    A tab bar underneath needs no term of its own: it shortens the measured frame
+ *    and the real distance to the bottom by the same amount.
+ *
+ * Android keeps offset 0 because its keyboard frame is already reported in window
+ * coordinates. That asymmetry is not an oversight; it is what app/thread/[id].tsx
+ * shipped and was verified with.
+ */
+export function KeyboardPad({
+  children,
+  header = false,
+  style,
+}: {
+  children: React.ReactNode;
+  /** True when the screen renders under a native header (anything with a `title`). */
+  header?: boolean;
+  style?: StyleProp<ViewStyle>;
+}) {
+  const insets = useSafeAreaInsets();
+  return (
+    <KeyboardAvoidingView
+      style={style ?? { flex: 1 }}
+      behavior="padding"
+      keyboardVerticalOffset={header && Platform.OS === 'ios' ? insets.top + HEADER_H : 0}
+    >
+      {children}
+    </KeyboardAvoidingView>
+  );
+}
+
+/** Standard iOS navigation header height. Not a guess: the value app/thread/[id].tsx
+ *  was shipped and verified with. */
+const HEADER_H = 44;
 
 export const Eyebrow = ({ children, style }: { children: React.ReactNode; style?: StyleProp<ViewStyle> }) => (
   <View style={[{ marginTop: 18, marginBottom: 8 }, style]}>

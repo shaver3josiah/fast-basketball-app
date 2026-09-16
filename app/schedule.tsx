@@ -1,7 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -27,7 +25,7 @@ import {
   totalMinutes,
 } from '../src/data';
 import type { SessionEvent, WorkoutBlock, WorkoutKind, WorkoutTemplate } from '../src/types';
-import { Banner, Body, Button, Card, CardTitle, GhostButton, Segmented, Stepper } from '../src/ui';
+import { Banner, Body, Button, Card, CardTitle, GhostButton, KeyboardPad, Segmented, Stepper } from '../src/ui';
 import { SESSION_TYPES, color, radius, semantic, type, type SessionType } from '../src/theme';
 
 const HOME_GYM = 'Salvation Army Fort Lauderdale Corps gym';
@@ -190,7 +188,7 @@ export default function Schedule() {
   }
 
   return (
-    <KeyboardAvoidingView style={s.page} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardPad header style={s.page}>
     <ScrollView style={s.page} contentContainerStyle={s.pad} keyboardShouldPersistTaps="handled">
       <Stack.Screen options={{ title: editing ? 'Edit session' : 'Add to the calendar' }} />
 
@@ -467,7 +465,7 @@ export default function Schedule() {
 
       {editing && <EditActions event={editing} events={events} onDone={() => router.back()} />}
     </ScrollView>
-    </KeyboardAvoidingView>
+    </KeyboardPad>
   );
 }
 

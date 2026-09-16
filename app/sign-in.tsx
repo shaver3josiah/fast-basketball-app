@@ -1,7 +1,5 @@
 import { useState } from 'react';
 import {
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -15,7 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSession } from '../src/session';
 import { backend, isConfigured } from '../src/firebase';
 import { Logo } from '../src/Logo';
-import { Button } from '../src/ui';
+import { Button, KeyboardPad } from '../src/ui';
 import { color, radius, semantic, type } from '../src/theme';
 
 export default function SignIn() {
@@ -70,10 +68,7 @@ export default function SignIn() {
   }
 
   return (
-    <KeyboardAvoidingView
-      style={s.page}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
+    <KeyboardPad style={s.page}>
       <ScrollView
         contentContainerStyle={[s.inner, { paddingTop: insets.top + 48, paddingBottom: insets.bottom + 24 }]}
         keyboardShouldPersistTaps="handled"
@@ -172,7 +167,7 @@ export default function SignIn() {
           Trouble getting in? Text Coach Kingsley at (503) 686-8371.
         </Text>
       </ScrollView>
-    </KeyboardAvoidingView>
+    </KeyboardPad>
   );
 }
 

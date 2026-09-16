@@ -1,8 +1,6 @@
 import { useState } from 'react';
 import { BrandIcon } from '../src/Logo';
 import {
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -14,7 +12,7 @@ import { Link, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createUserWithEmailAndPassword, sendEmailVerification, signOut } from 'firebase/auth';
 import { auth } from '../src/firebase';
-import { Button } from '../src/ui';
+import { Button, KeyboardPad } from '../src/ui';
 import { color, radius, semantic, type } from '../src/theme';
 
 /**
@@ -90,7 +88,7 @@ export default function SignUp() {
   }
 
   return (
-    <KeyboardAvoidingView style={s.page} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardPad style={s.page}>
       <ScrollView
         contentContainerStyle={[
           s.inner,
@@ -155,7 +153,7 @@ export default function SignUp() {
           </Pressable>
         </Link>
       </ScrollView>
-    </KeyboardAvoidingView>
+    </KeyboardPad>
   );
 }
 

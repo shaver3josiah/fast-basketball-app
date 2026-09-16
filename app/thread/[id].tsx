@@ -1,8 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   FlatList,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -17,7 +15,7 @@ import { db } from '../../src/firebase';
 import { useSession, useNames } from '../../src/session';
 import { canPostIn, sendMessage, subscribeMessages } from '../../src/data';
 import type { Athlete, Message, Thread } from '../../src/types';
-import { Banner } from '../../src/ui';
+import { Banner, KeyboardPad } from '../../src/ui';
 import { bubbleColor, color, radius, semantic, type } from '../../src/theme';
 
 export default function ThreadScreen() {
@@ -106,21 +104,10 @@ export default function ThreadScreen() {
               : undefined,
         }}
       />
-      {/*
-        `padding` on BOTH platforms. The Android branch used to pass `undefined` and
-        lean on the window resizing itself, which is what Expo's own guide says — but
-        this app draws edge to edge, so the window does NOT resize and the composer sat
-        under the keyboard with whatever was being typed hidden behind it.
-
-        Padding is self-correcting either way: KeyboardAvoidingView measures its own
-        frame against the keyboard, so on a build where the window DID resize the
-        overlap is zero and it adds nothing.
-      */}
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior="padding"
-        keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top + 44 : 0}
-      >
+      {/* `header` because this screen renders under the "Messages" navigation header.
+          The reasoning that used to sit here now lives on KeyboardPad in src/ui.tsx,
+          which is where the other five text-entry screens get it from too. */}
+      <KeyboardPad header>
         <FlatList
           ref={listRef}
           data={messages}
@@ -222,7 +209,7 @@ export default function ThreadScreen() {
             </Text>
           </View>
         )}
-      </KeyboardAvoidingView>
+      </KeyboardPad>
     </View>
   );
 }

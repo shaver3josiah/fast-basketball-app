@@ -1,7 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -18,7 +16,7 @@ import {
   totalMinutes,
 } from '../../src/data';
 import type { WorkoutBlock, WorkoutKind, WorkoutTemplate } from '../../src/types';
-import { Body, Button, Card, Empty, Eyebrow, GhostButton, Screen, Segmented, Stepper, TypeChip } from '../../src/ui';
+import { Body, Button, Card, Empty, Eyebrow, GhostButton, KeyboardPad, Screen, Segmented, Stepper, TypeChip } from '../../src/ui';
 import { SESSION_TYPES, color, radius, semantic, type, type SessionType } from '../../src/theme';
 
 /**
@@ -45,7 +43,7 @@ export default function Builder() {
   if (role !== 'coach') return <Redirect href="/(tabs)" />;
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardPad header>
     <Screen>
       {draft ? (
         <Editor
@@ -83,7 +81,7 @@ export default function Builder() {
         </>
       )}
     </Screen>
-    </KeyboardAvoidingView>
+    </KeyboardPad>
   );
 }
 
