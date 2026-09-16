@@ -17,7 +17,7 @@ import {
   totalMinutes,
 } from '../../src/data';
 import type { WorkoutBlock, WorkoutKind, WorkoutTemplate } from '../../src/types';
-import { Body, Button, Card, Empty, Eyebrow, GhostButton, KeyboardPad, Screen, Segmented, Stepper, TypeChip } from '../../src/ui';
+import { Body, Button, Card, Empty, Eyebrow, GhostButton, Screen, Segmented, Stepper, TypeChip } from '../../src/ui';
 import { SESSION_TYPES, color, radius, semantic, type, typesOf, type SessionType } from '../../src/theme';
 
 /** What a new block starts on. Blake writes far more "ten makes from the elbow" than
@@ -54,7 +54,6 @@ export default function Builder() {
   if (role !== 'coach') return <Redirect href="/(tabs)" />;
 
   return (
-    <KeyboardPad header>
     <Screen>
       {draft ? (
         <Editor
@@ -92,7 +91,6 @@ export default function Builder() {
         </>
       )}
     </Screen>
-    </KeyboardPad>
   );
 }
 

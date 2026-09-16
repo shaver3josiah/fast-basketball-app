@@ -1,8 +1,6 @@
 import React from 'react';
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -12,7 +10,10 @@ import {
   type ViewStyle,
 } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import {
+  KeyboardAvoidingView,
+  KeyboardAwareScrollView,
+} from 'react-native-keyboard-controller';
 import {
   SESSION_TYPES,
   color,
@@ -25,7 +26,19 @@ import {
 } from './theme';
 import type { Role } from './types';
 
-/** Page scaffold: court-black ground, consistent gutters. */
+/**
+ * Page scaffold: court-black ground, consistent gutters.
+ *
+ * The scroller is KeyboardAwareScrollView rather than a plain ScrollView, so a field
+ * near the bottom of a long form is scrolled INTO VIEW when it takes focus. Padding
+ * alone cannot do that: it makes room under the keyboard but never moves the form, so
+ * the last field on a page stays exactly where it was, underneath it.
+ *
+ * `bottomOffset` is the gap left between the focused field and the top of the keyboard.
+ * Without it the field lands flush against the keyboard and reads as clipped.
+ *
+ * Harmless on the screens here that hold no input at all: it only reacts to focus.
+ */
 export function Screen({
   children,
   scroll = true,
@@ -37,62 +50,74 @@ export function Screen({
 }) {
   if (!scroll) return <View style={[s.page, s.pad, contentStyle]}>{children}</View>;
   return (
-    <ScrollView style={s.page} contentContainerStyle={[s.pad, contentStyle]}>
+    <KeyboardAwareScrollView
+      style={s.page}
+      contentContainerStyle={[s.pad, contentStyle]}
+      bottomOffset={24}
+      keyboardShouldPersistTaps="handled"
+    >
       {children}
-    </ScrollView>
+    </KeyboardAwareScrollView>
   );
 }
 
 /**
- * The keyboard wrapper every text-entry screen goes through.
+ * The keyboard wrapper for a screen with a FIXED bottom bar over a list, which in this
+ * app means the message thread and its composer. A screen that is just a form wants
+ * `Screen` instead: it scrolls the focused field into view, which padding alone cannot.
  *
- * Two things here are load-bearing and were each a real bug before this component
- * existed, on five screens at once:
+ * This is react-native-keyboard-controller's KeyboardAvoidingView, NOT the one in
+ * react-native, and the swap is the whole fix. From Android 15 (target SDK 35) edge to
+ * edge is forced and the window no longer resizes under the keyboard, so React Native's
+ * built-in component has nothing left to measure and simply stops working. That is
+ * facebook/react-native#49759, it is still open, and it is why the first attempt here
+ * (`behavior="padding"` plus a hand-computed header offset) looked right in the diff and
+ * did nothing on a real phone. Expo's own keyboard guide points at this library for
+ * anything beyond a prototype.
  *
- * 1. `behavior="padding"` on BOTH platforms. Expo's own keyboard guide still says to
- *    pass `undefined` on Android, which relies on the WINDOW RESIZING under the
- *    keyboard. This app draws edge to edge, so the window does not resize and the
- *    field being typed into stays underneath the keyboard. On a build where the
- *    window did resize, "padding" computes an overlap of zero and adds nothing, so
- *    it is the safe answer in both directions.
- *
- * 2. `header` for a screen sitting under a native navigation header.
- *    KeyboardAvoidingView measures its own frame with onLayout, which is relative to
- *    its PARENT — the scene below the header — not to the window. So on a header
- *    screen it under-pads by exactly the header's height and the keyboard still
- *    covers the last field. Passing the header height back as the offset cancels it.
- *    A tab bar underneath needs no term of its own: it shortens the measured frame
- *    and the real distance to the bottom by the same amount.
- *
- * Android keeps offset 0 because its keyboard frame is already reported in window
- * coordinates. That asymmetry is not an oversight; it is what app/thread/[id].tsx
- * shipped and was verified with.
+ * `automaticOffset` is the other half. The library measures where the view actually sits
+ * on screen, including the navigation header, so there is no header height to guess at
+ * and no platform branch. The 44px constant this component used to carry is gone.
  */
 export function KeyboardPad({
   children,
-  header = false,
   style,
 }: {
   children: React.ReactNode;
-  /** True when the screen renders under a native header (anything with a `title`). */
-  header?: boolean;
   style?: StyleProp<ViewStyle>;
 }) {
-  const insets = useSafeAreaInsets();
   return (
-    <KeyboardAvoidingView
-      style={style ?? { flex: 1 }}
-      behavior="padding"
-      keyboardVerticalOffset={header && Platform.OS === 'ios' ? insets.top + HEADER_H : 0}
-    >
+    <KeyboardAvoidingView style={style ?? { flex: 1 }} behavior="padding" automaticOffset>
       {children}
     </KeyboardAvoidingView>
   );
 }
 
-/** Standard iOS navigation header height. Not a guess: the value app/thread/[id].tsx
- *  was shipped and verified with. */
-const HEADER_H = 44;
+/**
+ * The scroller for a screen that is a form and brings its own styles, where `Screen`'s
+ * fixed gutters do not fit. Same component `Screen` uses underneath, so the gap left
+ * above the keyboard is decided in one place rather than drifting across five files.
+ */
+export function KeyboardForm({
+  children,
+  style,
+  contentContainerStyle,
+}: {
+  children: React.ReactNode;
+  style?: StyleProp<ViewStyle>;
+  contentContainerStyle?: StyleProp<ViewStyle>;
+}) {
+  return (
+    <KeyboardAwareScrollView
+      style={style}
+      contentContainerStyle={contentContainerStyle}
+      bottomOffset={24}
+      keyboardShouldPersistTaps="handled"
+    >
+      {children}
+    </KeyboardAwareScrollView>
+  );
+}
 
 export const Eyebrow = ({ children, style }: { children: React.ReactNode; style?: StyleProp<ViewStyle> }) => (
   <View style={[{ marginTop: 18, marginBottom: 8 }, style]}>

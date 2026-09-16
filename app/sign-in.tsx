@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import {
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -13,7 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSession } from '../src/session';
 import { backend, isConfigured } from '../src/firebase';
 import { Logo } from '../src/Logo';
-import { Button, KeyboardPad } from '../src/ui';
+import { Button, KeyboardForm } from '../src/ui';
 import { color, radius, semantic, type } from '../src/theme';
 
 export default function SignIn() {
@@ -68,11 +67,10 @@ export default function SignIn() {
   }
 
   return (
-    <KeyboardPad style={s.page}>
-      <ScrollView
-        contentContainerStyle={[s.inner, { paddingTop: insets.top + 48, paddingBottom: insets.bottom + 24 }]}
-        keyboardShouldPersistTaps="handled"
-      >
+    <KeyboardForm
+      style={s.page}
+      contentContainerStyle={[s.inner, { paddingTop: insets.top + 48, paddingBottom: insets.bottom + 24 }]}
+    >
         {/* The real lockup, and the site's own intro build. What was here was a
             lightning-bolt emoji over FAST and BASKETBALL set in type, and the design
             system forbids setting the wordmark in type in as many words. */}
@@ -166,8 +164,7 @@ export default function SignIn() {
         <Text style={s.foot}>
           Trouble getting in? Text Coach Kingsley at (503) 686-8371.
         </Text>
-      </ScrollView>
-    </KeyboardPad>
+    </KeyboardForm>
   );
 }
 

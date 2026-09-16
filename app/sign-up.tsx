@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { BrandIcon } from '../src/Logo';
 import {
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -12,7 +11,7 @@ import { Link, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createUserWithEmailAndPassword, sendEmailVerification, signOut } from 'firebase/auth';
 import { auth } from '../src/firebase';
-import { Button, KeyboardPad } from '../src/ui';
+import { Button, KeyboardForm } from '../src/ui';
 import { color, radius, semantic, type } from '../src/theme';
 
 /**
@@ -88,14 +87,13 @@ export default function SignUp() {
   }
 
   return (
-    <KeyboardPad style={s.page}>
-      <ScrollView
-        contentContainerStyle={[
-          s.inner,
-          { paddingTop: insets.top + 44, paddingBottom: insets.bottom + 24 },
-        ]}
-        keyboardShouldPersistTaps="handled"
-      >
+    <KeyboardForm
+      style={s.page}
+      contentContainerStyle={[
+        s.inner,
+        { paddingTop: insets.top + 44, paddingBottom: insets.bottom + 24 },
+      ]}
+    >
         <BrandIcon size={46} />
         <Text style={s.h1}>Create your account</Text>
         <Text style={s.lede}>
@@ -152,8 +150,7 @@ export default function SignUp() {
             <Text style={s.link}>Already have an account? Sign in</Text>
           </Pressable>
         </Link>
-      </ScrollView>
-    </KeyboardPad>
+    </KeyboardForm>
   );
 }
 

@@ -4,7 +4,7 @@ import { Redirect, Stack, useRouter } from 'expo-router';
 import { useSession } from '../src/session';
 import { createThreadsFor, hasConsent, inviteAthlete, subscribeThreads } from '../src/data';
 import type { Athlete, Thread } from '../src/types';
-import { Banner, Body, Button, Card, CardTitle, Eyebrow, GhostButton, KeyboardPad, Screen, Tag } from '../src/ui';
+import { Banner, Body, Button, Card, CardTitle, Eyebrow, GhostButton, Screen, Tag } from '../src/ui';
 import { color, radius, semantic, type } from '../src/theme';
 
 /**
@@ -34,7 +34,6 @@ export default function Roster() {
   const athletes = Object.values(athletesById);
 
   return (
-    <KeyboardPad header>
     <Screen>
       <Stack.Screen options={{ title: 'Roster' }} />
 
@@ -60,7 +59,6 @@ export default function Roster() {
       <Eyebrow style={{ marginTop: 22 }}>Invite a family</Eyebrow>
       <InviteForm />
     </Screen>
-    </KeyboardPad>
   );
 }
 

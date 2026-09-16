@@ -26,7 +26,7 @@ import {
   totalMinutes,
 } from '../src/data';
 import type { SessionEvent, WorkoutBlock, WorkoutKind, WorkoutTemplate } from '../src/types';
-import { Banner, Body, Button, Card, CardTitle, GhostButton, KeyboardPad, Segmented, Stepper } from '../src/ui';
+import { Banner, Body, Button, Card, CardTitle, GhostButton, KeyboardForm, Segmented, Stepper } from '../src/ui';
 import { SESSION_TYPES, color, radius, semantic, type, typesOf, type SessionType } from '../src/theme';
 
 const HOME_GYM = 'Salvation Army Fort Lauderdale Corps gym';
@@ -199,8 +199,7 @@ export default function Schedule() {
   }
 
   return (
-    <KeyboardPad header style={s.page}>
-    <ScrollView style={s.page} contentContainerStyle={s.pad} keyboardShouldPersistTaps="handled">
+    <KeyboardForm style={s.page} contentContainerStyle={s.pad}>
       <Stack.Screen options={{ title: editing ? 'Edit session' : 'Add to the calendar' }} />
 
       {/* --- who ------------------------------------------------------------ */}
@@ -504,8 +503,7 @@ export default function Schedule() {
       />
 
       {editing && <EditActions event={editing} events={events} onDone={() => router.back()} />}
-    </ScrollView>
-    </KeyboardPad>
+    </KeyboardForm>
   );
 }
 

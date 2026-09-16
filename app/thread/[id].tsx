@@ -104,10 +104,9 @@ export default function ThreadScreen() {
               : undefined,
         }}
       />
-      {/* `header` because this screen renders under the "Messages" navigation header.
-          The reasoning that used to sit here now lives on KeyboardPad in src/ui.tsx,
-          which is where the other five text-entry screens get it from too. */}
-      <KeyboardPad header>
+      {/* A fixed composer over a list, so this one lifts rather than scrolls. The form
+          screens use KeyboardForm instead. Both live in src/ui.tsx. */}
+      <KeyboardPad>
         <FlatList
           ref={listRef}
           data={messages}
