@@ -29,7 +29,14 @@ const SHIPPED = {
 export function render() {
   const files = readdirSync(SRC).filter((f) => f.endsWith('.html') && SHIPPED[f]);
   const entries = files.map((f) => {
-    const html = readFileSync(join(SRC, f), 'utf8');
+    // Normalise to LF before anything else looks at it. Git stores these .html files
+    // with LF and hands a Windows checkout CRLF, and JSON.stringify below turns a real
+    // CRLF into the four characters \r\n INSIDE the string literal. That is escape text,
+    // not a line break, so the check's own line-ending normalisation cannot reach it:
+    // regenerate on Windows and the file matches on Windows and fails on CI, which is
+    // exactly what happened after the Shot Tracker rename. Read it the same way on every
+    // machine and the generated file is identical everywhere.
+    const html = readFileSync(join(SRC, f), 'utf8').replace(/\r\n/g, '\n');
     const meta = SHIPPED[f];
     return (
       `  {\n` +
