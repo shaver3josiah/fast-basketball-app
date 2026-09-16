@@ -19,7 +19,7 @@ import { useSession } from '../../src/session';
 import { deleteEvent, moveEvent, pasteEvents, subscribeEvents } from '../../src/data';
 import type { SessionEvent } from '../../src/types';
 import { Empty, Eyebrow, GhostButton } from '../../src/ui';
-import { SESSION_TYPES, color, radius, semantic, type } from '../../src/theme';
+import { SESSION_TYPES, color, radius, semantic, type, typesOf } from '../../src/theme';
 
 const DOW = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
 const sameDay = (a: Date, b: Date) =>
@@ -409,7 +409,12 @@ function DayCell({
 }) {
   const label = events.length
     ? `${day}, ${events.length} ${events.length === 1 ? 'session' : 'sessions'}: ${events
-        .map((e) => `${SESSION_TYPES[e.type]?.label ?? e.type}, ${e.name}`)
+        .map(
+          (e) =>
+            `${typesOf(e)
+              .map((k) => SESSION_TYPES[k]?.label ?? k)
+              .join(' and ')}, ${e.name}`
+        )
         .join('. ')}`
     : `${day}, nothing scheduled`;
 
@@ -529,11 +534,16 @@ function SessionCard({
   onBuzz: (kind: 'pick' | 'move' | 'drop') => void;
   onDrop: (day: number) => void;
 }) {
-  const t = SESSION_TYPES[event.type] ?? {
+  // A session can cover several things at once. The first is the primary one, which
+  // is what the badge draws and what the grid tints the day with; the rest are spelled
+  // out in the row so a coach sees at a glance that Tuesday is handling AND shooting.
+  const cats = typesOf(event);
+  const t = SESSION_TYPES[cats[0]] ?? {
     label: event.type,
     icon: 'ellipse-outline' as const,
     color: color.slate,
   };
+  const extra = cats.slice(1).map((k) => SESSION_TYPES[k]).filter(Boolean);
   const d = event.startsAt.toDate();
 
   const tx = useSharedValue(0);
@@ -635,7 +645,7 @@ function SessionCard({
 
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={`${t.label}, ${event.name}, ${event.timeLabel || d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}${event.canceled ? ', canceled' : ''}`}
+          accessibilityLabel={`${cats.map((k) => SESSION_TYPES[k]?.label ?? k).join(' and ')}, ${event.name}, ${event.timeLabel || d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}${event.canceled ? ', canceled' : ''}`}
           accessibilityHint={
             draggable ? 'Opens the session. Press and hold to move it to another day.' : undefined
           }
@@ -662,6 +672,12 @@ function SessionCard({
                   </Text>
                 </View>
               ) : null}
+              {extra.map((x) => (
+                <View key={x.label} style={s.evType}>
+                  <Ionicons name={x.icon} size={11} color={x.color} />
+                  <Text style={[s.evTypeText, { color: x.color }]}>{x.label}</Text>
+                </View>
+              ))}
             </View>
 
             <Text style={[s.evName, event.canceled && s.struck]}>{event.name}</Text>
@@ -876,6 +892,8 @@ const s = StyleSheet.create({
   evDur: { fontSize: 11.5, fontWeight: '700', color: color.textDim },
   coached: { flexDirection: 'row', alignItems: 'center', gap: 3 },
   coachedText: { fontSize: 10.5, fontWeight: '800', letterSpacing: 0.6, color: color.miamiTeal },
+  evType: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  evTypeText: { fontSize: 10.5, fontWeight: '800', letterSpacing: 0.6 },
   evName: { fontSize: 15, fontWeight: '600', color: color.chalk, marginTop: 3 },
   evMeta: { ...type.meta, marginTop: 2 },
   evBlocks: { fontSize: 12, color: color.textDim, marginTop: 5 },

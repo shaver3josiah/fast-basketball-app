@@ -22,11 +22,12 @@ import {
   subscribeTemplates,
   updateEvent,
   applyToSeries,
+  blockAmount,
   totalMinutes,
 } from '../src/data';
 import type { SessionEvent, WorkoutBlock, WorkoutKind, WorkoutTemplate } from '../src/types';
 import { Banner, Body, Button, Card, CardTitle, GhostButton, KeyboardPad, Segmented, Stepper } from '../src/ui';
-import { SESSION_TYPES, color, radius, semantic, type, type SessionType } from '../src/theme';
+import { SESSION_TYPES, color, radius, semantic, type, typesOf, type SessionType } from '../src/theme';
 
 const HOME_GYM = 'Salvation Army Fort Lauderdale Corps gym';
 const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -72,7 +73,9 @@ export default function Schedule() {
   const [kind, setKind] = useState<WorkoutKind>(
     params.kind === 'coached' ? 'coached' : 'individual'
   );
-  const [sessionType, setSessionType] = useState<SessionType>('skills');
+  // Never empty. The first one is written as the document's primary `type`, which is
+  // what the calendar tints a day with and what the rules validate.
+  const [sessionTypes, setSessionTypes] = useState<SessionType[]>(['skills']);
   const [name, setName] = useState('');
   const [location, setLocation] = useState(HOME_GYM);
   const [blocks, setBlocks] = useState<WorkoutBlock[]>([]);
@@ -103,7 +106,7 @@ export default function Schedule() {
     if (loaded || !editing) return;
     setAthleteIds([editing.athleteId]);
     setKind(editing.kind ?? 'individual');
-    setSessionType(editing.type);
+    setSessionTypes(typesOf(editing));
     setName(editing.name);
     setLocation(editing.location);
     setBlocks(editing.blocks ?? []);
@@ -116,10 +119,16 @@ export default function Schedule() {
 
   function applyTemplate(t: WorkoutTemplate) {
     setTemplateId(t.id);
-    setSessionType(t.type);
+    setSessionTypes(typesOf(t));
     setKind(t.kind);
     setBlocks(t.blocks.map((b) => ({ ...b })));
-    setDuration(totalMinutes(t.blocks) || 60);
+    // totalMinutes counts timed blocks only, because nothing here knows how long 20 reps
+    // takes. So for a workout carrying any reps block that sum is a floor, not a length,
+    // and using it directly would book a session of three reps blocks and one five minute
+    // block as a five minute session. Treat it as the floor it is; Blake edits this anyway.
+    const timed = totalMinutes(t.blocks);
+    const hasReps = t.blocks.some((b) => b.measure === 'reps');
+    setDuration(hasReps ? Math.max(timed, 60) : timed || 60);
     if (!name.trim()) setName(t.name);
   }
 
@@ -152,7 +161,8 @@ export default function Schedule() {
     try {
       if (editing) {
         await editEvent(editing.id, when, {
-          type: sessionType,
+          type: sessionTypes[0],
+          types: sessionTypes,
           name: name.trim(),
           location: location.trim(),
           kind,
@@ -163,7 +173,8 @@ export default function Schedule() {
       } else {
         await scheduleWorkout({
           athletes: athleteIds.map((id) => athletesById[id]).filter(Boolean),
-          type: sessionType,
+          type: sessionTypes[0],
+          types: sessionTypes,
           name,
           location,
           startsAt: when,
@@ -262,11 +273,24 @@ export default function Schedule() {
                   pressed && { backgroundColor: color.inkHover },
                 ]}
               >
-                <Ionicons name={SESSION_TYPES[t.type].icon} size={14} color={SESSION_TYPES[t.type].color} />
+                {typesOf(t).map((k) => (
+                  <Ionicons
+                    key={k}
+                    name={SESSION_TYPES[k].icon}
+                    size={14}
+                    color={SESSION_TYPES[k].color}
+                  />
+                ))}
                 <Text style={s.tplName} numberOfLines={1}>
                   {t.name}
                 </Text>
-                <Text style={s.tplMin}>{t.totalMinutes} min</Text>
+                {/* A workout of nothing but reps totals zero minutes, so the block
+                    count stands in rather than a misleading "0 min". */}
+                <Text style={s.tplMin}>
+                  {t.totalMinutes > 0
+                    ? `${t.totalMinutes} min`
+                    : `${t.blocks.length} ${t.blocks.length === 1 ? 'block' : 'blocks'}`}
+                </Text>
               </Pressable>
             ))}
           </ScrollView>
@@ -285,25 +309,41 @@ export default function Schedule() {
       />
 
       <Text style={s.label}>Type</Text>
+      <Text style={s.typeHint}>Pick as many as the session covers.</Text>
       <View style={s.typeRow}>
         {(Object.keys(SESSION_TYPES) as SessionType[]).map((k) => {
           const t = SESSION_TYPES[k];
-          const on = sessionType === k;
+          const on = sessionTypes.includes(k);
+          const last = on && sessionTypes.length === 1;
           return (
             <Pressable
               key={k}
-              accessibilityRole="radio"
-              accessibilityState={{ selected: on }}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: on, disabled: last }}
               accessibilityLabel={t.label}
-              onPress={() => setSessionType(k)}
+              accessibilityHint={last ? 'A session keeps at least one type' : undefined}
+              onPress={() =>
+                setSessionTypes((cur) => {
+                  // The last one standing stays on: a session with no category has no
+                  // primary `type` to write, and the calendar has nothing to tint with.
+                  if (cur.includes(k)) return cur.length === 1 ? cur : cur.filter((x) => x !== k);
+                  // Appended, so the first pick stays the primary one.
+                  return [...cur, k];
+                })
+              }
               style={({ pressed }) => [
                 s.typeBtn,
                 on && { borderColor: t.color, backgroundColor: color.inkHover },
                 pressed && !on && { backgroundColor: color.inkHover },
               ]}
             >
+              {/* Four of the six categories are greys, so the tick carries the on state
+                  rather than the colour, and the category's own icon stays put. */}
+              {on ? (
+                <Ionicons name="checkmark-circle" size={13} color={t.color} style={s.typeTick} />
+              ) : null}
               <Ionicons name={t.icon} size={17} color={on ? t.color : color.textDim} />
-              <Text style={[s.typeLabel, on && { color: color.chalk }]} numberOfLines={1}>
+              <Text style={[s.typeLabel, on && { color: color.chalk }]} numberOfLines={2}>
                 {t.label}
               </Text>
             </Pressable>
@@ -427,7 +467,7 @@ export default function Schedule() {
               <View key={b.id} style={s.blockRow}>
                 <Text style={s.blockNum}>{i + 1}</Text>
                 <Text style={s.blockName}>{b.name}</Text>
-                <Text style={s.blockMin}>{b.minutes} min</Text>
+                <Text style={s.blockMin}>{blockAmount(b)}</Text>
               </View>
             ))}
             <Text style={s.hint}>
@@ -685,19 +725,24 @@ const s = StyleSheet.create({
   tplName: { fontSize: 13.5, fontWeight: '700', color: color.chalk, flexShrink: 1 },
   tplMin: { fontSize: 11.5, color: color.textDim },
 
-  typeRow: { flexDirection: 'row', gap: 6 },
+  typeHint: { ...type.meta, marginBottom: 8, marginTop: -2 },
+  // Six categories will not sit across a phone in one row, so they wrap three at a
+  // time. flexBasis rather than a width, so the last row still fills the space.
+  typeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   typeBtn: {
-    flex: 1,
+    flexGrow: 1,
+    flexBasis: '30%',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 4,
-    minHeight: 60,
+    minHeight: 64,
     paddingHorizontal: 4,
     borderRadius: radius.card,
     borderWidth: 1,
     borderColor: semantic.borderStrong,
     backgroundColor: semantic.surfaceInput,
   },
+  typeTick: { position: 'absolute', top: 5, right: 5 },
   typeLabel: { fontSize: 10.5, fontWeight: '700', color: color.textDim, textAlign: 'center' },
 
   dayRow: {

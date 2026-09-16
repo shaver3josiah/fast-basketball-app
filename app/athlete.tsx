@@ -6,7 +6,7 @@ import { useSession } from '../src/session';
 import { hasConsent, subscribeEvents } from '../src/data';
 import type { SessionEvent } from '../src/types';
 import { Avatar, Body, Card, CardTitle, Empty, GhostButton, Tag } from '../src/ui';
-import { SESSION_TYPES, color, radius, semantic, type } from '../src/theme';
+import { SESSION_TYPES, color, radius, semantic, type, typesOf } from '../src/theme';
 
 /**
  * One athlete, from the coach's side: who they are, what is coming up, and the two
@@ -99,11 +99,16 @@ export default function AthleteScreen() {
           <Empty icon="calendar-outline">Nothing scheduled yet.</Empty>
         ) : (
           upcoming.map((e) => {
-            const t = SESSION_TYPES[e.type] ?? {
+            // A session can cover several things at once. The first is the primary one
+            // and is what the icon draws; all of them are named in the meta line, so
+            // this screen agrees with the calendar instead of showing only the first.
+            const cats = typesOf(e);
+            const t = SESSION_TYPES[cats[0]] ?? {
               label: e.type,
               icon: 'ellipse-outline' as const,
               color: color.slate,
             };
+            const catLabel = cats.map((k) => SESSION_TYPES[k]?.label ?? k).join(' + ');
             const d = e.startsAt.toDate();
             return (
               <Pressable
@@ -119,6 +124,7 @@ export default function AthleteScreen() {
                     {e.name}
                   </Text>
                   <Text style={s.rowMeta}>
+                    {catLabel ? `${catLabel} · ` : ''}
                     {d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}
                     {e.timeLabel ? ` · ${e.timeLabel}` : ''}
                     {e.kind === 'coached' ? ' · Coached' : ''}

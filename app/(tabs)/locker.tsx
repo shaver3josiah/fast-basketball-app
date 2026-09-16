@@ -58,8 +58,17 @@ export default function Locker() {
   return (
     <Screen>
       {role === 'coach' && (
-        <Banner tone="ok" title="You publish here">
-          Upload an HTML workflow and it renders inside the app. Nobody downloads anything.
+        // This used to promise an upload button. There is none: a worksheet arrives
+        // either baked into a release by `npm run worksheets` or as a document in the
+        // `workflows` collection, and a published document with the same id replaces
+        // the built-in copy. Telling the coach he can upload one sent him looking for
+        // a control that was never built. The repo path lives in this comment and not
+        // in the copy below, because Blake reads that banner on a phone and cannot open
+        // docs/WORKSHEETS.md from it.
+        <Banner tone="ok" title="How a worksheet gets here">
+          There is no upload button. Worksheets are HTML files your developer adds to the
+          app, so send a finished one to him. Ask him for the worksheet guide as well: it
+          has prompts you can paste into Gemini to write a new one.
         </Banner>
       )}
       {role === 'player' && (
@@ -118,9 +127,13 @@ export default function Locker() {
                     <Text style={s.logName} numberOfLines={1}>
                       {w.name}
                     </Text>
+                    {/* A reps-only workout runs no clock, so it logs zero minutes and
+                        "0 min" would read as if nothing happened. The blocks it ticked
+                        off are the honest measure of that session. */}
                     <Text style={s.logMeta}>
-                      {w.blocksTotal ? `${w.blocksDone}/${w.blocksTotal} blocks · ` : ''}
-                      {w.minutes} min{when(w.completedAt) ? ` · ${when(w.completedAt)}` : ''}
+                      {w.blocksTotal ? `${w.blocksDone}/${w.blocksTotal} blocks` : ''}
+                      {w.minutes > 0 ? `${w.blocksTotal ? ' · ' : ''}${w.minutes} min` : ''}
+                      {when(w.completedAt) ? ` · ${when(w.completedAt)}` : ''}
                     </Text>
                   </View>
                 ))}

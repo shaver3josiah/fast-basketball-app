@@ -258,7 +258,12 @@ const BODIES = {
       field('notes', 'Where did the misses cluster?', 'textarea'),
     script: TOTALS_JS,
   },
-  w7: {
+  // The key is the seeded document id, and it deliberately matches the id
+  // scripts/build-worksheets.mjs gives the same file inside the binary.
+  // subscribeWorkflows drops a built-in whose id is already published, so seeding
+  // REPLACES the shipped copy. Under any other key the demo Locker listed Shot
+  // Tracker twice, once from the binary and once from Firestore.
+  'builtin-night-shots': {
     // A shooting log the athlete fills in AT the hoop, one tap per real rep. The court
     // on it only animates the shot that was just logged, so nothing in it can be earned
     // on the couch.

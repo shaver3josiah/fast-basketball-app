@@ -10,6 +10,7 @@ import { Redirect, useRouter } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSession } from '../../src/session';
 import {
+  blockAmount,
   deleteTemplate,
   saveTemplate,
   subscribeTemplates,
@@ -17,7 +18,17 @@ import {
 } from '../../src/data';
 import type { WorkoutBlock, WorkoutKind, WorkoutTemplate } from '../../src/types';
 import { Body, Button, Card, Empty, Eyebrow, GhostButton, KeyboardPad, Screen, Segmented, Stepper, TypeChip } from '../../src/ui';
-import { SESSION_TYPES, color, radius, semantic, type, type SessionType } from '../../src/theme';
+import { SESSION_TYPES, color, radius, semantic, type, typesOf, type SessionType } from '../../src/theme';
+
+/** What a new block starts on. Blake writes far more "ten makes from the elbow" than
+ *  "four minutes of", so reps is the default and time is the deliberate choice. */
+const NEW_BLOCK: Pick<WorkoutBlock, 'minutes' | 'reps' | 'measure'> = {
+  measure: 'reps',
+  reps: 10,
+  // Carried even on a reps block so flipping the control to Time has a value waiting
+  // rather than dropping the stepper to zero.
+  minutes: 15,
+};
 
 /**
  * Blake's workout library. He builds a session once and schedules it all season.
@@ -109,9 +120,14 @@ function TemplateCard({
         <View style={{ flex: 1 }}>
           <Text style={s.tplName}>{template.name}</Text>
           <View style={s.tplMetaRow}>
-            <TypeChip type={template.type} compact />
+            {typesOf(template).map((k) => (
+              <TypeChip key={k} type={k} compact />
+            ))}
             <Text style={s.tplMeta}>
-              {template.kind === 'coached' ? 'Coached' : 'On their own'} · {template.totalMinutes} min
+              {template.kind === 'coached' ? 'Coached' : 'On their own'}
+              {/* A workout of nothing but reps totals zero minutes, and "0 min" reads
+                  as a broken row. The block count is the honest measure of it. */}
+              {template.totalMinutes > 0 ? ` · ${template.totalMinutes} min` : ''}
               {' · '}
               {template.blocks.length} {template.blocks.length === 1 ? 'block' : 'blocks'}
             </Text>
@@ -124,7 +140,7 @@ function TemplateCard({
         <View style={s.tplBlocks}>
           {template.blocks.slice(0, 4).map((b) => (
             <Text key={b.id} style={s.tplBlock} numberOfLines={1}>
-              {b.minutes} min · {b.name}
+              {blockAmount(b)} · {b.name}
             </Text>
           ))}
           {template.blocks.length > 4 && (
@@ -146,7 +162,9 @@ function TemplateCard({
 interface Draft {
   id: string;
   name: string;
-  type: SessionType;
+  /** Every category picked, in the order of SESSION_TYPES. Never empty: the first one
+   *  is written as the document's primary `type`. */
+  types: SessionType[];
   kind: WorkoutKind;
   blocks: WorkoutBlock[];
 }
@@ -154,15 +172,15 @@ interface Draft {
 const blankDraft = (): Draft => ({
   id: '',
   name: '',
-  type: 'skills',
+  types: ['skills'],
   kind: 'individual',
-  blocks: [{ id: rid(), name: '', minutes: 15 }],
+  blocks: [{ id: rid(), name: '', ...NEW_BLOCK }],
 });
 
 const toDraft = (t: WorkoutTemplate): Draft => ({
   id: t.id,
   name: t.name,
-  type: t.type,
+  types: typesOf(t),
   kind: t.kind,
   blocks: t.blocks.map((b) => ({ ...b })),
 });
@@ -186,6 +204,20 @@ function Editor({
   // The block that was just added, so it can take focus without stealing it from a
   // row the coach is already typing in.
   const focusId = useRef<string | null>(null);
+  const inputs = useRef<Record<string, TextInput | null>>({});
+
+  // Focus moves to the row that was just added, once that row exists. autoFocus is
+  // not enough: pressing return leaves the keyboard up on the row that spawned this
+  // one, and the new field has to take focus back explicitly or the coach types the
+  // next line into the previous block.
+  useEffect(() => {
+    const id = focusId.current;
+    if (!id) return;
+    const el = inputs.current[id];
+    if (!el) return;
+    focusId.current = null;
+    el.focus();
+  }, [draft.blocks]);
 
   const total = useMemo(() => totalMinutes(draft.blocks), [draft.blocks]);
   const named = draft.blocks.filter((b) => b.name.trim());
@@ -204,10 +236,41 @@ function Editor({
     onChange({ ...draft, blocks: next });
   }
 
-  function addBlock() {
-    const b = { id: rid(), name: '', minutes: 15 };
+  /** `after` is a block id to insert behind, or null to append. */
+  function addBlock(after: string | null = null) {
+    const b: WorkoutBlock = { id: rid(), name: '', ...NEW_BLOCK };
     focusId.current = b.id;
-    onChange({ ...draft, blocks: [...draft.blocks, b] });
+    const next = [...draft.blocks];
+    const at = after ? next.findIndex((x) => x.id === after) : -1;
+    next.splice(at < 0 ? next.length : at + 1, 0, b);
+    onChange({ ...draft, blocks: next });
+  }
+
+  /**
+   * Return in a block's name adds the next one, the way a list does. An empty row
+   * adds nothing: holding return would otherwise stack blank blocks the coach then
+   * has to delete one at a time.
+   */
+  function submitBlock(id: string) {
+    if (!draft.blocks.find((b) => b.id === id)?.name.trim()) return;
+    addBlock(id);
+  }
+
+  /**
+   * A new pick goes on the END, so the first one stays first. The first one is saved
+   * as the document's primary `type`, which is what the calendar tints a day with, and
+   * reordering the list behind the coach's back would quietly repaint sessions he has
+   * already scheduled from this workout.
+   */
+  function toggleType(k: SessionType) {
+    const on = draft.types.includes(k);
+    // The last one standing cannot be turned off. A workout with no category has no
+    // primary type to write, and the calendar has nothing to tint the day with.
+    if (on && draft.types.length === 1) return;
+    onChange({
+      ...draft,
+      types: on ? draft.types.filter((x) => x !== k) : [...draft.types, k],
+    });
   }
 
   async function save() {
@@ -217,7 +280,10 @@ function Editor({
       await saveTemplate({
         id: draft.id,
         name: draft.name,
-        type: draft.type,
+        // The first category picked is the primary one the rules and the calendar
+        // read; `types` carries the rest.
+        type: draft.types[0],
+        types: draft.types,
         kind: draft.kind,
         // An empty row is someone who tapped Add and changed their mind. Dropping it
         // silently is kinder than an error about a field they never filled in.
@@ -269,25 +335,35 @@ function Editor({
       />
 
       <Text style={s.label}>Type</Text>
+      <Text style={s.typeHint}>Pick as many as the session covers.</Text>
       <View style={s.typeRow}>
         {(Object.keys(SESSION_TYPES) as SessionType[]).map((k) => {
           const t = SESSION_TYPES[k];
-          const on = draft.type === k;
+          const on = draft.types.includes(k);
+          const last = on && draft.types.length === 1;
           return (
             <Pressable
               key={k}
-              accessibilityRole="radio"
-              accessibilityState={{ selected: on }}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: on, disabled: last }}
               accessibilityLabel={t.label}
-              onPress={() => onChange({ ...draft, type: k })}
+              accessibilityHint={last ? 'A workout keeps at least one type' : undefined}
+              onPress={() => toggleType(k)}
               style={({ pressed }) => [
                 s.typeBtn,
                 on && { borderColor: t.color, backgroundColor: color.inkHover },
                 pressed && !on && { backgroundColor: color.inkHover },
               ]}
             >
+              {/* A tick as well as the border and the fill. Four of the six categories
+                  are greys now, so a colour change alone would not tell a colourblind
+                  coach which ones are on. It sits in the corner so the category's own
+                  icon, which is what names it, stays put. */}
+              {on ? (
+                <Ionicons name="checkmark-circle" size={13} color={t.color} style={s.typeTick} />
+              ) : null}
               <Ionicons name={t.icon} size={17} color={on ? t.color : color.textDim} />
-              <Text style={[s.typeLabel, on && { color: color.chalk }]} numberOfLines={1}>
+              <Text style={[s.typeLabel, on && { color: color.chalk }]} numberOfLines={2}>
                 {t.label}
               </Text>
             </Pressable>
@@ -308,7 +384,11 @@ function Editor({
 
       <View style={s.blocksHead}>
         <Text style={s.label}>Blocks</Text>
-        <Text style={s.total}>{total} min</Text>
+        <Text style={s.total}>
+          {total > 0
+            ? `${total} min`
+            : `${draft.blocks.length} ${draft.blocks.length === 1 ? 'block' : 'blocks'}`}
+        </Text>
       </View>
 
       {draft.blocks.map((b, i) => (
@@ -317,16 +397,20 @@ function Editor({
           block={b}
           index={i}
           count={draft.blocks.length}
-          autoFocus={focusId.current === b.id}
+          inputRef={(el) => {
+            inputs.current[b.id] = el;
+          }}
+          onSubmit={() => submitBlock(b.id)}
           onChange={(patch) => setBlock(b.id, patch)}
           onMove={(dir) => move(b.id, dir)}
-          onRemove={() =>
-            onChange({ ...draft, blocks: draft.blocks.filter((x) => x.id !== b.id) })
-          }
+          onRemove={() => {
+            delete inputs.current[b.id];
+            onChange({ ...draft, blocks: draft.blocks.filter((x) => x.id !== b.id) });
+          }}
         />
       ))}
 
-      <GhostButton label="Add a block" icon="add" onPress={addBlock} />
+      <GhostButton label="Add a block" icon="add" onPress={() => addBlock()} />
 
       {error ? (
         <Text style={s.error} accessibilityLiveRegion="polite">
@@ -374,7 +458,8 @@ function BlockRow({
   block,
   index,
   count,
-  autoFocus,
+  inputRef,
+  onSubmit,
   onChange,
   onMove,
   onRemove,
@@ -382,34 +467,74 @@ function BlockRow({
   block: WorkoutBlock;
   index: number;
   count: number;
-  autoFocus?: boolean;
+  inputRef: (el: TextInput | null) => void;
+  onSubmit: () => void;
   onChange: (patch: Partial<WorkoutBlock>) => void;
   onMove: (dir: -1 | 1) => void;
   onRemove: () => void;
 }) {
+  const reps = block.measure === 'reps';
   return (
     <View style={s.block}>
       <View style={s.blockTop}>
         <Text style={s.blockNum}>{index + 1}</Text>
         <TextInput
+          ref={inputRef}
           style={s.blockInput}
           value={block.name}
           onChangeText={(name) => onChange({ name })}
           placeholder="Two-ball pound dribbles"
           placeholderTextColor={color.textFaint}
           accessibilityLabel={`Block ${index + 1} name`}
-          autoFocus={autoFocus}
+          // Return adds the next block instead of dismissing the keyboard, so a
+          // workout is typed as one list. blurOnSubmit={false} is what keeps the
+          // keyboard up for the row this is about to create.
+          returnKeyType="next"
+          blurOnSubmit={false}
+          onSubmitEditing={onSubmit}
+        />
+      </View>
+
+      <View style={s.blockMeasure}>
+        <Segmented
+          label={`Block ${index + 1} measured in`}
+          value={reps ? 'reps' : 'time'}
+          onChange={(m) =>
+            onChange({
+              measure: m,
+              // Give the other stepper something to land on rather than zero, for a
+              // block that has never been measured that way.
+              ...(m === 'reps' && block.reps == null ? { reps: NEW_BLOCK.reps } : {}),
+              ...(m === 'time' && !block.minutes ? { minutes: NEW_BLOCK.minutes } : {}),
+            })
+          }
+          options={[
+            { value: 'reps', label: 'Reps', icon: 'repeat-outline' },
+            { value: 'time', label: 'Time', icon: 'time-outline' },
+          ]}
         />
       </View>
 
       <View style={s.blockBottom}>
-        <Stepper
-          label={`Block ${index + 1} minutes`}
-          value={block.minutes}
-          onChange={(minutes) => onChange({ minutes })}
-          min={5}
-          max={120}
-        />
+        {reps ? (
+          <Stepper
+            label={`Block ${index + 1} reps`}
+            value={block.reps ?? 0}
+            onChange={(r) => onChange({ reps: r })}
+            min={5}
+            max={200}
+            step={5}
+            suffix="reps"
+          />
+        ) : (
+          <Stepper
+            label={`Block ${index + 1} minutes`}
+            value={block.minutes}
+            onChange={(minutes) => onChange({ minutes })}
+            min={5}
+            max={120}
+          />
+        )}
         {/* Arrows rather than a drag handle. Reordering four rows is two taps here,
             and a drag target on a 40pt row fights the scroll view around it. The
             calendar earns a real drag; this does not. */}
@@ -508,19 +633,24 @@ const s = StyleSheet.create({
     paddingHorizontal: 14,
   },
 
-  typeRow: { flexDirection: 'row', gap: 6 },
+  typeHint: { ...type.meta, marginBottom: 8, marginTop: -2 },
+  // Six categories will not sit across a phone in one row, so they wrap three at a
+  // time. flexBasis rather than a width, so the last row still fills the space.
+  typeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   typeBtn: {
-    flex: 1,
+    flexGrow: 1,
+    flexBasis: '30%',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 4,
-    minHeight: 60,
+    minHeight: 64,
     paddingHorizontal: 4,
     borderRadius: radius.card,
     borderWidth: 1,
     borderColor: semantic.borderStrong,
     backgroundColor: semantic.surfaceInput,
   },
+  typeTick: { position: 'absolute', top: 5, right: 5 },
   typeLabel: { fontSize: 10.5, fontWeight: '700', color: color.textDim, textAlign: 'center' },
 
   blocksHead: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' },
@@ -549,6 +679,7 @@ const s = StyleSheet.create({
     minHeight: 44,
     paddingHorizontal: 0,
   },
+  blockMeasure: { marginTop: 8 },
   blockBottom: {
     flexDirection: 'row',
     alignItems: 'center',

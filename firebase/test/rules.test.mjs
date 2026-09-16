@@ -463,6 +463,34 @@ describe('a coached session is one shared document', () => {
     await assertSucceeds(getDoc(doc(as(PLAYER), 'events', 'solo')));
   });
 
+  test('a session carries every category it covers, and nothing else', async () => {
+    await seed();
+    const multi = (over) => ({
+      athleteId: ATHLETE,
+      type: 'handle',
+      name: 'Handling into finishing',
+      location: 'the gym',
+      startsAt: new Date(),
+      ...over,
+    });
+    // Blake works two things in one session, so `types` carries the set and `type`
+    // stays the primary one the calendar tints the day with.
+    await assertSucceeds(
+      setDoc(doc(as(COACH), 'events', 'm1'), multi({ types: ['handle', 'shoot'] }))
+    );
+    // A key the app does not draw would render as a blank chip on a family's calendar.
+    await assertFails(
+      setDoc(doc(as(COACH), 'events', 'm2'), multi({ types: ['handle', 'dunking'] }))
+    );
+    // Six categories exist, so anything longer is a duplicate or free storage.
+    await assertFails(
+      setDoc(
+        doc(as(COACH), 'events', 'm3'),
+        multi({ types: ['skills', 'shoot', 'handle', 'cond', 'team', 'rest', 'skills'] })
+      )
+    );
+  });
+
   test('eight athletes is the ceiling the rules unroll to', async () => {
     await seed();
     await seedSecondFamily();
@@ -889,6 +917,27 @@ describe('workout templates', () => {
       setDoc(doc(as(COACH), 'workoutTemplates', 'big'), {
         ...TPL,
         blocks: Array.from({ length: 61 }, (_, i) => ({ id: String(i), name: 'x', minutes: 5 })),
+      })
+    );
+  });
+
+  test('a template can cover several categories, but only real ones', async () => {
+    await seed();
+    await assertSucceeds(
+      setDoc(doc(as(COACH), 'workoutTemplates', 't3'), {
+        ...TPL,
+        types: ['skills', 'handle', 'shoot'],
+      })
+    );
+    // Same two bounds the events rule carries: no invented category, and no list
+    // longer than the six that exist.
+    await assertFails(
+      setDoc(doc(as(COACH), 'workoutTemplates', 't4'), { ...TPL, types: ['skills', 'dunking'] })
+    );
+    await assertFails(
+      setDoc(doc(as(COACH), 'workoutTemplates', 't5'), {
+        ...TPL,
+        types: ['skills', 'shoot', 'handle', 'cond', 'team', 'rest', 'skills'],
       })
     );
   });

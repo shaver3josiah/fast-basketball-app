@@ -1,17 +1,30 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSession, useNames } from '../../src/session';
 import { subscribeThreads, subscribeLastMessage } from '../../src/data';
 import type { Message, Thread } from '../../src/types';
-import { Avatar, Banner, Empty, Eyebrow, Screen, Tag } from '../../src/ui';
+import { Avatar, Banner, Button, Card, CardTitle, Empty, Eyebrow, GhostButton, Screen, Tag } from '../../src/ui';
 import { color, radius, semantic, type } from '../../src/theme';
 
+/**
+ * A chat cannot be conjured from this screen, so the button does not pretend it can.
+ * A thread only exists after the coach invites a family on the Roster, they sign up
+ * with that exact address, and he taps Open threads on their card. These are those
+ * three steps, in the order they actually happen.
+ */
+const STEPS = [
+  'Invite the family by email on the Roster. Use the address they really gave you.',
+  'They sign up with that address and confirm it. The app connects them to you.',
+  'Tap Open threads on their card. That is the new chat, with the parent on it.',
+];
+
 export default function Messages() {
-  const { user, role, consent, prefs } = useSession();
+  const { user, role, consent, prefs, athletesById } = useSession();
   const names = useNames();
   const router = useRouter();
   const [threads, setThreads] = useState<Thread[] | null>(null);
+  const [howTo, setHowTo] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -19,6 +32,16 @@ export default function Messages() {
   }, [user?.uid]);
 
   const locked = role === 'player' && !consent;
+  const isCoach = role === 'coach';
+
+  // Families who signed up but have no thread yet. `guardianUid` is the same gate the
+  // Roster puts on its own Open threads button: a thread needs a real account to point
+  // at, so an invite nobody has claimed is not something this button can finish.
+  const waiting = useMemo(() => {
+    if (!isCoach || threads === null) return [];
+    const threaded = new Set(threads.map((t) => t.athleteId));
+    return Object.values(athletesById).filter((a) => a.guardianUid && !threaded.has(a.id));
+  }, [isCoach, threads, athletesById]);
 
   return (
     <Screen>
@@ -47,12 +70,68 @@ export default function Messages() {
         </Banner>
       )}
 
-      <Eyebrow>{role === 'coach' ? 'Roster threads' : 'Conversations'}</Eyebrow>
+      {/* The eyebrow and the one action share a row so the screen keeps a single
+          affordance at the top instead of a stack of competing buttons. */}
+      <View style={s.head}>
+        {/* The row carries the spacing Eyebrow normally carries itself. Its own 18/8
+            margins are part of its margin box, so centring the row against a 44pt
+            button would have dropped the label 5px below the button's middle. */}
+        <Eyebrow style={{ flex: 1, marginTop: 0, marginBottom: 0 }}>
+          {isCoach ? 'Roster threads' : 'Conversations'}
+        </Eyebrow>
+        {isCoach && (
+          <GhostButton
+            label={howTo ? 'Close' : 'Add chat'}
+            icon={howTo ? 'close' : 'add'}
+            onPress={() => setHowTo((v) => !v)}
+          />
+        )}
+      </View>
+
+      {isCoach && howTo && (
+        <Card>
+          <CardTitle>How a new chat starts</CardTitle>
+          {STEPS.map((text, i) => (
+            <View key={text} style={s.step}>
+              <Text style={s.stepNum}>{i + 1}</Text>
+              <Text style={s.stepText}>{text}</Text>
+            </View>
+          ))}
+
+          {waiting.length > 0 && (
+            <Text style={s.waiting} accessibilityLiveRegion="polite">
+              {waiting.length === 1
+                ? `${waiting[0].playerName}'s family is signed up with no chat yet. Open their threads on the Roster and you can message them today.`
+                : `${waiting.length} families are signed up with no chat yet. Open their threads on the Roster and you can message them today.`}
+            </Text>
+          )}
+
+          <View style={{ height: 14 }} />
+          {/* This button navigates, it does not open anything. The Roster has its own
+              button literally labelled Open threads, and that is the one that writes the
+              thread, so naming this one after that action would be the same words twice
+              with only the second one doing it. */}
+          <Button
+            label="Go to the roster"
+            onPress={() => {
+              setHowTo(false);
+              router.push('/roster');
+            }}
+          />
+        </Card>
+      )}
 
       {threads === null && <Text style={type.meta}>Loading…</Text>}
-      {threads?.length === 0 && (
-        <Empty icon="chatbubbles-outline">No conversations yet.{'\n'}Coach Kingsley opens these.</Empty>
-      )}
+      {threads?.length === 0 &&
+        (isCoach ? (
+          <Empty icon="chatbubbles-outline">
+            No threads yet.{'\n'}Tap Add chat and it walks you through it.
+          </Empty>
+        ) : (
+          <Empty icon="chatbubbles-outline">
+            No conversations yet.{'\n'}Coach Kingsley opens these.
+          </Empty>
+        ))}
 
       {threads?.map((t) => (
         <ThreadRow
@@ -142,6 +221,12 @@ function timeOf(m: Message | null): string {
 }
 
 const s = StyleSheet.create({
+  head: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 18, marginBottom: 8 },
+  step: { flexDirection: 'row', gap: 10, marginTop: 10 },
+  // The number is the label, so the step still reads in order without the colour.
+  stepNum: { width: 16, fontSize: 13, fontWeight: '800', color: color.redHot, lineHeight: 19 },
+  stepText: { ...type.body, flex: 1, fontSize: 13.5, lineHeight: 19 },
+  waiting: { color: color.miamiTeal, fontSize: 13.5, fontWeight: '700', marginTop: 14, lineHeight: 19 },
   row: {
     flexDirection: 'row',
     gap: 12,

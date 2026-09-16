@@ -91,11 +91,32 @@ export type IconName = keyof typeof Ionicons.glyphMap;
 export const SESSION_TYPES = {
   skills: { label: 'Skills', icon: 'flash-outline', color: color.redHot },
   shoot: { label: 'Shooting', icon: 'locate-outline', color: color.miamiTeal },
+  // Red and teal are the only two hues this palette has, and both were already spent,
+  // so these two take steps off the same light-grey ramp as Small Group and Rest.
+  // Measured on every surface they are drawn on: textLede is 12.0:1 on the page and
+  // 10.4:1 on a card, textBody 9.6:1 and 8.3:1, both well past the 7.3:1 Rest has
+  // shipped with. The icon and the word are what actually tell them apart.
+  handle: { label: 'Ball Handling', icon: 'basketball-outline', color: color.textLede },
+  cond: { label: 'Conditioning', icon: 'pulse-outline', color: color.textBody },
   team: { label: 'Small Group', icon: 'people-outline', color: color.chalk },
   rest: { label: 'Rest / Film', icon: 'film-outline', color: '#9C9CA9' },
 } as const satisfies Record<string, { label: string; icon: IconName; color: string }>;
 
 export type SessionType = keyof typeof SESSION_TYPES;
+
+/**
+ * Every category a workout covers. One session is often two things at once, ball
+ * handling and shooting, so `types` carries the whole set.
+ *
+ * `type` stays the primary one and is never dropped: firebase/firestore.rules
+ * validates documents by field name, the calendar tints a day with a single colour,
+ * and there is real data in Firestore that predates the set. A document written
+ * before today has no `types` at all, and falling back to the single field is the
+ * whole reason it still renders. Read a category through here, never off `.type`
+ * directly, or a second selection silently disappears from wherever you forgot.
+ */
+export const typesOf = (x: { type: SessionType; types?: SessionType[] }): SessionType[] =>
+  x.types?.length ? x.types : [x.type];
 
 /**
  * The DS display faces (Anton / Bebas / Barlow) are not bundled — shipping four

@@ -90,6 +90,25 @@ service cloud.firestore {
       );
     }
 
+    // --- the categories a workout covers -----------------------------------
+    //
+    // One session is often two things at once, ball handling and shooting, so `types`
+    // carries the whole set. `type` is unchanged: it stays the primary category, it is
+    // what every document written before this carries, and nothing here touches it.
+    //
+    // Bounded for the same reason the template's blocks list is: a field the coach
+    // writes freely is a field that can be used as storage. Every member has to be a
+    // category the app actually draws, because an unknown key renders as a blank chip
+    // on a family's calendar. Six categories exist, so six is the ceiling.
+    function typesOk(d) {
+      return !('types' in d) || (
+        d.types is list
+        && d.types.size() >= 1
+        && d.types.size() <= 6
+        && d.types.hasOnly(['skills', 'shoot', 'handle', 'cond', 'team', 'rest'])
+      );
+    }
+
     // ---------------------------------------------------------------
     // Athletes — the consent record itself
     // ---------------------------------------------------------------
@@ -259,7 +278,9 @@ service cloud.firestore {
 
       // Nothing below applies to an event with no athleteIds, so every event written
       // before coached sessions were shared keeps working exactly as it did.
-      allow create, update: if isCoach() && audienceWritten(request.resource.data);
+      allow create, update: if isCoach()
+        && audienceWritten(request.resource.data)
+        && typesOk(request.resource.data);
       allow delete: if isCoach();
     }
 
@@ -376,7 +397,8 @@ service cloud.firestore {
         && request.resource.data.name.size() > 0
         && request.resource.data.name.size() <= 120
         && request.resource.data.blocks is list
-        && request.resource.data.blocks.size() <= 60;
+        && request.resource.data.blocks.size() <= 60
+        && typesOk(request.resource.data);
 
       allow delete: if isCoach();
     }

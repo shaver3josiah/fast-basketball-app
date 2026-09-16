@@ -14,7 +14,7 @@ import Animated, {
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../src/firebase';
 import { useSession } from '../../src/session';
-import { logWorkoutDone, savePrefs } from '../../src/data';
+import { blockAmount, logWorkoutDone, savePrefs } from '../../src/data';
 import { Celebrate } from '../../src/Celebrate';
 import {
   CELEBRATIONS,
@@ -25,7 +25,7 @@ import {
 } from '../../src/rewards';
 import type { SessionEvent, WorkoutBlock } from '../../src/types';
 import { Button, GhostButton, Loading, TypeChip } from '../../src/ui';
-import { color, radius, semantic, type } from '../../src/theme';
+import { color, radius, semantic, type, typesOf } from '../../src/theme';
 
 /** Only the timer pays out. A workout marked done without it is bookkeeping, not work. */
 const MIN_TIMED_SECONDS = 60;
@@ -78,8 +78,16 @@ export default function Train() {
   }, [event?.blocks, event?.name, event?.durationMin]);
 
   const block = blocks[Math.min(idx, blocks.length - 1)];
+  // A reps block is counted, not timed, so there is no clock to run on it: the panel
+  // becomes a target to tick off instead. Absence of `measure` means time, which is
+  // every block written before reps existed.
+  const isReps = block?.measure === 'reps';
   const blockSeconds = Math.max(1, Math.round((block?.minutes ?? 1) * 60));
   const allDone = blocks.every((b) => done[b.id]);
+  /** Whether this workout has a clock anywhere in it. A reps-only session is finished
+   *  by ticking every block, which is the other half of the rule the Finish gate has
+   *  always enforced. */
+  const anyTimed = blocks.some((b) => b.measure !== 'reps');
 
   const state = readState(prefs);
   const celebration = activeCelebration(state);
@@ -94,7 +102,10 @@ export default function Train() {
   }, [block?.id, blockSeconds]);
 
   useEffect(() => {
-    if (!running) return;
+    // isReps is a guard, not a new condition: tapping a reps block clears `running`
+    // through onOpen. It is here so a future caller cannot start a countdown on a
+    // block that has no duration to count.
+    if (!running || isReps) return;
     const startedAt = Date.now();
     deadline.current = startedAt + leftRef.current * 1000;
     const iv = setInterval(() => {
@@ -116,7 +127,7 @@ export default function Train() {
     };
     // The remaining time is read once, off the ref, when the clock starts. Putting it
     // in the deps would rebuild the deadline on every tick: the classic drifting timer.
-  }, [running, block?.id]);
+  }, [running, block?.id, isReps]);
 
   function buzz(kind: 'tap' | 'end' | 'win') {
     if (Platform.OS === 'web') return; // expo-haptics throws on web rather than no-opping
@@ -234,41 +245,67 @@ export default function Train() {
 
       <ScrollView contentContainerStyle={s.pad}>
         <View style={s.head}>
-          <TypeChip type={event.type ?? 'skills'} />
+          {typesOf({ type: event.type ?? 'skills', types: event.types }).map((k) => (
+            <TypeChip key={k} type={k} />
+          ))}
           <Text style={type.meta}>
             {event.location}
             {event.durationMin ? ` · ${event.durationMin} min` : ''}
           </Text>
         </View>
 
-        <Clock
-          seconds={left}
-          total={blockSeconds}
-          running={running}
-          reduceMotion={reduceMotion}
-          title={block?.name ?? 'Workout'}
-          step={`Block ${Math.min(idx + 1, blocks.length)} of ${blocks.length}`}
-        />
+        {isReps ? (
+          <RepsPanel
+            reps={block?.reps ?? 0}
+            done={!!done[block.id]}
+            title={block?.name ?? 'Workout'}
+            step={`Block ${Math.min(idx + 1, blocks.length)} of ${blocks.length}`}
+          />
+        ) : (
+          <Clock
+            seconds={left}
+            total={blockSeconds}
+            running={running}
+            reduceMotion={reduceMotion}
+            title={block?.name ?? 'Workout'}
+            step={`Block ${Math.min(idx + 1, blocks.length)} of ${blocks.length}`}
+          />
+        )}
 
         <View style={s.controls}>
-          <View style={{ flex: 1 }}>
-            <Button
-              label={running ? 'Pause' : left === blockSeconds ? 'Start the clock' : 'Resume'}
-              onPress={() => {
-                buzz('tap');
-                setRunning((r) => !r);
-              }}
-            />
-          </View>
-          <GhostButton
-            label="Reset"
-            icon="refresh-outline"
-            onPress={() => {
-              setRunning(false);
-              leftRef.current = blockSeconds;
-              setLeft(blockSeconds);
-            }}
-          />
+          {isReps ? (
+            <View style={{ flex: 1 }}>
+              <Button
+                label={done[block.id] ? 'Counted' : 'Got them all'}
+                disabled={!!done[block.id]}
+                onPress={() => {
+                  buzz('tap');
+                  markDone(block.id, true);
+                }}
+              />
+            </View>
+          ) : (
+            <>
+              <View style={{ flex: 1 }}>
+                <Button
+                  label={running ? 'Pause' : left === blockSeconds ? 'Start the clock' : 'Resume'}
+                  onPress={() => {
+                    buzz('tap');
+                    setRunning((r) => !r);
+                  }}
+                />
+              </View>
+              <GhostButton
+                label="Reset"
+                icon="refresh-outline"
+                onPress={() => {
+                  setRunning(false);
+                  leftRef.current = blockSeconds;
+                  setLeft(blockSeconds);
+                }}
+              />
+            </>
+          )}
         </View>
 
         <Text style={s.eyebrow}>The work</Text>
@@ -297,7 +334,9 @@ export default function Train() {
                 ? allDone
                   ? 'Every block is down. Close it out.'
                   : 'The clock has run. Close it out when you are done.'
-                : `Run the clock for at least a minute to log this workout. ${MIN_TIMED_SECONDS - Math.min(timedSec, MIN_TIMED_SECONDS)}s to go.`}
+                : anyTimed
+                  ? `Run the clock for at least a minute to log this workout. ${MIN_TIMED_SECONDS - Math.min(timedSec, MIN_TIMED_SECONDS)}s to go.`
+                  : 'Tick every block off to log this workout.'}
           </Text>
           <Button
             label={finished ? 'Logged' : 'Finish the workout'}
@@ -368,6 +407,43 @@ function Clock({
   );
 }
 
+/**
+ * A reps block in place of the clock. There is nothing to count down, so the number is
+ * the target and the athlete says when it is met. No progress bar either: a bar that
+ * cannot move is furniture.
+ */
+function RepsPanel({
+  reps,
+  done,
+  title,
+  step,
+}: {
+  reps: number;
+  done: boolean;
+  title: string;
+  step: string;
+}) {
+  return (
+    <View style={s.clock}>
+      <View style={s.clockTop}>
+        <Ionicons
+          name={done ? 'checkmark-circle' : 'repeat-outline'}
+          size={13}
+          color={done ? color.miamiTeal : color.textFaint}
+        />
+        <Text style={s.step}>{step}</Text>
+      </View>
+      <Text style={s.digits} accessibilityLabel={`${reps} reps${done ? ', counted' : ''}`}>
+        {reps}
+      </Text>
+      <Text style={s.repsUnit}>{reps === 1 ? 'rep' : 'reps'}</Text>
+      <Text style={s.blockName} numberOfLines={2}>
+        {title}
+      </Text>
+    </View>
+  );
+}
+
 function BlockRow({
   block,
   current,
@@ -385,13 +461,15 @@ function BlockRow({
     <View style={[s.row, current && s.rowOn, done && { opacity: 0.6 }]}>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={`Put the clock on ${block.name}`}
+        accessibilityLabel={
+          block.measure === 'reps' ? `Work on ${block.name}` : `Put the clock on ${block.name}`
+        }
         onPress={onOpen}
         style={{ flex: 1 }}
       >
         <Text style={[s.rowName, done && s.struck]}>{block.name}</Text>
         <Text style={type.meta}>
-          {block.minutes} min{block.notes ? ` · ${block.notes}` : ''}
+          {blockAmount(block)}{block.notes ? ` · ${block.notes}` : ''}
         </Text>
       </Pressable>
       <Pressable
@@ -440,6 +518,7 @@ const s = StyleSheet.create({
     fontVariant: ['tabular-nums'],
   },
   blockName: { fontSize: 15, fontWeight: '700', color: color.textLede, textAlign: 'center', marginTop: 2 },
+  repsUnit: { ...type.eyebrow, fontSize: 11, marginTop: 2 },
   track: { height: 6, borderRadius: 4, backgroundColor: color.courtBlack, width: '100%', marginTop: 14, overflow: 'hidden' },
   fill: { height: '100%', backgroundColor: color.fastRed },
 

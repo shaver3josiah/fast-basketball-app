@@ -70,7 +70,13 @@ export interface SessionEvent {
    * because he is the monitored party and does not get to choose his own audience.
    */
   memberUids?: string[];
+  /** The primary category, and always typesOf()[0]. Kept as the single source the
+   *  calendar tints a day with, and the field firebase/firestore.rules already knew. */
   type: import('./theme').SessionType;
+  /** Every category the session covers, when it covers more than one. Absent on
+   *  anything written before multi-select, which is why nothing reads it directly:
+   *  go through typesOf() in theme.ts. */
+  types?: import('./theme').SessionType[];
   name: string;
   location: string;
   startsAt: Timestamp;
@@ -165,6 +171,15 @@ export interface WorkoutBlock {
   id: string;
   name: string;
   minutes: number;
+  /** How many of it, when the block is counted rather than timed. */
+  reps?: number;
+  /**
+   * Which of the two the block is measured in. ABSENT MEANS 'time': every block
+   * written before reps existed carries only `minutes`, and reading absence as time
+   * is what keeps those templates running their clock. A new block starts on 'reps',
+   * which is what Blake writes most of.
+   */
+  measure?: 'reps' | 'time';
   notes?: string;
 }
 
@@ -197,10 +212,16 @@ export type WorkoutKind = 'individual' | 'coached';
 export interface WorkoutTemplate {
   id: string;
   name: string;
+  /** The primary category. See SessionEvent.type: same field, same reasons. */
   type: import('./theme').SessionType;
+  /** Every category, when the workout covers more than one. Read it through
+   *  typesOf() in theme.ts so a template written before multi-select still renders. */
+  types?: import('./theme').SessionType[];
   kind: WorkoutKind;
   blocks: WorkoutBlock[];
-  /** Denormalised sum of the blocks so a list can show it without adding up. */
+  /** Denormalised sum of the TIMED blocks so a list can show it without adding up.
+   *  A workout of nothing but reps sums to zero, so a list row shows the block count
+   *  instead of a misleading "0 min". */
   totalMinutes: number;
   updatedAt: Timestamp | null;
 }

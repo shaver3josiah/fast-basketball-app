@@ -651,22 +651,43 @@ export function subscribeTemplates(cb: (t: WorkoutTemplate[]) => void): Unsubscr
   );
 }
 
+/**
+ * How much of a block there is, in one phrase. Every screen that lists blocks prints
+ * this, so the reps-or-minutes decision is made once: a block written before reps
+ * existed carries no `measure`, and absence means time.
+ */
+export const blockAmount = (b: WorkoutBlock) =>
+  b.measure === 'reps' ? `${b.reps ?? 0} reps` : `${b.minutes} min`;
+
+/** A reps block has no duration, so it adds nothing here. Callers that print this
+ *  have to cope with zero: see WorkoutTemplate.totalMinutes. */
 export const totalMinutes = (blocks: WorkoutBlock[]) =>
-  blocks.reduce((n, b) => n + (Number(b.minutes) || 0), 0);
+  blocks.reduce((n, b) => n + (b.measure === 'reps' ? 0 : Number(b.minutes) || 0), 0);
+
+/**
+ * The stored shape of one block. `measure` and `reps` are written only for a reps
+ * block, so a timed one keeps exactly the shape it has had since the builder shipped
+ * and absence keeps meaning time.
+ */
+const blockBody = (b: WorkoutBlock) => ({
+  id: b.id,
+  name: b.name.trim(),
+  minutes: Number(b.minutes) || 0,
+  ...(b.measure === 'reps' ? { measure: 'reps' as const, reps: Number(b.reps) || 0 } : {}),
+  ...(b.notes?.trim() ? { notes: b.notes.trim() } : {}),
+});
 
 /** Create or overwrite. Returns the id so a fresh template can be selected at once. */
 export async function saveTemplate(t: Omit<WorkoutTemplate, 'updatedAt'>): Promise<string> {
   const body = {
     name: t.name.trim(),
     type: t.type,
+    // Both are written, always. `type` is what the rules and the calendar read, and
+    // `types` is the whole set: writing only one of them loses a selection.
+    types: t.types?.length ? t.types : [t.type],
     kind: t.kind,
     // Strip undefined: Firestore rejects it, and an empty note is absence, not a value.
-    blocks: t.blocks.map((b) => ({
-      id: b.id,
-      name: b.name.trim(),
-      minutes: Number(b.minutes) || 0,
-      ...(b.notes?.trim() ? { notes: b.notes.trim() } : {}),
-    })),
+    blocks: t.blocks.map(blockBody),
     totalMinutes: totalMinutes(t.blocks),
     updatedAt: serverTimestamp(),
   };
@@ -707,7 +728,10 @@ export interface ScheduleInput {
    * documents.
    */
   athletes: Athlete[];
+  /** The primary category. */
   type: SessionType;
+  /** Every category the session covers. Defaults to just the primary one. */
+  types?: SessionType[];
   name: string;
   location: string;
   startsAt: Date;
@@ -764,18 +788,14 @@ export async function scheduleWorkout(input: ScheduleInput): Promise<number> {
   }
 
   const seriesId = dates.length > 1 ? newId() : undefined;
-  const blocks = input.blocks.map((b) => ({
-    id: b.id,
-    name: b.name,
-    minutes: b.minutes,
-    ...(b.notes ? { notes: b.notes } : {}),
-  }));
+  const blocks = input.blocks.map(blockBody);
 
   const base = (athletes: Athlete[], date: Date) => ({
     athleteId: athletes[0].id,
     athleteIds: athletes.map((a) => a.id),
     memberUids: audienceOf(athletes),
     type: input.type,
+    types: input.types?.length ? input.types : [input.type],
     name: input.name.trim(),
     location: input.location.trim(),
     startsAt: Timestamp.fromDate(date),
@@ -908,6 +928,7 @@ export async function pasteEvents(events: SessionEvent[], onto: Date): Promise<n
       ...(e.athleteIds ? { athleteIds: e.athleteIds } : {}),
       ...(e.memberUids ? { memberUids: e.memberUids } : {}),
       type: e.type,
+      ...(e.types?.length ? { types: e.types } : {}),
       name: e.name,
       location: e.location,
       startsAt: Timestamp.fromDate(next),
