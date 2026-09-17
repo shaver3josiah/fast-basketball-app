@@ -13,6 +13,7 @@
 /** Messages the page posts back to React Native. */
 export type BridgeMessage =
   | { type: 'wfstate'; answers: Record<string, string | boolean | number> }
+  | { type: 'wffields'; count: number }
   | { type: 'wfheight'; height: number };
 
 const RESTORE_AND_LISTEN = `
@@ -32,6 +33,11 @@ const RESTORE_AND_LISTEN = `
     });
     // Let the document's own listeners (running totals, etc.) see the restored values.
     document.dispatchEvent(new Event('change', { bubbles: true }));
+    // How many answers this document even has. A tool like Shot Form keeps its own
+    // record on the phone and marks nothing, so Save would write an empty submission
+    // and the "your answers save to your account" hint would be a lie. Reporting the
+    // count lets the screen hide Save for ANY such page rather than naming one.
+    send({ type: 'wffields', count: nodes().length });
   }
 
   function collect() {

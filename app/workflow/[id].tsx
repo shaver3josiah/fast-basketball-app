@@ -30,6 +30,8 @@ export default function WorkflowScreen() {
   const [seed, setSeed] = useState<Record<string, unknown> | undefined>();
   const [seeded, setSeeded] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
+  // Assumed until the page says otherwise, so Save does not flash away on every open.
+  const [hasFields, setHasFields] = useState(true);
 
   // Whose submission are we looking at? The coach arrives with an explicit athlete;
   // a family only ever has its own.
@@ -87,20 +89,23 @@ export default function WorkflowScreen() {
   const mayWrite =
     role !== 'coach' && targetAthleteId === athlete?.id && !!targetAthleteId && isCurrentPeriod;
 
-  /**
-   * A linked tool (Shot Form) is the website's page, not a form with `data-k` fields.
-   * There is nothing for Save to collect, so the button would write an empty submission
-   * and the "your answers save to your account" hint would be a lie. It keeps its own
-   * record on the phone, the way it does in a browser.
-   */
-  const linked = workflow?.url;
-
   function onMessage(e: WebViewMessageEvent) {
-    let payload: { type?: string; answers?: Record<string, string | boolean | number> };
+    let payload: {
+      type?: string;
+      answers?: Record<string, string | boolean | number>;
+      count?: number;
+    };
     try {
       payload = JSON.parse(e.nativeEvent.data);
     } catch {
       return; // Not ours. The page is the coach's HTML and may post anything.
+    }
+    // A page with no `data-k` anywhere — Shot Form keeps its own record on the phone and
+    // marks nothing — has nothing for Save to collect. Take the button away rather than
+    // let it write an empty submission under a hint that promises otherwise.
+    if (payload.type === 'wffields') {
+      setHasFields((payload.count ?? 0) > 0);
+      return;
     }
     if (payload.type !== 'wfstate' || !targetAthleteId || !workflow) return;
     saveWorkflowAnswers(targetAthleteId, workflow, payload.answers ?? {}, new Date())
@@ -128,8 +133,8 @@ export default function WorkflowScreen() {
       <View style={s.bar}>
         <View style={s.live} />
         <Text style={s.barText} numberOfLines={1}>
-          {linked
-            ? 'Live from fast-basketball.com · nothing is recorded'
+          {!hasFields
+            ? 'Rendered in-app · nothing is recorded'
             : role === 'coach' && targetAthlete
               ? `${targetAthlete.playerName} · read only`
               : mayWrite
@@ -141,19 +146,16 @@ export default function WorkflowScreen() {
       <WebView
         ref={webRef}
         originWhitelist={['*']}
-        source={
-          linked
-            ? { uri: linked }
-            : {
-                html: workflow.html ?? '',
-                // Both platforms get a real origin. Android needs one or the page is opaque
-                // and its own inline script and storage are blocked. iOS was happy with
-                // about:blank until a worksheet asked for the microphone: getUserMedia is
-                // offered only to a secure context, and an opaque origin is not one, so the
-                // dribble counter would have found no navigator.mediaDevices to call.
-                baseUrl: 'https://localhost/',
-              }
-        }
+        source={{
+          html: workflow.html,
+          // Both platforms get a real origin. Android needs one or the page is opaque
+          // and its own inline script and storage are blocked. iOS was happy with
+          // about:blank until a worksheet asked for the microphone: getUserMedia is
+          // offered only to a secure context, and an opaque origin is not one, so the
+          // dribble counter would have found no navigator.mediaDevices to call, and
+          // Shot Form no camera.
+          baseUrl: 'https://localhost/',
+        }}
         // The document is Blake's own HTML, so this is containment, not distrust:
         // scripts run (the forms need them) but the page gets no file system, no
         // cross-origin reach, and no way to navigate the frame somewhere else.
@@ -177,12 +179,11 @@ export default function WorkflowScreen() {
         injectedJavaScript={bridgeScript(seed)}
         onMessage={onMessage}
         onShouldStartLoadWithRequest={(req) => {
-          // The initial render is about:blank / the baseUrl, or — for a linked tool —
-          // its own origin, which has to be allowed or the page would bounce itself
-          // straight out to the system browser. Anything else is a link someone tapped:
-          // hand it over and stay put.
+          // The initial render is about:blank / the baseUrl. Anything else is a link
+          // someone tapped: hand it to the system browser and stay put. The CDN and font
+          // fetches Shot Form makes are subresources, not navigations, so they never
+          // reach here.
           if (req.url === 'about:blank' || req.url.startsWith('https://localhost/')) return true;
-          if (linked && req.url.startsWith(originOf(linked))) return true;
           Linking.openURL(req.url).catch(() => {});
           return false;
         }}
@@ -191,12 +192,12 @@ export default function WorkflowScreen() {
 
       <View style={[s.saveBar, { paddingBottom: Math.max(insets.bottom, 12) }]}>
         <Text style={s.hint} accessibilityLiveRegion="polite">
-          {linked
-            ? 'Point the phone at the shooter from the side. Your reps stay on this phone.'
+          {!hasFields
+            ? 'This one keeps its own record on the phone. There is nothing to save.'
             : (status ??
               hintFor({ role, mayWrite, isCurrentPeriod, saved: !!current, heading, names }))}
         </Text>
-        {mayWrite && !linked && (
+        {mayWrite && hasFields && (
           <Button
             label="Save"
             onPress={() => {
@@ -209,16 +210,6 @@ export default function WorkflowScreen() {
     </View>
   );
 }
-
-/**
- * `https://host/` out of a full URL.
- *
- * Done with a regex rather than `new URL(x).origin` because React Native's URL polyfill
- * does not implement `origin` on every engine, and a silent `undefined` here would send
- * the tool's own first load out to the system browser. A URL that does not match is
- * returned whole, which only ever narrows what this allows.
- */
-const originOf = (url: string): string => url.replace(/^(https?:\/\/[^/]+).*$/, '$1/');
 
 function hintFor({
   role,

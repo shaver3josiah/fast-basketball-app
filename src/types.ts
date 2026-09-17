@@ -109,17 +109,7 @@ export interface SessionEvent {
 export interface Workflow {
   id: string;
   name: string;
-  /** The document itself. Absent on a linked tool, which carries `url` instead. */
-  html?: string;
-  /**
-   * A tool that lives on the website rather than in the binary, loaded by URL.
-   *
-   * Shot Form is the one of these: it is useless without a signal anyway (the pose
-   * model is 6 MB from a CDN), so baking a second copy of its 174 KB page into the
-   * app would buy no offline use and would guarantee the two copies drift. One home,
-   * build/site/src/shotform/index.html, and a fix there reaches the app the same day.
-   */
-  url?: string;
+  html: string;
   publishedBy: string;
   publishedAt: Timestamp | null;
   sizeBytes: number;

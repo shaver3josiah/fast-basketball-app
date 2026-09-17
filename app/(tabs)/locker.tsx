@@ -243,13 +243,10 @@ function WorkflowRow({
       <View style={{ flex: 1 }}>
         <Text style={s.name}>{workflow.name}</Text>
         <Text style={s.meta}>
-          {CADENCE_LABEL[cadence] ?? 'One-off'} ·{' '}
-          {/* A linked tool has no bytes in the binary, and "0 B" read as a broken row.
-              Saying it needs a signal is the thing an athlete in a gym wants to know. */}
-          {workflow.url ? 'On the website · needs signal' : formatSize(workflow.sizeBytes ?? 0)}
+          {CADENCE_LABEL[cadence] ?? 'One-off'} · {formatSize(workflow.sizeBytes ?? 0)}
           {/* The coach did not publish this one and cannot delete it: it ships with the
               app. Saying so is cheaper than him wondering where it came from. */}
-          {isBuiltin(workflow.id) && !workflow.url ? ' · Built in' : ''}
+          {isBuiltin(workflow.id) ? ' · Built in' : ''}
         </Text>
         {submissionCount > 0 && (
           <View style={s.pill}>
