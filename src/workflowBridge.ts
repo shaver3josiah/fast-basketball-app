@@ -109,6 +109,31 @@ function nightShots(a: Record<string, unknown>): string | null {
 }
 
 /**
+ * The dribble counter, read back as a session line.
+ *
+ * Detected by key shape for the same reason as the shooting log above, and it keeps its
+ * own thousands separator rather than calling toLocaleString: a four-figure dribble count
+ * is the normal case, and Intl is the one part of the runtime that differs between a
+ * Hermes build, a JSC build and the web.
+ */
+function dribbles(a: Record<string, unknown>): string | null {
+  if (a.dc_total === undefined) return null;
+  const total = num(a.dc_total);
+  const mins = num(a.dc_min);
+  const pace = num(a.dc_pace);
+  const best = num(a.dc_best);
+  const workouts = String(a.dc_done ?? '').split(',').filter(Boolean).length;
+  const grouped = String(total).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  return (
+    `${grouped} dribble${total === 1 ? '' : 's'}` +
+    (mins ? ` \u00b7 ${mins} min` : '') +
+    (pace ? ` \u00b7 ${pace}% on pace` : '') +
+    (best ? ` \u00b7 best streak ${best}` : '') +
+    (workouts ? ` \u00b7 ${workouts} workout${workouts === 1 ? '' : 's'}` : '')
+  );
+}
+
+/**
  * A one-line summary for the Locker list, matching the preview's saved-pill copy.
  *
  * This is what the COACH reads down his roster, so a worksheet whose shape is known gets
@@ -116,7 +141,7 @@ function nightShots(a: Record<string, unknown>): string | null {
  * knowing nothing rather than inventing a number.
  */
 export function summarize(answers: Record<string, unknown>): string {
-  const known = nightShots(answers);
+  const known = nightShots(answers) ?? dribbles(answers);
   if (known) return known;
   const done = Object.values(answers).filter((v) => v === true).length;
   const filled = Object.keys(answers).length;
@@ -145,6 +170,19 @@ export function demo(): string {
   // A rack with no attempts must not divide by zero.
   const empty: Record<string, unknown> = { ns_m0: '0', ns_a0: '0' };
   eq(summarize(empty), '0 of 70 makes · 0% on 0 shots', 'an untouched rack');
+
+  // The dribble counter saves strings too, and zero is a real answer: a session that
+  // logged no workouts must not print "0 workouts".
+  eq(
+    summarize({ dc_total: '1240', dc_min: '18', dc_pace: '76', dc_best: '43', dc_done: 'warm,ladder' }),
+    '1,240 dribbles \u00b7 18 min \u00b7 76% on pace \u00b7 best streak 43 \u00b7 2 workouts',
+    'a full handles session'
+  );
+  eq(summarize({ dc_total: '80', dc_min: '0', dc_pace: '0', dc_best: '0', dc_done: '' }),
+    '80 dribbles', 'a session that only counted');
+  if (summarize({ dc_total: '80' }).includes('fields filled')) {
+    throw new Error('the dribble counter fell through to the generic summary');
+  }
 
   // Checkbox worksheets keep the old behaviour exactly.
   eq(summarize({ Week10: true, Week11: true, notes: 'x' }), '2 of the blocks done', 'checkboxes');

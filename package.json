@@ -53,6 +53,7 @@
     "test:schedule": "node --experimental-strip-types scripts/check-schedule.mjs",
     "test:rewards": "node --experimental-strip-types scripts/check-rewards.mjs",
     "test:bridge": "node --experimental-strip-types scripts/check-bridge.mjs",
+    "test:dribble": "node scripts/check-dribble.mjs",
     "worksheets": "node scripts/build-worksheets.mjs",
     "sounds": "node scripts/build-sounds.mjs",
     "check:sounds": "node scripts/build-sounds.mjs --check",

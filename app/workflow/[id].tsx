@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Platform, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
@@ -87,6 +87,14 @@ export default function WorkflowScreen() {
   const mayWrite =
     role !== 'coach' && targetAthleteId === athlete?.id && !!targetAthleteId && isCurrentPeriod;
 
+  /**
+   * A linked tool (Shot Form) is the website's page, not a form with `data-k` fields.
+   * There is nothing for Save to collect, so the button would write an empty submission
+   * and the "your answers save to your account" hint would be a lie. It keeps its own
+   * record on the phone, the way it does in a browser.
+   */
+  const linked = workflow?.url;
+
   function onMessage(e: WebViewMessageEvent) {
     let payload: { type?: string; answers?: Record<string, string | boolean | number> };
     try {
@@ -120,23 +128,32 @@ export default function WorkflowScreen() {
       <View style={s.bar}>
         <View style={s.live} />
         <Text style={s.barText} numberOfLines={1}>
-          {role === 'coach' && targetAthlete
-            ? `${targetAthlete.playerName} · read only`
-            : mayWrite
-              ? 'Rendered in-app · sandboxed · no download'
-              : 'Read only'}
+          {linked
+            ? 'Live from fast-basketball.com · nothing is recorded'
+            : role === 'coach' && targetAthlete
+              ? `${targetAthlete.playerName} · read only`
+              : mayWrite
+                ? 'Rendered in-app · sandboxed · no download'
+                : 'Read only'}
         </Text>
       </View>
 
       <WebView
         ref={webRef}
         originWhitelist={['*']}
-        source={{
-          html: workflow.html,
-          // Android needs a baseUrl or the page gets an opaque origin that blocks
-          // inline script and storage. iOS defaults to about:blank and behaves.
-          ...(Platform.OS === 'android' ? { baseUrl: 'https://localhost/' } : {}),
-        }}
+        source={
+          linked
+            ? { uri: linked }
+            : {
+                html: workflow.html ?? '',
+                // Both platforms get a real origin. Android needs one or the page is opaque
+                // and its own inline script and storage are blocked. iOS was happy with
+                // about:blank until a worksheet asked for the microphone: getUserMedia is
+                // offered only to a secure context, and an opaque origin is not one, so the
+                // dribble counter would have found no navigator.mediaDevices to call.
+                baseUrl: 'https://localhost/',
+              }
+        }
         // The document is Blake's own HTML, so this is containment, not distrust:
         // scripts run (the forms need them) but the page gets no file system, no
         // cross-origin reach, and no way to navigate the frame somewhere else.
@@ -145,12 +162,27 @@ export default function WorkflowScreen() {
         allowFileAccessFromFileURLs={false}
         allowUniversalAccessFromFileURLs={false}
         setSupportMultipleWindows={false}
+        // The dribble counter listens for the ball; Shot Form watches the shooter. Both
+        // pages run on the origin this WebView is already on, so a capture request from
+        // one is granted and one from anywhere else still prompts. Neither skips the OS:
+        // iOS asks the first time, using the two usage strings in app.json, and Android's
+        // WebView routes the request through RECORD_AUDIO and CAMERA. Both of those are
+        // declared in app.json — the microphone via expo-audio's `recordAudioAndroid`,
+        // which used to be false, and the camera via `android.permissions`. Without the
+        // manifest entry the WebView's own prompt is refused instantly and the page finds
+        // no stream, which looks exactly like a broken page.
+        mediaCapturePermissionGrantType="grantIfSameHostElsePrompt"
+        allowsInlineMediaPlayback
+        mediaPlaybackRequiresUserAction={false}
         injectedJavaScript={bridgeScript(seed)}
         onMessage={onMessage}
         onShouldStartLoadWithRequest={(req) => {
-          // The initial render is about:blank / the baseUrl. Anything else is a link
-          // someone tapped: hand it to the system browser and stay put.
+          // The initial render is about:blank / the baseUrl, or — for a linked tool —
+          // its own origin, which has to be allowed or the page would bounce itself
+          // straight out to the system browser. Anything else is a link someone tapped:
+          // hand it over and stay put.
           if (req.url === 'about:blank' || req.url.startsWith('https://localhost/')) return true;
+          if (linked && req.url.startsWith(originOf(linked))) return true;
           Linking.openURL(req.url).catch(() => {});
           return false;
         }}
@@ -159,9 +191,12 @@ export default function WorkflowScreen() {
 
       <View style={[s.saveBar, { paddingBottom: Math.max(insets.bottom, 12) }]}>
         <Text style={s.hint} accessibilityLiveRegion="polite">
-          {status ?? hintFor({ role, mayWrite, isCurrentPeriod, saved: !!current, heading, names })}
+          {linked
+            ? 'Point the phone at the shooter from the side. Your reps stay on this phone.'
+            : (status ??
+              hintFor({ role, mayWrite, isCurrentPeriod, saved: !!current, heading, names }))}
         </Text>
-        {mayWrite && (
+        {mayWrite && !linked && (
           <Button
             label="Save"
             onPress={() => {
@@ -174,6 +209,16 @@ export default function WorkflowScreen() {
     </View>
   );
 }
+
+/**
+ * `https://host/` out of a full URL.
+ *
+ * Done with a regex rather than `new URL(x).origin` because React Native's URL polyfill
+ * does not implement `origin` on every engine, and a silent `undefined` here would send
+ * the tool's own first load out to the system browser. A URL that does not match is
+ * returned whole, which only ever narrows what this allows.
+ */
+const originOf = (url: string): string => url.replace(/^(https?:\/\/[^/]+).*$/, '$1/');
 
 function hintFor({
   role,
