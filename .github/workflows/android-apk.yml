@@ -287,11 +287,23 @@ jobs:
           echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/upload.jks"
 
           cp "$BUILT" "$OUT"
+          # GRADLE HAS ALREADY SIGNED THIS, WITH THE ANDROID DEBUG KEY. Expo's template
+          # points the release buildType at signingConfigs.debug, and jarsigner ADDS a
+          # signature where apksigner REPLACES one -- so signing straight over the top
+          # leaves TWO certificate chains, and Play rejects the upload with "Your
+          # Android App Bundle has more than 1 certificate chain" half an hour after
+          # the build. Drop every existing signature first. MANIFEST.MF stays, because
+          # jarsigner rewrites its digests.
+          zip -d "$OUT" "META-INF/*.RSA" "META-INF/*.DSA" "META-INF/*.SF" >/dev/null || true
           jarsigner -sigalg SHA256withRSA -digestalg SHA-256 \
             -keystore "$RUNNER_TEMP/upload.jks" \
             -storepass:env ANDROID_KEYSTORE_PASSWORD \
             -keypass:env ANDROID_KEY_PASSWORD \
             "$OUT" "$ANDROID_KEY_ALIAS"
+
+          # Play is otherwise the first thing that notices, and only at upload time.
+          CHAINS=$(unzip -l "$OUT" | grep -ciE "META-INF/.*[.](RSA|DSA)$" || true)
+          [ "$CHAINS" = "1" ] || { echo "::error::bundle carries $CHAINS certificate chains, not 1"; exit 1; }
 
           jarsigner -verify "$OUT"
           # Prints the signer. If this is the Android Debug certificate, Play will
