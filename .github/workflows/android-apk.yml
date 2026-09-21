@@ -168,6 +168,24 @@ jobs:
       #
       # NOTE: this is for the sideloaded .apk. A Play Store upload is an .aab from
       # bundleRelease and must carry every ABI; do not copy this flag there.
+
+      # R8. The Play Console grades every upload on "DEX code optimization" and this app
+      # scored Low, because RN 0.86's template defaults android.enableMinifyInReleaseBuilds
+      # to false. It is a gradle property, not a file edit, which is the only reason it can
+      # be set from here at all: prebuild rewrites android/ on every run, so a committed
+      # edit to build.gradle or gradle.properties would be destroyed (same reasoning as the
+      # versionCode stamp above).
+      #
+      # R8 touches only the Java/Kotlin shell. Every line of app logic is JS in a Hermes
+      # bundle, which R8 cannot see, so nothing in src/ or app/ is at risk. What it can
+      # break is a native module whose classes are found by reflection -- and every one
+      # here ships its own consumer rules (expo, expo-modules-core, expo-notifications,
+      # react-native-svg, reanimated, worklets, react-android), while the template's
+      # app/proguard-rules.pro adds the reanimated keeps on top.
+      #
+      # SET ON BOTH GRADLE CALLS, ALWAYS. The .apk below is what gets sideloaded and
+      # actually run on a phone; the .aab is what reaches Play. Minifying only one of them
+      # would mean the build somebody tested is not the build that ships.
       - name: Assemble release
         working-directory: android
         env:
@@ -175,7 +193,31 @@ jobs:
         run: |
           set -euo pipefail
           echo "building for: $ABIS"
-          ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures="$ABIS"
+          ./gradlew assembleRelease --no-daemon \
+            -PreactNativeArchitectures="$ABIS" \
+            -Pandroid.enableMinifyInReleaseBuilds=true
+
+      # R8 writes mapping.txt only when it actually ran, so this is the honest test that
+      # the property above was not silently ignored -- a renamed property in a future Expo
+      # template would otherwise give a green build that Play still grades Low.
+      - name: Check R8 ran
+        run: |
+          set -euo pipefail
+          M=android/app/build/outputs/mapping/release/mapping.txt
+          [ -s "$M" ] || {
+            echo "::error::$M is missing or empty -- R8 did not run. Check that android/app/build.gradle still reads android.enableMinifyInReleaseBuilds."; exit 1; }
+          echo "R8 ran: $(wc -l < "$M") mapping lines"
+
+      # Without this file an obfuscated stack trace is unreadable, and it exists only on
+      # this runner. AGP is understood to embed the map inside the .aab for Play, but that
+      # has not been checked on a real build here and the sideloaded .apk carries none
+      # either way -- so keep the copy. If a Play crash report ever comes back obfuscated,
+      # this artifact is what gets uploaded by hand under App bundle explorer.
+      - uses: actions/upload-artifact@v5
+        with:
+          name: r8-mapping
+          path: android/app/build/outputs/mapping/release/mapping.txt
+          if-no-files-found: error
 
       # Expo's prebuild template points the release buildType at signingConfigs.debug,
       # so the APK Gradle just produced is DEBUG-signed. prebuild rewrites android/ on
@@ -257,7 +299,10 @@ jobs:
       - name: Bundle release (.aab)
         if: env.PLAY_TRACK != 'none'
         working-directory: android
-        run: ./gradlew bundleRelease --no-daemon -PreactNativeArchitectures="armeabi-v7a,arm64-v8a,x86,x86_64"
+        run: |
+          ./gradlew bundleRelease --no-daemon \
+            -PreactNativeArchitectures="armeabi-v7a,arm64-v8a,x86,x86_64" \
+            -Pandroid.enableMinifyInReleaseBuilds=true
 
       # An .aab is a jar, so it is signed with jarsigner, not apksigner -- apksigner
       # only understands the APK format and refuses this file. Google re-signs the
