@@ -46,6 +46,18 @@ export const APP_INFO = {
 
 export const CATEGORIES = { primary: 'SPORTS', secondary: 'EDUCATION' };
 
+/**
+ * Apple wants the year the rights were obtained followed by the entity that owns them,
+ * and nothing else -- no "Copyright", no (c), no "All rights reserved", no URL. It is
+ * the developer entity on the account, which is the name Apple cross-checks, rather
+ * than FAST Basketball, whose product this is but who does not hold the App Store
+ * account or the software.
+ *
+ * Its absence is why "Add for Review" refuses with "You have one or more errors on this
+ * page" and names nothing useful until you scroll.
+ */
+export const COPYRIGHT = '2026 JOBDASH, LLC';
+
 export const LISTING = {
   description: `Fast Basketball is the private line between Coach Blake Kingsley, his players, and their parents.
 
@@ -256,8 +268,12 @@ export async function push() {
   // app.json, whose expo.version has sat at 1.0.0 across every release on purpose.
   const build = await newestBuild(app.id);
   console.log(`version ${version.attributes.versionString} -> ${build.short} (build ${build.number})`);
-  if (version.attributes.versionString !== build.short) {
-    await patch('appStoreVersions', version.id, { versionString: build.short }, `version string ${build.short}`);
+  const versionAttrs = {
+    ...(version.attributes.versionString === build.short ? {} : { versionString: build.short }),
+    ...(version.attributes.copyright === COPYRIGHT ? {} : { copyright: COPYRIGHT }),
+  };
+  if (Object.keys(versionAttrs).length) {
+    await patch('appStoreVersions', version.id, versionAttrs, `version ${build.short}, copyright`);
   }
 
   if (DRY) {
