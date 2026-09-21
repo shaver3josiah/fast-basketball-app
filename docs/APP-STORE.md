@@ -17,7 +17,7 @@ questionnaire, the price, the version string, the build to review, and the App R
 notes and demo account. Then it prints what is left.
 
 **Two things it cannot do, and one it will not.** Screenshots are
-`scripts/appstore-screenshots.mjs`. App Privacy has no API at all — every
+`scripts/store-screenshots.mjs`. App Privacy has no API at all — every
 `appDataUsages` path answers 404, and fastlane cannot reach it either — so §5 below is
 still a console form. And it never submits for review; that stays a decision somebody
 makes on purpose.
@@ -104,15 +104,31 @@ App Review looks for them there and not only on the listing.
 Required: 6.9-inch iPhone, 1320 × 2868. One set covers every iPhone size. `app.json` sets
 `supportsTablet: false`, so **no iPad screenshots are needed**.
 
-`scripts/appstore-screenshots.mjs` captures and uploads them. It renders the real app
-against seeded demo data in a local emulator, so nothing is staged and no family's real
-conversation is photographed. Five, in this order, are the story:
+`npm run screenshots` captures and uploads them. It renders the real app against the
+seeded demo family in a local Firebase emulator, so nothing is staged and no real
+family's conversation is photographed. Five, in this order, are the story:
 
-1. A conversation with the monitoring banner visible
-2. The You tab showing Training consent granted
-3. The Calendar
-4. The Locker
-5. An athlete's thread while consent is off — the locked composer
+1. **Messages** — the "You see everything" banner over the conversation list
+2. **The conversation** — the monitored coach-to-athlete thread, read-only for the parent
+3. **Calendar** — the month, the session types, the next session
+4. **The Locker** — the workflows and the two built-in training tools
+5. **You** — training consent granted, and the reader switch that cannot be turned off
+
+It writes a Play set too, at 1080 x 2160. Play refuses a phone screenshot whose long
+edge is more than twice its short edge, and 2868/1320 is 2.17, so the two stores need
+two captures rather than one resized.
+
+**One liberty is taken, and it is taken to be accurate.** On the web there is no home
+indicator, so `react-native-safe-area-context` reports a zero bottom inset and the tab
+bar sits against the very edge of the frame with 15 device pixels under its labels. A
+real iPhone reserves 34pt there and an Android phone reserves its gesture bar, so the
+capture pads it back. Nothing else about the pixels is touched.
+
+The header of `scripts/store-screenshots.mjs` has the emulator setup, in order. The
+step everyone skips is `EXPO_PUBLIC_FIREBASE_PROJECT_ID=fast-basketball-dev` in
+`.env.local`: the emulator serves whatever project id it is asked for, so without it
+the app talks to an empty database inside the same emulator and the only symptom is
+the app saying the coach has not added you to an athlete yet.
 
 ## 4. Age rating
 

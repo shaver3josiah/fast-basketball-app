@@ -15,7 +15,7 @@
  *   node scripts/appstore-metadata.mjs
  *
  * WHAT IT DELIBERATELY DOES NOT DO:
- *   - Screenshots. scripts/appstore-screenshots.mjs uploads those.
+ *   - Screenshots. scripts/store-screenshots.mjs uploads those.
  *   - App Privacy (the nutrition label). Apple exposes it, but getting it wrong is a
  *     legal statement about a minor's data, so it is answered in the console against
  *     the table in docs/APP-STORE.md section 5 and read back by this script.
@@ -373,7 +373,7 @@ export async function remaining({ appId, versionId }) {
   const { data: locs } = await asc(`appStoreVersions/${versionId}/appStoreVersionLocalizations`);
   const en = locs.find((l) => l.attributes.locale === 'en-US');
   const { data: sets } = await asc(`appStoreVersionLocalizations/${en.id}/appScreenshotSets`);
-  if (!sets.length) gaps.push('screenshots: none uploaded (scripts/appstore-screenshots.mjs)');
+  if (!sets.length) gaps.push('screenshots: none uploaded (npm run screenshots -- --upload)');
 
   // App Privacy is NOT in the App Store Connect API -- every appDataUsage path
   // answers 404, and fastlane cannot reach it either. It is a console form, and it
