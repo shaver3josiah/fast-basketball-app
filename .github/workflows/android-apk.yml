@@ -32,7 +32,10 @@ permissions:
 jobs:
   apk:
     runs-on: ubuntu-24.04
-    timeout-minutes: 45   # fail rather than sit in a hung job
+    # The .apk alone used 1331s of this. The .aab is a second Gradle task on the same
+    # build, cheap when the ABI sets match and a second full native compile when they
+    # do not -- which is what a dispatch run building one ABI for the .apk asks for.
+    timeout-minutes: 75   # fail rather than sit in a hung job
     steps:
       - uses: actions/checkout@v5
 
