@@ -5,7 +5,12 @@ One `git tag` produces both binaries:
 | Tag pushed | What happens | Where it lands |
 | --- | --- | --- |
 | `v1.0.1` | `android-apk.yml` builds and signs an APK | GitHub **Releases**, download to any Android phone |
+| `v1.0.1` | the same job builds and signs an `.aab` and uploads it | **Google Play**, `internal` track |
 | `v1.0.1` | `ios-testflight.yml` builds, signs, uploads | **TestFlight**, install on any iPhone |
+
+The store listings themselves are code too, not a form somebody retypes:
+`scripts/appstore-metadata.mjs` pushes the whole App Store listing over Apple's API,
+and section 7 covers the Play half.
 
 Both binaries are the same JavaScript against the same Firebase project, so an
 iPhone and an Android phone message each other with no extra work.
@@ -26,6 +31,11 @@ These need your Apple account or your private keys. Nobody can do them for you.
 - Accept the App Store Connect agreements.
 - Add TestFlight testers.
 - Generate the Android upload keystore (it is your signing identity).
+- Create the Google Play app record, and the service account that lets CI upload to
+  it (section 7). Play has no API that creates an app.
+- Answer **App Privacy** in App Store Connect and **Data safety** in the Play Console.
+  Neither has an API; both are legal statements about a child's data, and the answers
+  are written out in `APP-STORE.md` section 5.
 - Paste every secret in the §4 table into GitHub as a repository secret, `ENV_FILE`
   included. That one is not an Apple or Android key and is easy to skip, and skipping it
   gives you a green build of an app that dead-ends on "unconfigured".
@@ -146,7 +156,7 @@ Keep `fast-basketball-upload.jks` and `keystore.base64.txt` **out of the repo**.
 
 ---
 
-## 4. The nine secrets
+## 4. The ten secrets
 
 GitHub, then your repo, then **Settings**, then Secrets and variables, then
 **Actions**, then New repository secret.
@@ -162,6 +172,7 @@ GitHub, then your repo, then **Settings**, then Secrets and variables, then
 | `ANDROID_KEY_ALIAS` | Android | `fast-basketball` |
 | `ANDROID_KEY_PASSWORD` | Android | Same as the keystore password |
 | `ENV_FILE` | both | The whole of `.env`, verbatim. **Not optional** — see below |
+| `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` | Android | The whole service-account JSON from section 7. Without it the `.aab` is built and signed but not published |
 
 ### `ENV_FILE`: the one whose absence is silent
 
@@ -259,6 +270,77 @@ happening. You do not have to do anything, but two things are worth knowing:
 If you ever see the keep-alive failing, fix it rather than muting it — the
 consequence is silent, and it lands on the families, not on you.
 
+## 7. Google Play
+
+A tag builds `fast-basketball.aab` beside the `.apk`, signs it with the same upload
+keystore, and pushes it to the **internal** track. `scripts/play-upload.mjs` does the
+upload in four HTTP calls with no third-party action, because the credential involved
+can publish to the store; `npm run test:play` pins its behaviour offline.
+
+### 7.1 The app record (one time, yours)
+
+<https://play.google.com/console> then **Create app**.
+
+- App name: `Fast Basketball`
+- Default language: English (United States)
+- App or game: App. Free or paid: **Free** (this cannot be changed to paid later)
+- Package name: **`com.fastbasketball.app`**, taken from the first upload, so it must
+  match `app.json` exactly and can never be changed afterwards
+
+Play will not accept a production release until these are answered, and none of them
+has an API:
+
+| Section | Answer |
+| --- | --- |
+| Privacy policy | `https://fast-basketball.com/privacy` |
+| App access | All functionality is behind a login. Give the demo credentials from `docs/owner-open-items.md` and the instructions from `APP-STORE.md` section 6 |
+| Ads | No ads |
+| Content rating | Same answers as Apple's: private messaging yes, user-generated content yes, no unrestricted web access, nothing else |
+| Target audience | **13 and over.** Do not tick an under-13 age band: it opts the app into the Families policy, and the whole design here is that an athlete under 13 has no login and trains from the parent's account |
+| Data safety | The table in `APP-STORE.md` section 5. Collected, linked to the user, app functionality, not shared, not used for tracking. Encrypted in transit, and deletion is offered in the app |
+| Government apps / financial / health | No to all |
+
+### 7.2 The service account (one time, yours)
+
+The upload credential. It is a Google Cloud service account that the Play Console
+grants release access to.
+
+1. <https://console.cloud.google.com/iam-admin/serviceaccounts> - pick any project you
+   own (the `fast-basketball-b3ebe` Firebase project is fine) then **Create service
+   account**. Name it `play-publisher`. Give it **no** project roles: the permission
+   that matters is granted in the Play Console, not here.
+2. On the new account, **Keys**, **Add key**, **Create new key**, **JSON**. The file
+   downloads once.
+3. Play Console, **Users and permissions**, **Invite new users**. Paste the service
+   account's email (`play-publisher@....iam.gserviceaccount.com`). App permissions:
+   Fast Basketball. Grant **Release to testing tracks**, **Release apps to
+   production**, and **View app information**.
+4. Set the secret from the downloaded file:
+
+```powershell
+gh secret set GOOGLE_PLAY_SERVICE_ACCOUNT_JSON --repo shaver3josiah/fast-basketball-app < "$HOME\Downloads\play-publisher-key.json"
+```
+
+> **The very first upload cannot be an API upload.** Play requires the first bundle
+> for a brand new app to go through the console by hand, because that upload is what
+> enrols the app in Play App Signing. Download the **fast-basketball-aab** artifact
+> from any tag run and drag it into the internal track once. Every upload after that
+> goes through CI.
+
+### 7.3 Tracks
+
+`internal` is live within minutes, needs no review, and reaches only the testers you
+list. `production` is public and takes a review of a day or two on a new app.
+
+The tag build always goes to `internal`. Promoting is a button in the console, which
+is deliberate: a first production release is refused until 7.1 is complete, and the
+error says only that the release is invalid.
+
+To push somewhere else on purpose: Actions, **Android APK**, Run workflow, and pick
+the track. `none` skips the bundle entirely and builds only the sideload `.apk`.
+
+---
+
 ## 6. When something breaks
 
 | Symptom | Cause | Fix |
@@ -271,6 +353,9 @@ consequence is silent, and it lands on the families, not on you.
 | `No profiles were found` | Bundle ID in `app.json` does not match the App ID | Make step 2.2 and `app.json` agree |
 | `doesn't include the aps-environment entitlement`, or a push entitlement mismatch at export | `expo-notifications` puts a Push Notifications entitlement on every iOS build, even though this app only schedules local reminders | Turn **Push Notifications** on for the App ID in step 2.2. `app.json` already pins `mode: production`, which is what an App Store build has to carry |
 | iOS build number rejected as duplicate | Two runs produced the same build number | Push a new tag; the build number is the GitHub run number |
+| Play: "Your app cannot be published yet" | A console section in 7.1 is unanswered | The console names it; Data safety and Target audience are the usual two |
+| Play: a version code that has already been used | Two runs produced the same versionCode | The version code is the GitHub run number, so start a new run rather than re-running the failed step |
+| Play upload: 403 from the API | The service account was never granted access to this app in the Play Console | 7.2 step 3. Granting it in Google Cloud IAM is not the same thing and does nothing |
 
 Version numbers: on a `v*` tag build, **the tag is the version a tester reads**, not
 `expo.version` in `app.json`. Both workflows strip the `v` and stamp what is left over

@@ -96,6 +96,13 @@ jobs:
       - name: Keyboard never covers a text field
         run: npm run check:keyboard
 
+      # The Play upload script holds a credential that can publish to the store, and
+      # every way it can fail is silent: a release pointing at a bundle nobody
+      # uploaded, an edit that is never committed, a stranded edit blocking the next
+      # run. The check is offline and takes a second.
+      - name: Play upload self-check
+        run: npm run test:play
+
       - name: Typecheck
         run: npx tsc --noEmit
 

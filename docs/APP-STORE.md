@@ -1,10 +1,29 @@
 # The App Store submission
 
 `SHIPPING.md` §2 gets a build into TestFlight. This is the other half: the words, the
-answers and the settings App Store Connect asks for before a build can go to review,
-written out so submitting is typing rather than deciding.
+answers and the settings App Store Connect asks for before a build can go to review.
 
-The build pipeline is done. What follows needs your Apple account and nobody else's.
+**Most of it is no longer typing.** `scripts/appstore-metadata.mjs` holds the listing
+and pushes it over Apple's API, idempotently:
+
+```powershell
+node scripts/appstore-metadata.mjs --dry   # prints what it would change
+node scripts/appstore-metadata.mjs
+```
+
+It sets the subtitle, the privacy policy URL, both categories, the description,
+keywords, promotional text, the support and marketing URLs, the age rating
+questionnaire, the price, the version string, the build to review, and the App Review
+notes and demo account. Then it prints what is left.
+
+**Two things it cannot do, and one it will not.** Screenshots are
+`scripts/appstore-screenshots.mjs`. App Privacy has no API at all — every
+`appDataUsages` path answers 404, and fastlane cannot reach it either — so §5 below is
+still a console form. And it never submits for review; that stays a decision somebody
+makes on purpose.
+
+This file is now the reasoning. The script is the copy: change a word there, not here,
+or the listing and the document drift apart with nothing to notice.
 
 > **Demo credentials are not in this file.** This repository is public. They are in
 > `docs/owner-open-items.md` at the project root, which is not version controlled.
@@ -30,6 +49,9 @@ no third-party analytics, a parental gate on everything — and this app is buil
 13-and-over shape described in §4 instead.
 
 ## 2. Description
+
+**The live copy is `LISTING` in `scripts/appstore-metadata.mjs`.** What follows is the
+same words, kept here for reading.
 
 > Fast Basketball is the private line between Coach Blake Kingsley, his players, and
 > their parents.
@@ -82,8 +104,9 @@ App Review looks for them there and not only on the listing.
 Required: 6.9-inch iPhone, 1320 × 2868. One set covers every iPhone size. `app.json` sets
 `supportsTablet: false`, so **no iPad screenshots are needed**.
 
-Take them from a TestFlight build signed in as the demo parent, so the content is real.
-Five, in this order, are the story:
+`scripts/appstore-screenshots.mjs` captures and uploads them. It renders the real app
+against seeded demo data in a local emulator, so nothing is staged and no family's real
+conversation is photographed. Five, in this order, are the story:
 
 1. A conversation with the monitoring banner visible
 2. The You tab showing Training consent granted
@@ -98,6 +121,14 @@ Answer the questionnaire honestly. Two answers decide the outcome here:
 - **Chat or messaging between users**: yes. Private and invitation-only, not open.
 - **Unrestricted web access**: no. The only web view renders HTML the coach publishes, and
   it is sandboxed (`src/workflowBridge.ts`).
+
+**Apple computes 4+ from honest answers, and that is wrong here.** Under the rating
+system Apple moved to in 2025, private chat and user-generated content are shown to
+parents as capabilities rather than raising the band, so the questionnaire alone leaves
+this app offered to under-13s. `AGE_RATING.ageRatingOverrideV2` is therefore set to
+`THIRTEEN_PLUS`, which is how a developer says the audience is older than the content
+implies. App Store Connect then reports `appStoreAgeRating: TWELVE_PLUS`, which is the
+legacy name for the same band; the store shows 13+.
 
 Expect **13+**. That is also the rating this product wants: COPPA attaches below 13, and
 the cheap compliant path is no logins for athletes under 13 — those families share the
@@ -178,9 +209,10 @@ Paste the demo credentials from `docs/owner-open-items.md`, and these notes:
 Apple emails within about an hour of a successful upload. Two messages are common and
 neither blocks TestFlight:
 
-- **"Missing Purpose String"** would name an API used without a usage description. The app
-  touches no camera, microphone, location or photo library, so it should not appear. If it
-  does, it names the key to add under `ios.infoPlist` in `app.json`.
+- **"Missing Purpose String"** names an API used without a usage description. The app uses
+  the camera (Shot Form) and the microphone (the Dribble Counter), and `app.json` carries
+  a usage string for each. It touches no location, contacts or photo library. If the notice
+  names anything else, it names the key to add under `ios.infoPlist`.
 - **A privacy manifest notice.** Expo's prebuild writes `PrivacyInfo.xcprivacy` and every
   native dependency here ships its own. If Apple names a missing declaration, add it under
   `ios.privacyManifests` in `app.json` and re-tag. It is metadata, not code.

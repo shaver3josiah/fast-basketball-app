@@ -59,7 +59,8 @@
     "check:sounds": "node scripts/build-sounds.mjs --check",
     "check:worksheets": "node scripts/build-worksheets.mjs --check",
     "test:auth": "node --experimental-strip-types scripts/check-auth-messages.mjs",
-    "check:keyboard": "node scripts/check-keyboard.mjs"
+    "check:keyboard": "node scripts/check-keyboard.mjs",
+    "test:play": "node scripts/check-play.mjs"
   },
   "private": true
 }

@@ -60,7 +60,8 @@
           "color": "#E60C20",
           "mode": "production"
         }
-      ]
+      ],
+      "./plugins/with-play-manifest"
     ]
   }
 }
