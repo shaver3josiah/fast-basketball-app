@@ -279,11 +279,38 @@ export async function push() {
   await patch('ageRatingDeclarations', rating.data.id, AGE_RATING, 'age rating questionnaire');
 
   // ---- the version being prepared ------------------------------------------------
-  const { data: versions } = await asc(
-    `apps/${app.id}/appStoreVersions?filter[appStoreState]=PREPARE_FOR_SUBMISSION&limit=1`,
-  );
-  const version = versions[0];
-  if (!version) throw new Error('no version is in PREPARE_FOR_SUBMISSION; create one in App Store Connect');
+  // EVERY EDITABLE STATE, not just PREPARE_FOR_SUBMISSION. A rejected version sits in
+  // REJECTED, and that is precisely when the review notes most need rewriting -- Apple
+  // rejected 1.0.4 build 9 asking for answers in the Notes field, and this script could
+  // not reach the version to put them there. It failed with "create one in App Store
+  // Connect", which was misleading: the version existed and was editable in the UI.
+  //
+  // The states are ordered by how much they mean "this is the one being worked on", and
+  // the first match wins, so a fresh PREPARE_FOR_SUBMISSION still beats a stale rejected
+  // one if both somehow exist.
+  const EDITABLE = [
+    'PREPARE_FOR_SUBMISSION',
+    'DEVELOPER_REJECTED',
+    'REJECTED',
+    'METADATA_REJECTED',
+    'INVALID_BINARY',
+  ];
+  let version = null;
+  for (const state of EDITABLE) {
+    const { data } = await asc(`apps/${app.id}/appStoreVersions?filter[appStoreState]=${state}&limit=1`);
+    if (data[0]) {
+      version = data[0];
+      if (state !== 'PREPARE_FOR_SUBMISSION') console.log(`  version is ${state}, which is editable -- patching it`);
+      break;
+    }
+  }
+  if (!version) {
+    throw new Error(
+      `no version is in an editable state (${EDITABLE.join(', ')}). ` +
+      'Either create one in App Store Connect, or the current version is already in review ' +
+      'or released, in which case metadata cannot be changed until a new version exists.',
+    );
+  }
 
   // The version string has to equal the build's CFBundleShortVersionString, and the
   // workflow stamps that from the git tag -- so the newest build decides it, not
