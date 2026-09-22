@@ -1,0 +1,87 @@
+name: App Store metadata
+
+# The listing, the review notes and the demo account live in
+# scripts/appstore-metadata.mjs, but the credentials that push them (ASC_KEY_ID,
+# ASC_ISSUER_ID, ASC_KEY_P8) exist only as repository secrets. Before this workflow the
+# only way to run the push was to copy those secrets onto a laptop, which is the one
+# thing the script's own header says not to do -- so in practice the listing was pushed
+# by hand or not at all, and "the file IS the listing" was true only in intent.
+#
+# Apple rejected 1.0.4 build 9 asking for answers "in the Notes field ... for reference
+# on future submissions". Those answers are in REVIEW_NOTES now, and this is what gets
+# them to Apple without a human holding a signing key.
+#
+# Nothing here submits for review. The script's --submit is deliberately separate, and
+# sending a version to review stays a human decision in App Store Connect.
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry:
+        description: "Print what would be sent and change nothing. Run this first."
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  metadata:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22.13'
+          cache: npm
+
+      # The script imports nothing outside node: builtins, so this is only here to keep
+      # the runtime identical to every other job rather than because it is needed.
+      - run: npm ci
+
+      - name: Push the listing
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          # The SAME account scripts/review-account.mjs provisions and proves. Passing
+          # the REVIEW_* names means App Review is handed the credential that script
+          # signed into, rather than a second copy that can drift out of date -- which
+          # is the failure that cost version code 18 on Play.
+          REVIEW_EMAIL: ${{ secrets.REVIEW_EMAIL }}
+          REVIEW_PASSWORD: ${{ secrets.REVIEW_PASSWORD }}
+        run: |
+          set -euo pipefail
+
+          # A missing secret would otherwise surface as a confusing API error several
+          # calls in, after some of the listing had already been patched.
+          for v in ASC_KEY_ID ASC_ISSUER_ID ASC_KEY_P8 REVIEW_EMAIL REVIEW_PASSWORD; do
+            if [ -z "${!v:-}" ]; then
+              echo "::error::$v is not set as a repository secret. See docs/SHIPPING.md."
+              exit 1
+            fi
+          done
+
+          if [ "${{ inputs.dry }}" = "true" ]; then
+            echo "DRY RUN -- nothing will be changed."
+            node scripts/appstore-metadata.mjs --dry
+          else
+            node scripts/appstore-metadata.mjs
+          fi
+
+      - name: Say what was not done
+        if: success()
+        run: |
+          {
+            echo "### Pushed the listing, the review notes and the demo account"
+            echo ""
+            echo "Still done by hand, on purpose:"
+            echo ""
+            echo "- **App Privacy** (the nutrition label). Apple exposes it over the API, but"
+            echo "  getting it wrong is a legal statement about a minor's data. Answer it in the"
+            echo "  console against the table in \`docs/APP-STORE.md\` section 5."
+            echo "- **Screenshots** — \`scripts/store-screenshots.mjs\` uploads those."
+            echo "- **Submitting for review** — a human decision in App Store Connect."
+          } >> "$GITHUB_STEP_SUMMARY"

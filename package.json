@@ -64,7 +64,9 @@
     "screenshots": "node scripts/store-screenshots.mjs",
     "review:account": "node --env-file=.env scripts/review-account.mjs",
     "review:check": "node --env-file=.env scripts/review-account.mjs --check",
-    "test:review": "node --test scripts/check-review-account.mjs"
+    "test:review": "node --test scripts/check-review-account.mjs",
+    "appstore:metadata": "node --env-file=.env scripts/appstore-metadata.mjs",
+    "appstore:dry": "node --env-file=.env scripts/appstore-metadata.mjs --dry"
   },
   "private": true
 }
