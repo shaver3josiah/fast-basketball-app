@@ -319,8 +319,13 @@ export async function push() {
     contactEmail: process.env.APP_REVIEW_CONTACT_EMAIL || 'shaver3josiah@gmail.com',
     contactPhone: process.env.APP_REVIEW_CONTACT_PHONE || '+1 503 686 8371',
     demoAccountRequired: true,
-    demoAccountName: need('APP_REVIEW_DEMO_EMAIL'),
-    demoAccountPassword: need('APP_REVIEW_DEMO_PASSWORD'),
+    // THE SAME CREDENTIAL scripts/review-account.mjs provisions and proves, under the
+    // name that script uses. Two env vars for one account is how they drift, and a
+    // drifted demo password in App Store Connect is the exact rejection class that
+    // cost version code 18 on Play. APP_REVIEW_DEMO_* still wins if it is set, so an
+    // existing environment keeps working.
+    demoAccountName: process.env.APP_REVIEW_DEMO_EMAIL || need('REVIEW_EMAIL'),
+    demoAccountPassword: process.env.APP_REVIEW_DEMO_PASSWORD || need('REVIEW_PASSWORD'),
     notes: REVIEW_NOTES,
   };
 
