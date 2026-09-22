@@ -103,6 +103,14 @@ jobs:
       - name: Play upload self-check
         run: npm run test:play
 
+      # review-account.mjs writes to the LIVE project with an admin credential, and its
+      # one guardrail is that it refuses any athlete record naming an address that is not
+      # a review address. Without that, the shortest path is to attach a store reviewer to
+      # a real family and hand Google a real conversation about a real child. The guard is
+      # a pure function so this runs offline in a second; disabling it fails three cases.
+      - name: Review-account guardrail self-check
+        run: npm run test:review
+
       - name: Typecheck
         run: npx tsc --noEmit
 
