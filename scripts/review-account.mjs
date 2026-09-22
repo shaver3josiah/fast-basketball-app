@@ -288,10 +288,53 @@ async function provision(token) {
     writes.push([`threads/${tid}/messages/${mid}`, { senderUid, text, createdAt }]);
   }
 
+  // THE CALENDAR, because the review notes send a reviewer to it. They say "Calendar
+  // shows scheduled workouts; tapping one opens a training timer", and until this
+  // existed the answer was an empty month -- while the coach's own seeded message two
+  // screens away said "I put a ball-handling workout on his calendar for the days in
+  // between". A reviewer following written instructions to something that is not there
+  // is the exact failure Apple already rejected once.
+  //
+  // Dated FORWARD (daysAgo takes a negative) so the calendar opens on a month with
+  // something in it. One past session is kept so the history is not empty either.
+  //
+  // memberUids AND athleteId are both set: the read rule accepts either, and the
+  // athleteId branch resolves through a get() at read time, so this survives the
+  // account being re-created with a new uid after the deletion recording.
+  const audience = [guardian.uid, playerUid].filter(Boolean);
+  const EVENTS = [
+    ['review-demo-event-1', daysAgo(-2, 17, 0), 'handle', 'Ball handling and finishing', 45, [
+      { id: 'b1', name: 'Two-ball pound dribble', minutes: 10 },
+      { id: 'b2', name: 'Crossover into pull-up', minutes: 20 },
+      { id: 'b3', name: 'Finishing off two feet', minutes: 15 },
+    ]],
+    ['review-demo-event-2', daysAgo(-5, 17, 0), 'shoot', 'Form shooting and free throws', 40, [
+      { id: 'b1', name: 'Form shooting, one hand', minutes: 10 },
+      { id: 'b2', name: 'Elbow to elbow, 10 makes a spot', minutes: 20 },
+      { id: 'b3', name: 'Free throws, 20 makes', minutes: 10 },
+    ]],
+    ['review-demo-event-3', daysAgo(3, 17, 0), 'skills', 'Skills session', 60, null],
+  ];
+  for (const [id, startsAt, type, name, durationMin, blocks] of EVENTS) {
+    writes.push([`events/${id}`, {
+      athleteId: ATHLETE,
+      athleteIds: [ATHLETE],
+      memberUids: audience,
+      type,
+      name,
+      location: 'Salvation Army Fort Lauderdale Corps gym, 100 SW 9th Ave',
+      startsAt,
+      durationMin,
+      ...(blocks ? { blocks } : {}),
+    }]);
+  }
+
   for (const [path, data] of writes) {
     await api(`${FS}/${path}`, { token, method: 'PATCH', body: { fields: fields(data) } });
   }
-  console.log(`  wrote    1 athlete, ${playerUid ? 2 : 1} thread(s), ${msgs.length} messages`);
+  console.log(
+    `  wrote    1 athlete, ${playerUid ? 2 : 1} thread(s), ${msgs.length} messages, ${EVENTS.length} calendar events`
+  );
 }
 
 // --- verify ------------------------------------------------------------------
@@ -391,6 +434,28 @@ async function verify() {
     }
     out.push([!posted, posted ? 'GUARDIAN CAN POST into her athlete thread' : 'guardian is refused posting into it']);
   }
+
+  // The review notes point a reviewer at the Calendar in as many words, so an empty one
+  // is a broken instruction rather than a cosmetic gap -- and a coach message two
+  // screens away promises a workout is on it. Read it as the guardian, through the
+  // rules, the way her phone does.
+  let events = -1;
+  try {
+    const q = await api(`${FS}:runQuery`, {
+      token: tok, method: 'POST',
+      body: {
+        structuredQuery: {
+          from: [{ collectionId: 'events' }],
+          where: { fieldFilter: { field: { fieldPath: 'athleteId' }, op: 'EQUAL', value: { stringValue: ATHLETE } } },
+          limit: 10,
+        },
+      },
+    });
+    events = q.filter((r) => r.document).length;
+  } catch {
+    events = -1;
+  }
+  out.push([events >= 2, `calendar has ${events < 0 ? 'unreadable' : events} sessions the guardian can see (needs 2+)`]);
 
   return out;
 }

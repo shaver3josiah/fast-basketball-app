@@ -320,11 +320,33 @@ export default function You() {
             external
             onPress={() => Linking.openURL('https://fast-basketball.com/privacy')}
           />
+          {/*
+            THIS MUST NOT REACH THE COACH. It used to open fast-basketball.com/contact,
+            which is the site's SALES enquiry form: it emails the coach, its spam filter
+            answers a flagged message with a silent ok and mails nobody, and it requires
+            the sender to tick "I'm the player's parent or guardian, or I'm 18 or older"
+            before it will submit. So the one route an athlete had for reporting a
+            concern about their coach went to that coach, could be dropped without
+            anyone seeing it, and a fifteen-year-old could not use it truthfully.
+
+            Mail to the account holder instead. It needs no server, works for a minor,
+            names no third party, and cannot be silently filtered. The address is the
+            same one already published as the App Review contact.
+          */}
           <Row
             icon="help-buoy-outline"
-            label="Get help or report a concern"
+            label="Report a concern"
             external
-            onPress={() => Linking.openURL('https://fast-basketball.com/contact')}
+            onPress={() =>
+              Linking.openURL(
+                'mailto:shaver3josiah@gmail.com' +
+                  '?subject=' + encodeURIComponent('Fast Basketball: report a concern') +
+                  '&body=' + encodeURIComponent(
+                    'Describe what happened. If it is about a message, say which conversation and roughly when.\n\n' +
+                      'This goes to the person who runs the app, not to the coach.\n\n'
+                  )
+              )
+            }
           />
           {role !== 'coach' && (
             <Row
