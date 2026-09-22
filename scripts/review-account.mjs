@@ -360,6 +360,38 @@ async function verify() {
   // "A reviewer who signs in to an empty app has been known to reject it as incomplete."
   out.push([msgCount >= 3, `conversation has ${msgCount} messages (needs 3+)`]);
 
+  // THE MONITORING PROMISE, checked rather than asserted. The review notes tell both
+  // stores that a guardian reads every word between the coach and her athlete and
+  // cannot post into it, and Apple asked specifically to see the controls that govern
+  // user-generated content. That claim is only true while the rules enforce it, so
+  // prove both halves with the reviewer's own token before saying it in a submission.
+  if (PLAYER_EMAIL) {
+    let seen = -1;
+    try {
+      const m = await api(`${FS}/threads/${T_PLAYER}/messages?pageSize=20`, { token: tok });
+      seen = (m.documents ?? []).length;
+    } catch {
+      seen = -1;
+    }
+    out.push([seen >= 1, `guardian reads her athlete's thread (${seen < 0 ? 'denied' : seen + ' messages'})`]);
+
+    // A write that SUCCEEDS here is the failure, so it is cleaned up rather than left
+    // sitting in a thread a reviewer is about to read.
+    const probe = `${FS}/threads/${T_PLAYER}/messages/rules-probe`;
+    let posted = false;
+    try {
+      await api(probe, {
+        token: tok, method: 'PATCH',
+        body: { fields: fields({ senderUid: session.localId, text: 'rules probe', createdAt: new Date() }) },
+      });
+      posted = true;
+      await api(probe, { token: tok, method: 'DELETE' }).catch(() => {});
+    } catch {
+      posted = false;
+    }
+    out.push([!posted, posted ? 'GUARDIAN CAN POST into her athlete thread' : 'guardian is refused posting into it']);
+  }
+
   return out;
 }
 
