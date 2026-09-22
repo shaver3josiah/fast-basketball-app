@@ -209,10 +209,10 @@ jobs:
           echo "R8 ran: $(wc -l < "$M") mapping lines"
 
       # Without this file an obfuscated stack trace is unreadable, and it exists only on
-      # this runner. AGP is understood to embed the map inside the .aab for Play, but that
-      # has not been checked on a real build here and the sideloaded .apk carries none
-      # either way -- so keep the copy. If a Play crash report ever comes back obfuscated,
-      # this artifact is what gets uploaded by hand under App bundle explorer.
+      # this runner. Play gets its own copy: AGP embeds the map in the bundle at
+      # BUNDLE-METADATA/com.android.tools.build.obfuscation/proguard.map, confirmed on the
+      # .aab from run 35658091810. The sideloaded .apk carries none, though, which is what
+      # this artifact is for -- a crash on a phone Blake installed by hand.
       - uses: actions/upload-artifact@v5
         with:
           name: r8-mapping
