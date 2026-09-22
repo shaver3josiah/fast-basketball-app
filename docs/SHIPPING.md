@@ -297,8 +297,47 @@ has an API:
 | Ads | No ads |
 | Content rating | Same answers as Apple's: private messaging yes, user-generated content yes, no unrestricted web access, nothing else |
 | Target audience | **13 and over.** Do not tick an under-13 age band: it opts the app into the Families policy, and the whole design here is that an athlete under 13 has no login and trains from the parent's account |
-| Data safety | The table in `APP-STORE.md` section 5. Collected, linked to the user, app functionality, not shared, not used for tracking. Encrypted in transit, and deletion is offered in the app |
+| Data safety | **Use the Play table under 7.1.1 below, not Apple's.** Same data, different category names, and one of Apple's (Other user content) has no Play equivalent |
 | Government apps / financial / health | No to all |
+
+### 7.1.1 Play's Data safety form, row by row
+
+Apple's table in `APP-STORE.md` section 5 is the same data, but Play names its
+categories differently, and Apple's "Other user content" has no Play equivalent. Filling
+Play's form from Apple's names is how the MESSAGES get left off, because nothing in
+Play's picker is called that. Messages between a coach and a minor are the most
+sensitive thing this app holds, and an undeclared data type Play finds the app
+transmitting is a policy violation on its own.
+
+Every row below: **Collected: yes. Shared: no.** (Google is a service provider, which
+Play does not count as sharing, and nobody else receives anything.) **Processed
+ephemerally: no. Required.** Purpose: **App functionality**, and **Account management**
+where noted. Nothing is used for analytics, advertising, personalisation or fraud.
+
+| Play category | Play data type | What it is here |
+|---|---|---|
+| Personal info | Name | The athlete's and guardian's names the coach types in; a chosen display name |
+| Personal info | Email address | The login, and the address the invitation is sent to. Also Account management |
+| Personal info | User IDs | The Firebase Auth uid every record is keyed on. Also Account management |
+| Personal info | Other info | The athlete's age, an optional number the coach types in |
+| Messages | Other in-app messages | **The coach/parent and coach/athlete conversations.** This is the row that goes missing |
+| Health and fitness | Fitness info | Minutes trained and workout blocks finished |
+| App activity | App interactions | The streak: the day the app was last opened, and which sessions were finished |
+| App activity | Other user-generated content | Answers typed into training worksheets; the Dribble Counter's saved count and ball fingerprint |
+
+Then the section-level questions:
+
+| Question | Answer |
+|---|---|
+| Is all data encrypted in transit? | **Yes.** Firebase Auth and Firestore are TLS only |
+| Do you provide a way for users to request deletion? | **Yes** |
+| Deletion URL | `https://fast-basketball.com/privacy` — the "The Fast Basketball app" section names the in-app path and a web route that works without the app installed. Play requires the web route; it did not exist before 22 September 2026 |
+
+Answer **no** to location, financial info, contacts, photos and videos, audio files
+(the Dribble Counter hears audio and saves none of it, only a count and a numeric
+fingerprint, which are declared above as user-generated content), files, calendar
+(Play's "Calendar events" means the phone's calendar, which the app never reads), web
+browsing, app info and performance, and device IDs.
 
 ### 7.2 The service account (one time, yours)
 

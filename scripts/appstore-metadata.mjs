@@ -129,7 +129,13 @@ export const AGE_RATING = {
   advertising: false,
   gambling: false,
   lootBox: false,
-  healthOrWellnessTopics: false,
+  // TRUE, and it was false until 22 September 2026. The app is structured exercise:
+  // workouts the coach publishes, a timer that logs minutes trained, a daily streak.
+  // App Privacy declares Fitness data for exactly that reason, and an age-rating form
+  // saying the same app has no health or wellness content contradicts the label a
+  // reviewer reads beside it. It is a capability shown to parents, not a rating raise,
+  // and ageRatingOverrideV2 below already fixes the band at 13+.
+  healthOrWellnessTopics: true,
   messagingAndChat: true,
   userGeneratedContent: true,
   socialMedia: false,

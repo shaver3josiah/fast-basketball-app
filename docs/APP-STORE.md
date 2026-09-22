@@ -165,18 +165,26 @@ in this app — Firebase Auth and Firestore are the whole backend.
 | User ID | Yes | The Firebase Auth uid every record is keyed on |
 | Fitness | Yes | The workout timer files minutes trained and blocks finished under the athlete (`logWorkoutDone` in `src/data.ts`), and the account's own record keeps a training streak and a workout count |
 | Other data | Yes | The athlete's age, an optional whole number the coach types on the Roster when he invites a family (`age` in `src/types.ts`) |
+| Product Interaction (under Usage Data) | Yes | The streak: `/users/{uid}` stores the day the app was last opened, the run length, the best run, and which sessions were finished (`lastDay`, `streak`, `bestStreak`, `doneEvents` in `UserPrefs`). Purpose: **App Functionality only** |
 
 Answer **No** to tracking, advertising data, location, contacts, photos, health, financial
 info, browsing history and diagnostics. Nothing in the app collects them.
 
-Two answers on that form are easy to get wrong here, so read them twice:
+Three answers on that form are easy to get wrong here, so read them twice:
 
 - **Health is No, Fitness is Yes.** Apple splits them. Nothing medical or clinical is
   collected. Minutes trained and blocks finished are exercise data, and they are shared
   with the coach, so they are declared.
-- **Analytics is No, including for the streak.** Keeping a streak means the account's own
-  record holds the date it was last opened. It stays on that account, the coach cannot read
-  it, and it exists to run the feature. That is App Functionality, not Analytics.
+- **Usage Data is Yes, Analytics is No.** Apple asks two separate things: what TYPE of
+  data leaves the phone, and what PURPOSE it serves. The streak sends the date the app was
+  last opened to Firestore, and "when the app was opened" is Product Interaction data, so
+  the type is declared. Its only purpose is to run the streak on that same account, which
+  the coach cannot read, so the purpose is App Functionality and Analytics stays unticked.
+  An earlier version of this table left the row out entirely by conflating the two
+  questions; the pre-resubmission audit of 22 September 2026 caught it.
+- **The privacy policy now matches this table.** `fast-basketball.com/privacy` has a
+  section on the app naming every row above. Until 22 September 2026 it described the
+  website only, and both stores check the label against the linked policy.
 
 Account deletion is offered in the app — You tab, Delete my account — which is what
 Guideline 5.1.1(v) requires.
