@@ -250,6 +250,67 @@ Paste the same credentials, and these notes:
 > are the child-safety record the guardian is promised, and no party, the coach included,
 > can delete one.
 
+### 6.3 Apple: the screen recording (rejection of 1.0.4 build 9)
+
+Apple rejected 1.0.4 (9) on 21 September 2026 under Guideline 2.1, Information Needed.
+It is not a defect finding. It is the questionnaire a developer account with little
+review history gets, and it asks for six things plus a recording. Items 2 to 6 are
+answered by `REVIEW_NOTES` above, which is why that block now carries them: Apple asked
+for the answers in the Notes field "for reference on future submissions", not only in a
+reply. Push them with `npm run appstore-metadata`, then paste the same text into the
+reply in App Store Connect and attach the recording.
+
+The recording is the only part nobody can automate. It has to be captured on a physical
+device on the current iOS, start at launch, and show registration, login, account
+deletion, user-generated content, and the reporting and blocking controls.
+
+**Record it in this order, one take:**
+
+1. **Launch from the home screen.** Apple asks for the recording to begin with launching
+   the app, so start on the springboard, not inside the app.
+2. **Registration.** Sign up with a brand new address. It will land on the verify-your-email
+   screen and stop there. Say out loud, or caption, that this is the invitation model: an
+   account reaches nothing until a verified address matches an athlete record the coach
+   created. Stopping here is the honest demonstration, not a failure.
+3. **Sign in as the demo account** from the Notes. Straight in, no code, no inbox.
+4. **Messages.** Open the conversation. Send one message so user-generated content is
+   visibly created, not just displayed.
+5. **Reporting.** You tab, "Get help or report a concern". Open it and let the form load.
+6. **Blocking.** On the same tab, show the consent switch and turn it off, then on. That is
+   the control that stops an athlete posting. Show a conversation's mute switch too.
+7. **Calendar and Locker,** briefly. Tap a scheduled workout to show the timer. Open the
+   Locker so the worksheets are visible. Do not open the camera or microphone tools unless
+   you want to demonstrate the permission prompts, which is fine but not required.
+8. **Account deletion.** You tab, Account, Delete account. Go all the way through to the
+   end, including the screen explaining that messages are retained as the guardian's record.
+
+**Step 8 destroys the reviewer's login, and step 8 is the one Apple insists on.**
+Deleting the demo account removes the Auth user that the Notes field hands Apple, and the
+athlete record, threads and messages all reference its uid.
+
+Put it back before replying:
+
+```
+npm run review:account -- --key <path to the admin SDK json>
+```
+
+It recreates the account with the same address, rewrites the athlete, both threads and
+every seeded message against the new uid, and then signs in as the reviewer to prove it.
+Do not send the reply until that run reports the account ready. `npm run review:check`
+re-checks it at any time.
+
+If recording the deletion on the demo account feels too sharp, register a second throwaway
+address at step 2, provision it by pointing `REVIEW_EMAIL` at it for one run, and delete
+that one instead. The demo account is then never touched.
+
+**One risk worth knowing before you send.** Apple asked to see "the required content
+reporting and blocking mechanisms". This app has a report link and two controls that stop
+a conversation, but it has no per-user block button, because there is no user to block:
+the only person a family can message is their own coach. That argument is in the notes and
+it is true. If Apple pushes back under Guideline 1.2 anyway, the smallest answer is a
+"Report this message" action inside a thread that opens the same support form with the
+thread id prefilled. That is a new build, so it is deliberately not being done pre-emptively.
+
 ## 7. Two things commonly panicked about that do not apply
 
 - **Sign in with Apple** (Guideline 4.8) is required only when an app offers a *third-party*

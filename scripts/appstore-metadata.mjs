@@ -153,19 +153,41 @@ export const AGE_RATING = {
   ageRatingOverrideV2: 'THIRTEEN_PLUS',
 };
 
-export const REVIEW_NOTES = `This app is a private messaging and scheduling tool for one basketball trainer and the families he coaches. It is invitation-only: the coach creates an athlete record naming a parent's email address, and an account can see nothing until a verified address matches one. The demo account above is already attached to an athlete record with an active conversation.
+export const REVIEW_NOTES = `WHAT THE APP IS AND WHO IT IS FOR
+Fast Basketball is a private coaching tool for one basketball trainer, Coach Blake Kingsley, and the families who hire him in Fort Lauderdale, Florida. It is not a social network, a marketplace, or an internal business tool. The problem: schedules live in text messages, workouts on paper, and a parent has no view of what their child is told. This app puts all three in one place, with the parent able to read everything. Audience: the coach, the parents who pay him, and athletes aged 13 and over. Anyone can become a client through fast-basketball.com, so this is a consumer service, not an app limited to one organization's employees.
 
-Sign in as the demo parent to see a conversation, the calendar, the Locker, and the consent controls on the You tab.
+HOW TO SET UP AND REACH EVERY FEATURE
+Use the demo account in the fields above. It is permanently verified, needs no one-time code, SMS, secondary device or email inbox, and is already attached to an athlete record with an active conversation. Messages is the conversation with the coach. Calendar shows scheduled workouts; tapping one opens a training timer. Locker holds training worksheets, including the two camera and microphone tools. You holds the guardian consent control, notification settings, and Account, which contains account deletion. Nothing is sold in the app and there is no in-app purchase.
 
-ON SAFETY, SINCE THE APP INVOLVES MINORS: a guardian is a permanent reader on every conversation between the coach and their athlete, enforced by Firestore Security Rules rather than by the UI. The coach cannot remove her, and cannot edit or delete a message. The athlete is shown a banner saying so. An athlete cannot send a message at all until the guardian grants consent, and the guardian can revoke it at any moment, which locks the conversation immediately. Athletes under 13 are given no login at all; those families use the parent's account, which is why the app is rated for 13 and over.
+EXTERNAL SERVICES
+Firebase Authentication (Google) for sign-in and Cloud Firestore (Google) for messages, schedules and training records. Nothing else. No analytics, crash reporting, advertising, tracking or AI service, and no payment processor, because nothing is sold. Notifications are local only, scheduled by the device clock: there is no push server and no APNs token. Two optional worksheets load a pose-detection model from Google's CDN on first use, and fonts from Google Fonts. Both run on the device.
 
-USER GENERATED CONTENT: the only content anyone can create is a message to their own coach and the answers they type into a training worksheet. There is no feed, no profile, no discovery and no way for one user to reach another, so there is nobody to block. The parent's consent switch is the block, and it is immediate.
+REGIONAL DIFFERENCES
+None. The app behaves identically everywhere, is English only, and has no geo-gating or region-specific content.
 
-CAMERA AND MICROPHONE: two optional training tools use them. Shot Form watches a shooting motion through the camera and the Dribble Counter listens for the bounce of a ball. Both run entirely on the device, record nothing, and send nothing anywhere. They are reached from the Locker tab and each asks before it opens the hardware.
+REGULATED INDUSTRY AND THIRD-PARTY MATERIAL
+Neither applies. This is youth sports coaching. All content is written by the coach or typed by the families; no protected or licensed third-party material is included. The account holder builds and operates the app for the coach under a signed written agreement, available on request.
 
-REPORTING: the You tab links to a support form monitored by the account holder.
+SAFETY, SINCE THE APP INVOLVES MINORS
+A guardian is a permanent reader on every conversation between the coach and her athlete, enforced by Firestore Security Rules rather than by the UI. The coach cannot remove her and cannot edit or delete a message. The athlete sees a banner saying so. An athlete cannot send a message until the guardian grants consent, and she can revoke it at any moment, which locks the conversation immediately. Athletes under 13 get no login; those families use the parent's account, which is why the rating is 13 and over.
 
-ACCOUNT DELETION is on the You tab under Account. It deletes the login and that account's own settings. Messages are retained deliberately, and the screen says so: they are the child-safety record the guardian is promised, and no party, the coach included, can delete one.`;
+USER GENERATED CONTENT, REPORTING AND BLOCKING
+The only content anyone creates is a message to their own coach and answers typed into a training worksheet. There is no feed, no profile, no search and no way for one user to reach another, so nobody can be exposed to a stranger's content. Reporting: You tab, "Get help or report a concern", which reaches a form the account holder monitors and answers. Blocking: the guardian's consent switch on the You tab immediately stops her athlete's conversation, and each conversation can be muted individually. We will add any further control Apple considers necessary.
+
+CAMERA AND MICROPHONE
+Two optional training tools use them. Shot Form watches a shooting motion; the Dribble Counter listens for a bouncing ball. Both run entirely on the device, record nothing and send nothing anywhere. Each asks before opening the hardware, and the app works fully without either.
+
+ACCOUNT DELETION
+You tab, under Account. It deletes the login and that account's settings. Messages are retained deliberately and the screen says so: they are the child-safety record the guardian is promised, and nobody, the coach included, can delete one.`;
+
+// App Store Connect caps the review notes at 4000 characters and refuses a longer
+// one at the API, after the rest of the metadata has already been pushed. Fail here
+// instead, where the message can say which field and by how much.
+if (REVIEW_NOTES.length > 4000) {
+  throw new Error(
+    'REVIEW_NOTES is ' + REVIEW_NOTES.length + ' characters; App Store Connect allows 4000.'
+  );
+}
 
 // ---------------------------------------------------------------------------------
 // API client. ES256, raw (P1363) signature -- a DER one is rejected as malformed.
