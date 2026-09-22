@@ -232,7 +232,7 @@ function need(name) {
   return v;
 }
 
-async function asc(path, { method = 'GET', body } = {}) {
+export async function asc(path, { method = 'GET', body } = {}) {
   const url = path.startsWith('http') ? path : `https://api.appstoreconnect.apple.com/v1/${path}`;
   const res = await fetch(url, {
     method,
