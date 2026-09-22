@@ -61,7 +61,10 @@
     "test:auth": "node --experimental-strip-types scripts/check-auth-messages.mjs",
     "check:keyboard": "node scripts/check-keyboard.mjs",
     "test:play": "node scripts/check-play.mjs",
-    "screenshots": "node scripts/store-screenshots.mjs"
+    "screenshots": "node scripts/store-screenshots.mjs",
+    "review:account": "node --env-file=.env scripts/review-account.mjs",
+    "review:check": "node --env-file=.env scripts/review-account.mjs --check",
+    "test:review": "node --test scripts/check-review-account.mjs"
   },
   "private": true
 }

@@ -183,7 +183,45 @@ Guideline 5.1.1(v) requires.
 
 ## 6. App Review Information
 
-Paste the demo credentials from `docs/owner-open-items.md`, and these notes:
+**Provision the account first: `npm run review:account -- --key <service-account.json>`.**
+It creates the demo login with `emailVerified` already true, builds a synthetic athlete
+record with a real conversation on it, and then signs in as the reviewer would and
+proves all of it. Do not submit on a run that reported a failure.
+
+Play rejected version code 18 because none of that had been done. The reviewer signed in
+and hit the app's own email-verification gate, which Google reported as "Multi-factor
+authentication blocks access" -- clearing it needed a Gmail inbox they correctly refused
+to ask for. The gate is not a bug and has not been changed; the demo account is simply
+verified through the admin API instead of by a human opening mail.
+
+### 6.1 Google Play: Sign in details
+
+Play Console, **App content**, **App access**. Choose *All or some functionality is
+restricted*, add one instruction set, and paste:
+
+| Field | Value |
+| --- | --- |
+| Name of the flow | `Guardian sign-in` |
+| Username | `REVIEW_EMAIL` from `docs/owner-open-items.md` |
+| Password | `REVIEW_PASSWORD` from `docs/owner-open-items.md` |
+
+> This account is permanently verified and needs no one-time password, SMS code,
+> secondary device, or access to any email inbox. Sign in and you are straight into the
+> app. The credentials are reusable, do not expire, and work from any location.
+>
+> The app is a private messaging and scheduling tool for one basketball trainer and the
+> families he coaches. It is invitation-only: the coach creates an athlete record naming
+> a parent's email address, and an account sees nothing until a verified address matches
+> one. This account is already attached to an athlete record with an active conversation,
+> so there is nothing to set up.
+>
+> After signing in: the first tab is the conversation with the coach. The Calendar tab
+> has scheduled workouts, the Locker tab has training worksheets, and the You tab has the
+> guardian's consent control and Account, which contains account deletion.
+
+### 6.2 Apple: the notes
+
+Paste the same credentials, and these notes:
 
 > This app is a private messaging and scheduling tool for one basketball trainer and the
 > families he coaches. It is invitation-only: the coach creates an athlete record naming a

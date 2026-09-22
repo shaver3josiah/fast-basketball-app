@@ -42,12 +42,12 @@ const b64u = (b) => Buffer.from(b).toString('base64url');
  * Apple's App Store Connect uses ES256 — same shape, different algorithm, and using
  * the wrong one fails as "invalid_grant" with nothing pointing at the algorithm.
  */
-export async function accessToken(key, fetchImpl = fetch) {
+export async function accessToken(key, fetchImpl = fetch, scope = SCOPE) {
   const now = Math.floor(Date.now() / 1000);
   const header = b64u(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
   const claims = b64u(JSON.stringify({
     iss: key.client_email,
-    scope: SCOPE,
+    scope,
     aud: key.token_uri || 'https://oauth2.googleapis.com/token',
     iat: now,
     exp: now + 3600,
