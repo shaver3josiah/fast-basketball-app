@@ -111,6 +111,11 @@ jobs:
       - name: Review-account guardrail self-check
         run: npm run test:review
 
+      # appstore-metadata.mjs would have rewritten the 1.0.4 record down to an untagged
+      # build's 1.0.0. The guard is pure and offline.
+      - name: App Store metadata self-check
+        run: npm run test:appstore
+
       - name: Typecheck
         run: npx tsc --noEmit
 

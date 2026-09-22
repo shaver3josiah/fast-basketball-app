@@ -215,6 +215,17 @@ function token() {
   return `${head}.${body}.${b64u(s.sign({ key: createPrivateKey(pem), dsaEncoding: 'ieee-p1363' }))}`;
 }
 
+/** True when version a sorts strictly before b, numerically per dot-separated part. */
+export function semverLess(a, b) {
+  const pa = String(a).split('.').map(Number);
+  const pb = String(b).split('.').map(Number);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const x = pa[i] || 0, y = pb[i] || 0;
+    if (x !== y) return x < y;
+  }
+  return false;
+}
+
 function need(name) {
   const v = process.env[name];
   if (!v) throw new Error(`${name} is not set. See the header of scripts/appstore-metadata.mjs.`);
@@ -323,6 +334,22 @@ export async function push() {
   // app.json, whose expo.version has sat at 1.0.0 across every release on purpose.
   const build = await newestBuild(app.id);
   console.log(`version ${version.attributes.versionString} -> ${build.short} (build ${build.number})`);
+
+  // NEVER GO BACKWARDS. Only a v* tag stamps a real version into a build; a
+  // workflow_dispatch run or the monthly keep-alive has no tag, so it ships app.json's
+  // 1.0.0. The newest build then "decides" the version, and this script rewrote the
+  // 1.0.4 record down to 1.0.0 in a dry run on 22 September 2026 -- the pre-resubmission
+  // audit had flagged exactly this and it was dismissed as unable to fire. It fired
+  // the first time anyone dispatched an iOS build by hand. Refuse, and name the fix.
+  if (semverLess(build.short, version.attributes.versionString)) {
+    throw new Error(
+      `newest build ${build.number} is version ${build.short}, below the record's ` +
+      `${version.attributes.versionString}. That build came from a run with no v* tag. ` +
+      'Tag a release (git tag vX.Y.Z && git push origin vX.Y.Z) so the build carries a ' +
+      'real version, wait for Apple to process it, and run this again.'
+    );
+  }
+
   const versionAttrs = {
     ...(version.attributes.versionString === build.short ? {} : { versionString: build.short }),
     ...(version.attributes.copyright === COPYRIGHT ? {} : { copyright: COPYRIGHT }),
