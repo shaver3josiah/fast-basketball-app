@@ -7,7 +7,18 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { allowed, checkSecret, latestTag, nextPatch, extractOutput } from './release-panel.mjs';
+import { allowed, checkSecret, latestTag, nextPatch, extractOutput, SKIP_MARKER } from './release-panel.mjs';
+
+// GitHub starts no workflow for a tag on a commit carrying one of these, so the panel
+// must refuse such a tip rather than spend the version number on a release that
+// never builds. The keep-alive message is the one that used to carry [skip ci].
+test('a skip marker at the tip is caught, the keep-alive message is not', () => {
+  for (const m of ['x [skip ci]', 'x [CI SKIP]', '[no ci] y', 'z [skip actions]', 'a\n\nskip-checks: true']) {
+    assert.ok(SKIP_MARKER.test(m), m);
+  }
+  assert.equal(SKIP_MARKER.test('chore: TestFlight keep-alive, build 42'), false);
+  assert.equal(SKIP_MARKER.test('Skip CI flakes in the rules test'), false);
+});
 
 const TOKEN = 'a'.repeat(48);
 
@@ -51,7 +62,7 @@ test('versions: the highest tag, compared as numbers, and the next patch', () =>
 test('the run output is what the script printed, not the echoed script', () => {
   const log = [
     'metadata\tSet up job\t2026-09-23T10:00:00.0000000Z Current runner version',
-    'metadata\tPush the listing\t﻿2026-09-23T10:00:01.0000000Z ##[group]Run set -euo pipefail',
+    'metadata\tPush the listing\t\uFEFF2026-09-23T10:00:01.0000000Z ##[group]Run set -euo pipefail',
     'metadata\tPush the listing\t2026-09-23T10:00:01.1000000Z   ASC_KEY_P8: ***',
     'metadata\tPush the listing\t2026-09-23T10:00:01.2000000Z ##[endgroup]',
     'metadata\tPush the listing\t2026-09-23T10:00:02.0000000Z app 6812377503 (Fast Basketball)',

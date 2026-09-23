@@ -375,6 +375,7 @@ export async function push() {
       },
     }));
     console.log(`  created App Store version ${WAIT_FOR}`);
+    await settle(app.id, version.id);
   }
   if (!version) {
     throw new Error(
@@ -388,8 +389,7 @@ export async function push() {
   // Once a version has shipped there are two: the live one, which cannot be edited, and
   // the one opened for the next version. Write to the one still being prepared.
   const { data: infos } = await asc(`apps/${app.id}/appInfos`);
-  const OPEN_INFO = ['PREPARE_FOR_SUBMISSION', 'DEVELOPER_REJECTED', 'REJECTED'];
-  const info = infos.find((i) => OPEN_INFO.includes(i.attributes.state ?? i.attributes.appStoreState)) ?? infos[0];
+  const info = openInfo(infos) ?? infos[0];
   const { data: infoLocs } = await asc(`appInfos/${info.id}/appInfoLocalizations`);
   const enInfo = infoLocs.find((l) => l.attributes.locale === 'en-US');
   await patch('appInfoLocalizations', enInfo.id, APP_INFO, 'subtitle and privacy policy URL', enInfo.attributes);
@@ -565,6 +565,31 @@ async function setFreePrice(appId) {
     },
   });
   console.log('  price: Free, base territory USA');
+}
+
+/** The app info still being prepared, as opposed to the live one a release leaves behind. */
+const OPEN_INFO = ['PREPARE_FOR_SUBMISSION', 'DEVELOPER_REJECTED', 'REJECTED'];
+const openInfo = (infos) => infos.find((i) => OPEN_INFO.includes(i.attributes.state ?? i.attributes.appStoreState));
+
+/**
+ * Wait until App Store Connect LISTS a version it just created, and the editable app
+ * info that came with it. The create returns at once but the lists lag for tens of
+ * seconds (fastlane retries its own lookups for minutes for the same reason); reading
+ * them too early wrote the subtitle to the live record and made a read-back seconds
+ * later report a version that did exist as missing.
+ */
+async function settle(appId, versionId) {
+  const deadline = Date.now() + 5 * 60_000;
+  for (;;) {
+    const { data: open } = await asc(`apps/${appId}/appStoreVersions?filter[appStoreState]=PREPARE_FOR_SUBMISSION&limit=5`);
+    const { data: infos } = await asc(`apps/${appId}/appInfos`);
+    if (open.some((v) => v.id === versionId) && openInfo(infos)) return;
+    if (Date.now() > deadline) {
+      throw new Error('App Store Connect has not listed the new version and its editable app info after 5 minutes. Run the workflow again; every write is idempotent.');
+    }
+    console.log('  waiting for App Store Connect to list the new version');
+    await new Promise((r) => setTimeout(r, 10_000));
+  }
 }
 
 /** The build with the highest marketing version, and the highest build number within it. */

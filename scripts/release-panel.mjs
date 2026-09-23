@@ -95,6 +95,9 @@ export function latestTag(names) {
   return best;
 }
 
+/** GitHub's skip markers: a push whose head commit carries one starts no workflow. */
+export const SKIP_MARKER = /\[(skip ci|ci skip|no ci|skip actions|actions skip)\]|skip-checks:\s*true/i;
+
 export const nextPatch = (v) => (v ? v.replace(/\d+$/, (n) => String(Number(n) + 1)) : '1.0.0');
 
 /**
@@ -108,7 +111,7 @@ export function extractOutput(log, steps = ['Push the listing', 'Read it back'])
     const [, step, rest] = line.split('\t');
     if (rest === undefined || !steps.includes(step)) continue;
     if (!byStep.has(step)) byStep.set(step, []);
-    byStep.get(step).push(rest.replace(/^﻿?\S+Z ?/, ''));
+    byStep.get(step).push(rest.replace(/^\uFEFF?\S+Z ?/, ''));
   }
   const out = [];
   for (const step of steps) {
@@ -211,6 +214,11 @@ async function tag(version) {
   const sha = (await run('git', ['rev-parse', '--verify', 'refs/remotes/origin/main^{commit}'])).trim();
   const problem = await notGreen(sha);
   if (problem) throw new Error(`CI has not passed on main (${sha.slice(0, 7)}: ${problem}). Tag once it is green.`);
+  // GitHub skips a tag push whose commit message carries a skip marker, so the tag
+  // would be spent and nothing would build. Refuse rather than report success.
+  if (SKIP_MARKER.test(await run('git', ['log', '-1', '--format=%B', sha]))) {
+    throw new Error(`The tip of main (${sha.slice(0, 7)}) says [skip ci], and a tag on it would start no build. Push any commit to main first.`);
+  }
   await run('git', ['push', 'origin', `${sha}:refs/tags/v${version}`]);
   return { ok: true, tag: `v${version}`, sha };
 }
@@ -218,9 +226,9 @@ async function tag(version) {
 /**
  * Why `sha` does not count as green on main, or null. Only a PUSH run on main counts:
  * ci.yml also runs on pull_request, and a PR's run is on the PR's own, editable
- * workflow. The monthly TestFlight keep-alive commits a timestamp with [skip ci], which
- * never gets a run, so a tip that differs from the last green commit only by that file
- * is taken as green rather than blocking every release until someone pushes again.
+ * workflow. The monthly TestFlight keep-alive commits a timestamp through GITHUB_TOKEN,
+ * which starts no run, so a tip that differs from the last green commit only by that
+ * file is taken as green rather than blocking every release until someone pushes again.
  */
 async function notGreen(sha) {
   const ci = (...extra) => ghJson('run', 'list', '--repo', REPO, '-w', 'ci.yml', '--branch', 'main',

@@ -312,8 +312,12 @@ jobs:
       # GitHub disables a scheduled workflow after 60 days without repository
       # activity -- which would quietly kill the keep-alive about a month before the
       # build it exists to renew expires. A commit per scheduled run resets that
-      # clock and doubles as a plain-text record of the last upload. [skip ci] so it
-      # does not also trigger the CI workflow.
+      # clock and doubles as a plain-text record of the last upload.
+      #
+      # NO [skip ci] in the message. The push uses GITHUB_TOKEN, which starts no workflow
+      # runs anyway, so the marker never did anything here -- except that GitHub also
+      # skips a TAG push whose commit carries it, so tagging a release onto this commit
+      # (it is the tip of main from the 1st of the month) would build nothing at all.
       - name: Stamp the keep-alive
         if: github.event_name == 'schedule'
         continue-on-error: true
@@ -324,5 +328,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add .github/last-keepalive.txt
-          git commit -m "chore: TestFlight keep-alive, build ${{ github.run_number }} [skip ci]"
+          git commit -m "chore: TestFlight keep-alive, build ${{ github.run_number }}"
           git push origin HEAD:${{ github.event.repository.default_branch }}
