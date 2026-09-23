@@ -217,6 +217,17 @@ if (-not (Test-ReleaseSecrets)) {
     exit 1
 }
 
+# GitHub starts no workflow for a push whose commit message carries a skip marker, even
+# one merely quoted in prose, and a tag push counts: the tag would exist, the version
+# would be spent, and nothing would build. The release panel refuses the same thing.
+$headMessage = (git log -1 --format=%B HEAD) -join "`n"
+if ($headMessage -match '\[(skip ci|ci skip|no ci|skip actions|actions skip)\]|skip-checks:\s*true') {
+    Write-Host ""
+    Write-Host "HEAD's commit message carries a skip marker, so a tag on it would build nothing." -ForegroundColor Red
+    Write-Host "Push any commit without one first, then ship." -ForegroundColor Red
+    exit 1
+}
+
 Invoke-Step "Tagging $Version" { git tag $Version }
 Invoke-Step "Pushing tag $Version" { git push origin $Version }
 

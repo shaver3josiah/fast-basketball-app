@@ -212,13 +212,14 @@ async function tag(version) {
   // The FULL ref. A bare "origin/main" resolves a local BRANCH of that name first (gh pr
   // checkout names branches after a PR's head ref), and git only warns about it.
   const sha = (await run('git', ['rev-parse', '--verify', 'refs/remotes/origin/main^{commit}'])).trim();
+  // GitHub skips a tag push whose commit message carries a skip marker, so the tag
+  // would be spent and nothing would build. Checked BEFORE CI: such a commit never gets
+  // a CI run either, and "wait for green" would send the owner waiting for nothing.
+  if (SKIP_MARKER.test(await run('git', ['log', '-1', '--format=%B', sha]))) {
+    throw new Error(`The tip of main (${sha.slice(0, 7)}) carries a skip marker in its message, so a tag on it would start no build. Push any commit to main first.`);
+  }
   const problem = await notGreen(sha);
   if (problem) throw new Error(`CI has not passed on main (${sha.slice(0, 7)}: ${problem}). Tag once it is green.`);
-  // GitHub skips a tag push whose commit message carries a skip marker, so the tag
-  // would be spent and nothing would build. Refuse rather than report success.
-  if (SKIP_MARKER.test(await run('git', ['log', '-1', '--format=%B', sha]))) {
-    throw new Error(`The tip of main (${sha.slice(0, 7)}) says [skip ci], and a tag on it would start no build. Push any commit to main first.`);
-  }
   await run('git', ['push', 'origin', `${sha}:refs/tags/v${version}`]);
   return { ok: true, tag: `v${version}`, sha };
 }
