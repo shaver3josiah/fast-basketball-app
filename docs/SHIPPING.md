@@ -7,6 +7,7 @@ One `git tag` produces both binaries:
 | `v1.0.1` | `android-apk.yml` builds and signs an APK | GitHub **Releases**, download to any Android phone |
 | `v1.0.1` | the same job builds and signs an `.aab` and uploads it | **Google Play**, `internal` track |
 | `v1.0.1` | `ios-testflight.yml` builds, signs, uploads | **TestFlight**, install on any iPhone |
+| (then) | `appstore-metadata.yml` waits for Apple to process that build, pushes the listing with it attached, and reads every field back | the App Store version record, ready for **Submit for Review** |
 
 The store listings themselves are code too, not a form somebody retypes:
 `scripts/appstore-metadata.mjs` pushes the whole App Store listing over Apple's API,
@@ -217,7 +218,18 @@ release-signed APK will not upgrade over it. You would have to uninstall first.
 
 ## 5. Releasing
 
-From the project folder in PowerShell:
+**The simplest way is the release panel**, a page on this machine:
+
+```powershell
+npm run release:panel
+```
+
+It shows which of the secrets above exist and gives a box for any that are missing
+(what you paste goes straight to `gh secret set` and is never shown again), previews and
+pushes the App Store listing, and tags a new version, refusing one that is not above the
+last tag or a commit CI has not passed. It never submits anything for review.
+
+Or from the project folder in PowerShell:
 
 ```powershell
 .\scripts\Ship.ps1

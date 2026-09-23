@@ -67,7 +67,9 @@
     "test:review": "node --test scripts/check-review-account.mjs",
     "appstore:metadata": "node --env-file=.env scripts/appstore-metadata.mjs",
     "appstore:dry": "node --env-file=.env scripts/appstore-metadata.mjs --dry",
-    "test:appstore": "node --test scripts/check-appstore.mjs"
+    "test:appstore": "node --test scripts/check-appstore.mjs",
+    "test:panel": "node --test scripts/check-release-panel.mjs",
+    "release:panel": "node scripts/release-panel.mjs"
   },
   "private": true
 }

@@ -229,43 +229,21 @@ restricted*, add one instruction set, and paste:
 
 ### 6.2 Apple: the notes
 
-Paste the same credentials, and these notes:
-
-> This app is a private messaging and scheduling tool for one basketball trainer and the
-> families he coaches. It is invitation-only: the coach creates an athlete record naming a
-> parent's email address, and an account can see nothing until a verified address matches
-> one. The demo account above is already attached to an athlete record with an active
-> conversation.
->
-> **Sign in as the demo parent** to see a conversation, the calendar, the Locker, and the
-> consent controls on the You tab.
->
-> **On safety, since the app involves minors:** a guardian is a permanent reader on every
-> conversation between the coach and their athlete, enforced by Firestore Security Rules
-> rather than by the UI — the coach cannot remove her, and cannot edit or delete a message.
-> The athlete is shown a banner saying so. An athlete cannot send a message at all until
-> the guardian grants consent, and the guardian can revoke it at any moment, which locks
-> the conversation immediately. Athletes under 13 are given no login at all; those families
-> use the parent's account, which is why the app is rated 13+.
->
-> **Reporting:** the You tab links to a support form monitored by the account holder. There
-> is no public feed, no discovery and no way for one user to contact another, so there is
-> nobody to block — the only person a family can message is their own coach, and the
-> parent's consent switch is the block.
->
-> **Account deletion** is on the You tab under Account. It deletes the login and that
-> account's own settings. Messages are retained deliberately, and the screen says so: they
-> are the child-safety record the guardian is promised, and no party, the coach included,
-> can delete one.
+**Do not paste these by hand.** They are `REVIEW_NOTES` in
+`scripts/appstore-metadata.mjs`, and the demo login is the `REVIEW_EMAIL` /
+`REVIEW_PASSWORD` repository secrets. The **App Store metadata** workflow pushes both and
+reads them back; it runs by itself after every `v*` tag's TestFlight upload, and by hand
+from `npm run release:panel`. A copy of the notes used to live here and had already
+drifted from the file (it still said the report link opened a support form).
 
 ### 6.3 Apple: the screen recording (rejection of 1.0.4 build 9)
 
 Apple rejected 1.0.4 (9) on 21 September 2026 under Guideline 2.1, Information Needed.
 It is not a defect finding. It is the questionnaire a developer account with little
 review history gets, and it asks for six things plus a recording. Items 2 to 6 are
-answered by `REVIEW_NOTES` above, which is why that block now carries them: Apple asked
+answered by `REVIEW_NOTES` (6.2), which is why that block now carries them: Apple asked
 for the answers in the Notes field "for reference on future submissions", not only in a
-reply. Push them with `npm run appstore-metadata`, then paste the same text into the
+reply. Push them with the **App Store metadata** workflow (6.2), then paste the same text into the
 reply in App Store Connect and attach the recording.
 
 The recording is the only part nobody can automate. It has to be captured on a physical
@@ -283,7 +261,8 @@ deletion, user-generated content, and the reporting and blocking controls.
 3. **Sign in as the demo account** from the Notes. Straight in, no code, no inbox.
 4. **Messages.** Open the conversation. Send one message so user-generated content is
    visibly created, not just displayed.
-5. **Reporting.** You tab, "Get help or report a concern". Open it and let the form load.
+5. **Reporting.** You tab, "Report a concern". Tap it and let the email open, addressed to
+   the account holder rather than the coach.
 6. **Blocking.** On the same tab, show the consent switch and turn it off, then on. That is
    the control that stops an athlete posting. Show a conversation's mute switch too.
 7. **Calendar and Locker,** briefly. Tap a scheduled workout to show the timer. Open the
@@ -316,7 +295,7 @@ reporting and blocking mechanisms". This app has a report link and two controls 
 a conversation, but it has no per-user block button, because there is no user to block:
 the only person a family can message is their own coach. That argument is in the notes and
 it is true. If Apple pushes back under Guideline 1.2 anyway, the smallest answer is a
-"Report this message" action inside a thread that opens the same support form with the
+"Report this message" action inside a thread that opens the same report email with the
 thread id prefilled. That is a new build, so it is deliberately not being done pre-emptively.
 
 ## 7. Two things commonly panicked about that do not apply

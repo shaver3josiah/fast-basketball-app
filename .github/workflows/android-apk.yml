@@ -375,6 +375,9 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "${GOOGLE_PLAY_SERVICE_ACCOUNT_JSON:-}" ]; then
+            # An annotation, not only the summary: the summary alone left this step
+            # green with nothing on the run page, so v1.0.5 read as uploaded and was not.
+            echo "::warning title=Not uploaded to Google Play::GOOGLE_PLAY_SERVICE_ACCOUNT_JSON is not set. The signed .aab is the fast-basketball-aab artifact of this run."
             {
               echo "## :warning: Not uploaded to Google Play"
               echo ""

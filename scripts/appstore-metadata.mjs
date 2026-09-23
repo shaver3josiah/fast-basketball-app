@@ -8,11 +8,20 @@
  * points here for the words.
  *
  * IT IS IDEMPOTENT. Every call is a PATCH of a resource App Store Connect creates
- * with the app, so running it twice changes nothing the second time. `--dry` prints
- * what it would send and touches nothing.
+ * with the app, and each one first compares what is already there, so running it
+ * twice changes nothing the second time. `--dry` prints what differs and touches
+ * nothing. `--expect-clean` is `--dry` that exits 1 when anything still differs,
+ * which is how a push is read back rather than assumed.
  *
  *   node scripts/appstore-metadata.mjs --dry
  *   node scripts/appstore-metadata.mjs
+ *   node scripts/appstore-metadata.mjs --expect-clean
+ *
+ * WAIT_FOR_VERSION=1.0.6 waits (up to WAIT_MINUTES, default 60) until Apple has
+ * processed a build of exactly that version, and attaches that build rather than
+ * the highest one. If no version record is editable (the last one was approved), it
+ * creates the 1.0.6 record first. The workflow sets it from the tag when a TestFlight
+ * upload finishes, which is what makes tag -> build -> listing one unattended flow.
  *
  * WHAT IT DELIBERATELY DOES NOT DO:
  *   - Screenshots. scripts/store-screenshots.mjs uploads those.
@@ -32,7 +41,13 @@ import { createSign, createPrivateKey } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 
 const BUNDLE_ID = 'com.fastbasketball.app';
-const DRY = process.argv.includes('--dry');
+const EXPECT_CLEAN = process.argv.includes('--expect-clean');
+const DRY = EXPECT_CLEAN || process.argv.includes('--dry');
+const WAIT_FOR = process.env.WAIT_FOR_VERSION?.trim().replace(/^v/, '') || null;
+const WAIT_MINUTES = Number(process.env.WAIT_MINUTES) || 60;
+
+/** Everything a dry run found still different. --expect-clean fails on any of it. */
+const pending = [];
 
 // ---------------------------------------------------------------------------------
 // The listing itself.
@@ -215,6 +230,9 @@ function token() {
   return `${head}.${body}.${b64u(s.sign({ key: createPrivateKey(pem), dsaEncoding: 'ieee-p1363' }))}`;
 }
 
+/** The highest of a list of version strings, or null. */
+export const latestVersion = (list) => list.reduce((a, b) => (!a || semverLess(a, b) ? b : a), null);
+
 /** True when version a sorts strictly before b, numerically per dot-separated part. */
 export function semverLess(a, b) {
   const pa = String(a).split('.').map(Number);
@@ -245,11 +263,49 @@ export async function asc(path, { method = 'GET', body } = {}) {
   return json;
 }
 
-/** PATCH unless --dry, in which case print the attributes and move on. */
-async function patch(type, id, attributes, label) {
-  if (DRY) { console.log(`  would patch ${label}: ${Object.keys(attributes).join(', ')}`); return; }
-  await asc(`${type}/${id}`, { method: 'PATCH', body: { data: { type, id, attributes } } });
-  console.log(`  ${label}`);
+/** App Store Connect echoes text back with its own line endings and edges. */
+const norm = (v) => (typeof v === 'string' ? v.replace(/\r\n/g, '\n').trim() : v);
+
+/**
+ * Split `wanted` against what App Store Connect already holds. `changed` differs;
+ * `blind` is a key the API never returns (write-only), which cannot be compared, so
+ * a push always sends it and a read-back cannot hold it against the listing. A key
+ * that comes back null is NOT blind: null is a real answer meaning "unset".
+ */
+export function diffAttrs(current, wanted) {
+  const changed = {};
+  const blind = [];
+  for (const [k, v] of Object.entries(wanted)) {
+    if (current?.[k] === undefined) blind.push(k);
+    else if (norm(current[k]) !== norm(v)) changed[k] = v;
+  }
+  return { changed, blind };
+}
+
+/** PATCH only what differs from `current`. Under --dry, say what differs and move on. */
+async function patch(type, id, wanted, label, current) {
+  const { changed, blind } = diffAttrs(current, wanted);
+  const keys = Object.keys(changed);
+  if (DRY) {
+    if (keys.length) {
+      pending.push(label);
+      console.log(`  would patch ${label}: ${keys.join(', ')}`);
+    } else {
+      console.log(`  ${label}: already current`);
+    }
+    if (blind.length) console.log(`    (not readable back, always sent: ${blind.join(', ')})`);
+    return;
+  }
+  const send = { ...changed, ...Object.fromEntries(blind.map((k) => [k, wanted[k]])) };
+  if (!Object.keys(send).length) { console.log(`  ${label}: already current`); return; }
+  await asc(`${type}/${id}`, { method: 'PATCH', body: { data: { type, id, attributes: send } } });
+  console.log(`  ${label}: ${Object.keys(send).join(', ')}`);
+}
+
+/** Record something a dry run would change that is not an attribute PATCH. */
+function wouldChange(label, what) {
+  pending.push(label);
+  console.log(`  would ${what}`);
 }
 
 // ---------------------------------------------------------------------------------
@@ -261,39 +317,11 @@ export async function push() {
 
   // Nothing in this app plays music, shows film or quotes a book. Left unanswered,
   // Apple holds the submission for it.
-  await patch('apps', app.id, { contentRightsDeclaration: 'DOES_NOT_USE_THIRD_PARTY_CONTENT' }, 'content rights');
+  await patch('apps', app.id, { contentRightsDeclaration: 'DOES_NOT_USE_THIRD_PARTY_CONTENT' }, 'content rights', app.attributes);
 
-  // ---- the app-level record: name, subtitle, privacy policy, categories ----------
-  const { data: [info] } = await asc(`apps/${app.id}/appInfos`);
-  const { data: infoLocs } = await asc(`appInfos/${info.id}/appInfoLocalizations`);
-  const enInfo = infoLocs.find((l) => l.attributes.locale === 'en-US');
-  await patch('appInfoLocalizations', enInfo.id, APP_INFO, 'subtitle and privacy policy URL');
-
-  if (DRY) {
-    console.log(`  would set categories: ${CATEGORIES.primary} / ${CATEGORIES.secondary}`);
-  } else {
-    // Categories are relationships, not attributes, so they do not go through patch().
-    await asc(`appInfos/${info.id}`, {
-      method: 'PATCH',
-      body: {
-        data: {
-          type: 'appInfos',
-          id: info.id,
-          relationships: {
-            primaryCategory: { data: { type: 'appCategories', id: CATEGORIES.primary } },
-            secondaryCategory: { data: { type: 'appCategories', id: CATEGORIES.secondary } },
-          },
-        },
-      },
-    });
-    console.log(`  categories ${CATEGORIES.primary} / ${CATEGORIES.secondary}`);
-  }
-
-  // Read the declaration rather than assuming it shares the appInfo's id. It does
-  // today, and a listing of appInfos does not carry the relationship at all, so
-  // assuming it is a guess that happens to work.
-  const rating = await asc(`appInfos/${info.id}/ageRatingDeclaration`);
-  await patch('ageRatingDeclarations', rating.data.id, AGE_RATING, 'age rating questionnaire');
+  // The version comes FIRST, before anything app-level: creating the next version is
+  // what makes App Store Connect open a new editable app info record, and the subtitle,
+  // categories and age rating below have to be written to that one, not the live one.
 
   // ---- the version being prepared ------------------------------------------------
   // EVERY EDITABLE STATE, not just PREPARE_FOR_SUBMISSION. A rejected version sits in
@@ -321,6 +349,33 @@ export async function push() {
       break;
     }
   }
+  // THE NEXT RELEASE. Once a version is approved, App Store Connect holds no editable
+  // record until somebody creates one, so an unattended tag would stop right here. A tag
+  // is the decision to ship that version, so the record is created for it -- only when
+  // the version is above every record that exists, so a mistyped dispatch cannot litter
+  // the app with stray versions. Nothing is submitted.
+  if (!version && WAIT_FOR) {
+    const { data: all } = await asc(`apps/${app.id}/appStoreVersions?limit=200`);
+    const top = latestVersion(all.map((v) => v.attributes.versionString));
+    if (top && !semverLess(top, WAIT_FOR)) {
+      throw new Error(`no version is editable, and ${WAIT_FOR} is not above the latest record, ${top}.`);
+    }
+    if (DRY) {
+      wouldChange(`version ${WAIT_FOR}`, `create App Store version ${WAIT_FOR}, then fill it in`);
+      return { appId: app.id, versionId: null };
+    }
+    ({ data: version } = await asc('appStoreVersions', {
+      method: 'POST',
+      body: {
+        data: {
+          type: 'appStoreVersions',
+          attributes: { platform: 'IOS', versionString: WAIT_FOR },
+          relationships: { app: { data: { type: 'apps', id: app.id } } },
+        },
+      },
+    }));
+    console.log(`  created App Store version ${WAIT_FOR}`);
+  }
   if (!version) {
     throw new Error(
       `no version is in an editable state (${EDITABLE.join(', ')}). ` +
@@ -329,10 +384,53 @@ export async function push() {
     );
   }
 
+  // ---- the app-level record: name, subtitle, privacy policy, categories ----------
+  // Once a version has shipped there are two: the live one, which cannot be edited, and
+  // the one opened for the next version. Write to the one still being prepared.
+  const { data: infos } = await asc(`apps/${app.id}/appInfos`);
+  const OPEN_INFO = ['PREPARE_FOR_SUBMISSION', 'DEVELOPER_REJECTED', 'REJECTED'];
+  const info = infos.find((i) => OPEN_INFO.includes(i.attributes.state ?? i.attributes.appStoreState)) ?? infos[0];
+  const { data: infoLocs } = await asc(`appInfos/${info.id}/appInfoLocalizations`);
+  const enInfo = infoLocs.find((l) => l.attributes.locale === 'en-US');
+  await patch('appInfoLocalizations', enInfo.id, APP_INFO, 'subtitle and privacy policy URL', enInfo.attributes);
+
+  // A category that cannot be read counts as unset, so a read-back fails loudly
+  // rather than passing on a relationship nobody looked at.
+  const category = async (rel) => (await asc(`appInfos/${info.id}/${rel}`).catch(() => null))?.data?.id ?? null;
+  const [primary, secondary] = await Promise.all([category('primaryCategory'), category('secondaryCategory')]);
+  if (primary === CATEGORIES.primary && secondary === CATEGORIES.secondary) {
+    console.log(`  categories: already ${primary} / ${secondary}`);
+  } else if (DRY) {
+    wouldChange('categories', `set categories: ${primary} / ${secondary} -> ${CATEGORIES.primary} / ${CATEGORIES.secondary}`);
+  } else {
+    // Categories are relationships, not attributes, so they do not go through patch().
+    await asc(`appInfos/${info.id}`, {
+      method: 'PATCH',
+      body: {
+        data: {
+          type: 'appInfos',
+          id: info.id,
+          relationships: {
+            primaryCategory: { data: { type: 'appCategories', id: CATEGORIES.primary } },
+            secondaryCategory: { data: { type: 'appCategories', id: CATEGORIES.secondary } },
+          },
+        },
+      },
+    });
+    console.log(`  categories ${CATEGORIES.primary} / ${CATEGORIES.secondary}`);
+  }
+
+  // Read the declaration rather than assuming it shares the appInfo's id. It does
+  // today, and a listing of appInfos does not carry the relationship at all, so
+  // assuming it is a guess that happens to work.
+  const rating = await asc(`appInfos/${info.id}/ageRatingDeclaration`);
+  await patch('ageRatingDeclarations', rating.data.id, AGE_RATING, 'age rating questionnaire', rating.data.attributes);
+
+
   // The version string has to equal the build's CFBundleShortVersionString, and the
   // workflow stamps that from the git tag -- so the newest build decides it, not
   // app.json, whose expo.version has sat at 1.0.0 across every release on purpose.
-  const build = await newestBuild(app.id);
+  const build = WAIT_FOR ? await waitForBuild(app.id, WAIT_FOR) : await newestBuild(app.id);
   console.log(`version ${version.attributes.versionString} -> ${build.short} (build ${build.number})`);
 
   // NEVER GO BACKWARDS. Only a v* tag stamps a real version into a build; a
@@ -350,16 +448,14 @@ export async function push() {
     );
   }
 
-  const versionAttrs = {
-    ...(version.attributes.versionString === build.short ? {} : { versionString: build.short }),
-    ...(version.attributes.copyright === COPYRIGHT ? {} : { copyright: COPYRIGHT }),
-  };
-  if (Object.keys(versionAttrs).length) {
-    await patch('appStoreVersions', version.id, versionAttrs, `version ${build.short}, copyright`);
-  }
+  await patch('appStoreVersions', version.id, { versionString: build.short, copyright: COPYRIGHT },
+    `version ${build.short}, copyright`, version.attributes);
 
-  if (DRY) {
-    console.log(`  would attach build ${build.number}`);
+  const attached = (await asc(`appStoreVersions/${version.id}/build`).catch(() => null))?.data?.id ?? null;
+  if (attached === build.id) {
+    console.log(`  build ${build.number}: already attached`);
+  } else if (DRY) {
+    wouldChange(`build ${build.number}`, `attach build ${build.number}`);
   } else {
     await asc(`appStoreVersions/${version.id}/relationships/build`, {
       method: 'PATCH',
@@ -370,7 +466,23 @@ export async function push() {
 
   const { data: verLocs } = await asc(`appStoreVersions/${version.id}/appStoreVersionLocalizations`);
   const enVer = verLocs.find((l) => l.attributes.locale === 'en-US');
-  await patch('appStoreVersionLocalizations', enVer.id, LISTING, 'description, keywords and URLs');
+  if (enVer) {
+    await patch('appStoreVersionLocalizations', enVer.id, LISTING, 'description, keywords and URLs', enVer.attributes);
+  } else if (DRY) {
+    wouldChange('en-US listing', 'create the en-US description, keywords and URLs');
+  } else {
+    await asc('appStoreVersionLocalizations', {
+      method: 'POST',
+      body: {
+        data: {
+          type: 'appStoreVersionLocalizations',
+          attributes: { locale: 'en-US', ...LISTING },
+          relationships: { appStoreVersion: { data: { type: 'appStoreVersions', id: version.id } } },
+        },
+      },
+    });
+    console.log('  created the en-US description, keywords and URLs');
+  }
 
   // ---- what App Review is told ---------------------------------------------------
   const review = {
@@ -391,9 +503,9 @@ export async function push() {
 
   const existing = await asc(`appStoreVersions/${version.id}/appStoreReviewDetail`).catch(() => null);
   if (existing?.data) {
-    await patch('appStoreReviewDetails', existing.data.id, review, 'review notes and demo account');
+    await patch('appStoreReviewDetails', existing.data.id, review, 'review notes and demo account', existing.data.attributes);
   } else if (DRY) {
-    console.log('  would create the review detail (demo account + notes)');
+    wouldChange('review detail', 'create the review detail (demo account + notes)');
   } else {
     await asc('appStoreReviewDetails', {
       method: 'POST',
@@ -429,7 +541,7 @@ async function setFreePrice(appId) {
   const free = points.find((p) => Number(p.attributes.customerPrice) === 0);
   if (!free) throw new Error('no free price point offered for USA');
 
-  if (DRY) { console.log('  would set the price to Free, base territory USA'); return; }
+  if (DRY) { wouldChange('price', 'set the price to Free, base territory USA'); return; }
 
   await asc('appPriceSchedules', {
     method: 'POST',
@@ -455,28 +567,81 @@ async function setFreePrice(appId) {
   console.log('  price: Free, base territory USA');
 }
 
-/** The most recently uploaded VALID build, with its marketing version. */
+/** The build with the highest marketing version, and the highest build number within it. */
+export function pickHighest(builds) {
+  let best = null;
+  for (const b of builds) {
+    if (!best || semverLess(best.short, b.short) ||
+        (best.short === b.short && Number(b.number) > Number(best.number))) best = b;
+  }
+  return best;
+}
+
+/**
+ * The VALID build with the highest marketing version, NOT the most recently uploaded.
+ * The monthly TestFlight keep-alive and any hand-dispatched build carry no tag and
+ * upload as app.json's 1.0.0; "most recent" then picked that, tripped the guard in
+ * push(), and left every dispatch -- the release panel's included -- unable to push
+ * the listing until somebody tagged a new binary.
+ */
 async function newestBuild(appId) {
   // The top-level /builds collection, not apps/{id}/builds: the relationship
   // endpoint accepts no filter, no sort and no include, so it can only hand back
   // whatever order it likes.
-  const { data } = await asc(
-    `builds?filter[app]=${appId}&filter[processingState]=VALID&sort=-uploadedDate&limit=1`,
+  const { data, included = [] } = await asc(
+    `builds?filter[app]=${appId}&filter[processingState]=VALID&sort=-uploadedDate&limit=50&include=preReleaseVersion`,
   );
-  const build = data[0];
-  if (!build) throw new Error('no VALID build is uploaded yet');
-  const pre = await asc(`builds/${build.id}/preReleaseVersion`);
-  return { id: build.id, number: build.attributes.version, short: pre.data.attributes.version };
+  const versionOf = new Map(included.filter((i) => i.type === 'preReleaseVersions').map((i) => [i.id, i.attributes.version]));
+  const best = pickHighest(data
+    .map((b) => ({ id: b.id, number: b.attributes.version, short: versionOf.get(b.relationships?.preReleaseVersion?.data?.id) }))
+    .filter((b) => b.short));
+  if (!best) throw new Error('no VALID build is uploaded yet');
+  return best;
+}
+
+/**
+ * The newest build of exactly `version`, once Apple has processed it. An upload is
+ * PROCESSING for anywhere from five minutes to an hour, and attaching the newest VALID
+ * build during that window would quietly attach the previous release instead.
+ */
+async function waitForBuild(appId, version) {
+  const deadline = Date.now() + WAIT_MINUTES * 60_000;
+  for (;;) {
+    const { data } = await asc(
+      `builds?filter[app]=${appId}&filter[preReleaseVersion.version]=${encodeURIComponent(version)}` +
+      '&sort=-uploadedDate&limit=1',
+    );
+    const b = data[0];
+    const state = b?.attributes.processingState;
+    if (state === 'VALID') return { id: b.id, number: b.attributes.version, short: version };
+    if (state === 'INVALID' || state === 'FAILED') {
+      throw new Error(`build ${b.attributes.version} of ${version} is ${state}. Apple emails the reason to the account holder.`);
+    }
+    if (Date.now() > deadline) {
+      throw new Error(`no processed build of ${version} after ${WAIT_MINUTES} minutes (last seen: ${state ?? 'not uploaded'}).`);
+    }
+    console.log(`  waiting for Apple to process ${version} (${state ?? 'not uploaded yet'})`);
+    await new Promise((r) => setTimeout(r, 60_000));
+  }
 }
 
 /** Everything the API cannot answer, read back so the gap is a list rather than a surprise. */
 export async function remaining({ appId, versionId }) {
   const gaps = [];
 
-  const { data: locs } = await asc(`appStoreVersions/${versionId}/appStoreVersionLocalizations`);
-  const en = locs.find((l) => l.attributes.locale === 'en-US');
-  const { data: sets } = await asc(`appStoreVersionLocalizations/${en.id}/appScreenshotSets`);
-  if (!sets.length) gaps.push('screenshots: none uploaded (npm run screenshots -- --upload)');
+  if (versionId) {
+    const { data: locs } = await asc(`appStoreVersions/${versionId}/appStoreVersionLocalizations`);
+    const en = locs.find((l) => l.attributes.locale === 'en-US');
+    const { data: sets } = await asc(`appStoreVersionLocalizations/${en.id}/appScreenshotSets`);
+    if (!sets.length) gaps.push('screenshots: none uploaded (npm run screenshots -- --upload)');
+
+    // An UPDATE cannot be submitted without it, and it is the one field that changes
+    // every release, so it is written in the console rather than kept in this file.
+    const { data: live } = await asc(`apps/${appId}/appStoreVersions?filter[appStoreState]=READY_FOR_SALE&limit=1`);
+    if (live.length && !en.attributes.whatsNew?.trim()) {
+      gaps.push("What's New: empty, and an update cannot be submitted without it (App Store Connect, the version page)");
+    }
+  }
 
   // App Privacy is NOT in the App Store Connect API -- every appDataUsage path
   // answers 404, and fastlane cannot reach it either. It is a console form, and it
@@ -494,4 +659,11 @@ if (process.argv[1]?.endsWith('appstore-metadata.mjs')) {
   const ids = await push();
   const gaps = await remaining(ids);
   console.log(gaps.length ? `\nstill needed before review:\n  - ${gaps.join('\n  - ')}` : '\nnothing else outstanding');
+  if (EXPECT_CLEAN) {
+    if (pending.length) {
+      console.error(`\nApp Store Connect does not match the file: ${pending.join('; ')}`);
+      process.exit(1);
+    }
+    console.log('\nread back: App Store Connect matches the file');
+  }
 }

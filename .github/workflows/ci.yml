@@ -116,6 +116,11 @@ jobs:
       - name: App Store metadata self-check
         run: npm run test:appstore
 
+      # The release panel sets repository secrets and pushes tags from localhost; who
+      # may call it and what it will store are pure checks, pinned offline.
+      - name: Release panel self-check
+        run: npm run test:panel
+
       - name: Typecheck
         run: npx tsc --noEmit
 
