@@ -4,6 +4,7 @@ import { CalendarDays, ChevronRight, Play, SquarePen, Users } from 'lucide-react
 import { blockAmount, totalMinutes } from './data';
 import { SessionGlyph } from './SessionGlyph';
 import { FlowFill } from './FlowFill';
+import { Surface } from './Surface';
 import type { SessionEvent } from './types';
 import { SESSION_TYPES, color, radius, semantic, type, typesOf } from './theme';
 
@@ -136,7 +137,7 @@ function Hero({
   const verb = e.canceled ? 'View' : isCoach ? 'Edit session' : next ? 'Start workout' : 'Open workout';
 
   return (
-    <View style={[s.hero, (past || e.canceled) && { opacity: 0.62 }]}>
+    <Surface style={[s.hero, (past || e.canceled) && { opacity: 0.62 }]}>
       {next ? <FlowFill tint={tint} peak={0.14} /> : null}
       <View style={s.heroTop}>
         <View style={s.glyphWell}>
@@ -223,7 +224,7 @@ function Hero({
           return <Icon size={16} color={fg} fill={isCoach ? 'none' : fg} strokeWidth={2.2} />;
         })()}
       </Pressable>
-    </View>
+    </Surface>
   );
 }
 

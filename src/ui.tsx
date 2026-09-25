@@ -12,6 +12,7 @@ import {
 import { Icon } from './Icon';
 import { SessionGlyph } from './SessionGlyph';
 import { FlowFill } from './FlowFill';
+import { Surface } from './Surface';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import {
   SESSION_TYPES,
@@ -127,14 +128,14 @@ export function Banner({
     ok: { flow: color.chalk, peak: 0.07, ic: 'information-circle-outline' as IconName, fg: color.chalk },
   }[tone];
   return (
-    <View style={s.banner}>
+    <Surface style={s.banner}>
       <FlowFill tint={tint.flow} peak={tint.peak} />
       <Icon name={tint.ic} size={16} color={tint.fg} style={s.bannerIcon} />
       <View style={{ flex: 1 }}>
         <Text style={[s.bannerTitle, { color: tint.fg }]}>{title}</Text>
         <Text style={s.bannerBody}>{children}</Text>
       </View>
-    </View>
+    </Surface>
   );
 }
 
@@ -165,7 +166,7 @@ export function Avatar({ name, role, size = 40 }: { name: string; role: Role; si
 }
 
 export const Card = ({ children, style }: { children: React.ReactNode; style?: StyleProp<ViewStyle> }) => (
-  <View style={[s.card, style]}>{children}</View>
+  <Surface style={[s.card, style]}>{children}</Surface>
 );
 
 export const CardTitle = ({ children }: { children: React.ReactNode }) => (

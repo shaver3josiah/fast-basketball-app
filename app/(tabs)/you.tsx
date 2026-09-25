@@ -3,6 +3,7 @@ import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Icon } from '../../src/Icon';
 import { FlowFill } from '../../src/FlowFill';
+import { SquircleLayer, shell } from '../../src/Surface';
 import { useSession, useNames } from '../../src/session';
 import { hasConsent, savePrefs, setConsent, setMuted, subscribeThreads } from '../../src/data';
 import { Celebrate } from '../../src/Celebrate';
@@ -524,11 +525,12 @@ function CelebrationRow({
       }
       onPress={onPress}
       style={({ pressed }) => [
-        s.celeb,
+        shell(s.celeb),
         pressed && { backgroundColor: color.inkHover },
         !unlocked && { opacity: 0.72 },
       ]}
     >
+      <SquircleLayer style={s.celeb} />
       {chosen ? <FlowFill tint={color.fastRed} /> : null}
       <Icon
         name={!unlocked ? 'lock-closed' : chosen ? 'radio-button-on' : 'radio-button-off'}

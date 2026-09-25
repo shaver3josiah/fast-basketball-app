@@ -24,6 +24,7 @@ import { Empty, Eyebrow, GhostButton } from '../../src/ui';
 import { SessionGlyph } from '../../src/SessionGlyph';
 import { TodaySnapshot, nextUp } from '../../src/TodaySnapshot';
 import { FlowFill } from '../../src/FlowFill';
+import { Surface, SquircleLayer, shell } from '../../src/Surface';
 import { SESSION_TYPES, color, radius, semantic, type, typesOf } from '../../src/theme';
 
 const DOW = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
@@ -309,7 +310,7 @@ export default function CalendarScreen() {
       ) : null}
 
       {clipboard && isCoach && (
-        <View style={s.clip}>
+        <Surface style={s.clip}>
           <FlowFill tint={color.miamiTeal} />
           <Icon name="copy-outline" size={16} color={color.chalk} />
           <Text style={s.clipText}>
@@ -324,7 +325,7 @@ export default function CalendarScreen() {
           >
             <Icon name="close" size={16} color={color.textDim} />
           </Pressable>
-        </View>
+        </Surface>
       )}
 
       <View style={s.dayHead}>
@@ -449,8 +450,10 @@ function TodayStrip({ events, onPress }: { events: SessionEvent[]; onPress: () =
       accessibilityRole="button"
       accessibilityLabel={`Today's snapshot: ${live.length} ${live.length === 1 ? 'session' : 'sessions'}, ${when}`}
       onPress={onPress}
-      style={({ pressed }) => [s.strip, pressed && { backgroundColor: color.inkHover }]}
+      // The press tint sits on the container over the painted shape: a flash, not a state.
+      style={({ pressed }) => [shell(s.strip), pressed && { backgroundColor: color.inkHover }]}
     >
+      <SquircleLayer style={s.strip} />
       <SessionGlyph kind={typesOf(lead)[0]} size={28} muted={!next} />
       <View style={{ flex: 1 }}>
         <Text style={s.stripTitle}>Today's snapshot</Text>
@@ -713,7 +716,8 @@ function SessionCard({
 
   return (
     <GestureDetector gesture={pan}>
-      <Animated.View style={[s.ev, card]}>
+      <Animated.View style={[shell(s.ev), card]}>
+        <SquircleLayer style={s.ev} />
         <Animated.View style={[StyleSheet.absoluteFill, s.evHeld, heldStyle]} pointerEvents="none" />
 
         <Pressable

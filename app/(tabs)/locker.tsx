@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Icon } from '../../src/Icon';
 import { FlowFill } from '../../src/FlowFill';
+import { SquircleLayer, shell } from '../../src/Surface';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSession, useNames } from '../../src/session';
@@ -279,10 +280,11 @@ function SubmissionRow({
       accessibilityRole="button"
       accessibilityLabel={`Open submission: ${workflow?.name ?? 'workflow'}${period ? `, ${period}` : ''}`}
       style={({ pressed }) => [
-        s.row,
+        shell(s.row),
         pressed && { backgroundColor: color.ink },
       ]}
     >
+      <SquircleLayer style={s.row} />
       <FlowFill tint={color.miamiTeal} still />
       <View style={[s.icon, { backgroundColor: color.tealTint }]}>
         <Icon name="checkmark" size={17} color={color.miamiTeal} />

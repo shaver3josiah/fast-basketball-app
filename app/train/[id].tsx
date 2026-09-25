@@ -17,6 +17,7 @@ import { useSession } from '../../src/session';
 import { blockAmount, logWorkoutDone, savePrefs } from '../../src/data';
 import { Celebrate } from '../../src/Celebrate';
 import { FlowFill } from '../../src/FlowFill';
+import { Surface } from '../../src/Surface';
 import {
   CELEBRATIONS,
   activeCelebration,
@@ -459,7 +460,7 @@ function BlockRow({
   onDone: () => void;
 }) {
   return (
-    <View style={[s.row, done && { opacity: 0.6 }]}>
+    <Surface style={[s.row, done && { opacity: 0.6 }]}>
       {current ? <FlowFill tint={color.fastRed} /> : null}
       <Pressable
         accessibilityRole="button"
@@ -489,7 +490,7 @@ function BlockRow({
           color={done ? color.bone : color.textFaint}
         />
       </Pressable>
-    </View>
+    </Surface>
   );
 }
 
