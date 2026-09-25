@@ -10,7 +10,7 @@ import { Loading } from '../../src/ui';
 import { FastMark } from '../../src/Logo';
 import { Dust } from '../../src/Ambience';
 import { Pending } from '../../src/Pending';
-import { RewardsIntro } from '../../src/RewardsIntro';
+import { Tour } from '../../src/Tour';
 import { readState } from '../../src/rewards';
 
 /** Unread is approximated by "threads you can see" until read receipts exist.
@@ -41,8 +41,8 @@ export default function TabsLayout() {
     // shows between cards; the tab bar and headers keep their own band colour.
     <View style={{ flex: 1, backgroundColor: semantic.surfacePage }}>
     <Dust />
-    {/* Once per device, and never for the coach: the streak is the athlete's. */}
-    {role !== 'coach' && <RewardsIntro state={readState(prefs)} />}
+    {/* Once per device, for every role, and again from the You tab's Replay. */}
+    <Tour role={role} state={readState(prefs)} />
     <Tabs
       screenOptions={{
         headerStyle: { backgroundColor: semantic.surfaceBand },
