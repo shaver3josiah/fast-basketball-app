@@ -82,7 +82,26 @@ export default function Locker() {
         </Banner>
       )}
 
-      <Eyebrow>Training workflows</Eyebrow>
+      {/* A tool, not a worksheet: nothing is filed, so it sits above the worksheets
+          rather than among them. */}
+      <Eyebrow>Tools</Eyebrow>
+      <Pressable
+        onPress={() => router.push('/timer')}
+        accessibilityRole="button"
+        accessibilityLabel="Open the timer. Countdown or stopwatch."
+        style={({ pressed }) => [s.row, pressed && { backgroundColor: color.ink }]}
+      >
+        <View style={[s.icon, { backgroundColor: 'rgba(255,122,24,0.14)' }]}>
+          <Icon name="stopwatch-outline" size={21} color="#FF9A3D" />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={s.name}>Timer</Text>
+          <Text style={s.meta}>Countdown or stopwatch, for a set, a sit or a rest</Text>
+        </View>
+        <Text style={s.chev}>›</Text>
+      </Pressable>
+
+      <Eyebrow style={{ marginTop: 22 }}>Training workflows</Eyebrow>
 
       {workflows === null && <Text style={type.meta}>Loading…</Text>}
       {workflows?.length === 0 && (
