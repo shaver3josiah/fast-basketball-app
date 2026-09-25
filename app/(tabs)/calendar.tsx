@@ -89,7 +89,8 @@ export default function CalendarScreen() {
   const visible = useMemo(
     () =>
       (events ?? []).filter(
-        (e) => filter === 'all' || e.athleteId === filter || e.athleteIds?.includes(filter)
+        // A public session is on every athlete's calendar, so no filter hides it.
+        (e) => filter === 'all' || e.public || e.athleteId === filter || e.athleteIds?.includes(filter)
       ),
     [events, filter]
   );
@@ -392,7 +393,7 @@ export default function CalendarScreen() {
         <SessionCard
           key={e.id}
           event={e}
-          names={isCoach && filter === 'all' ? namesOn(e) : []}
+          names={e.public ? ['Everyone'] : isCoach && filter === 'all' ? namesOn(e) : []}
           draggable={isCoach}
           reduceMotion={reduceMotion}
           gridRef={gridRef}

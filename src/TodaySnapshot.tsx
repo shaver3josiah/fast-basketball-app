@@ -78,7 +78,7 @@ export function TodaySnapshot({
             next={e.id === nextId}
             // Before the next one in time order; everything, once the day is done.
             past={!e.canceled && (nextIdx < 0 || i < nextIdx)}
-            names={isCoach ? namesOn(e) : []}
+            names={e.public ? ['Everyone'] : isCoach ? namesOn(e) : []}
             isCoach={isCoach}
             onOpen={() => onOpen(e)}
           />

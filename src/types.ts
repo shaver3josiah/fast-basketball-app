@@ -104,6 +104,10 @@ export interface SessionEvent {
   /** Shared by every occurrence projected out of one scheduling action, so the
    *  whole run can be moved or cancelled together. */
   seriesId?: string;
+  /** Posted for EVERY family: open gym, a camp, a team event. Carries no athlete, so
+   *  athleteId is the placeholder 'public' and nothing names who may read it; the rules
+   *  let any signed-in account read it. */
+  public?: boolean;
 }
 
 export interface Workflow {

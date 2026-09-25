@@ -77,6 +77,8 @@ export default function Schedule() {
   );
   // Never empty. The first one is written as the document's primary `type`, which is
   // what the calendar tints a day with and what the rules validate.
+  /** Post to every family's calendar instead of named athletes. */
+  const [everyone, setEveryone] = useState(false);
   const [sessionTypes, setSessionTypes] = useState<SessionType[]>(['skills']);
   const [name, setName] = useState('');
   const [location, setLocation] = useState(HOME_GYM);
@@ -106,7 +108,8 @@ export default function Schedule() {
   // Fill the form from the event being edited, once it has arrived.
   useEffect(() => {
     if (loaded || !editing) return;
-    setAthleteIds([editing.athleteId]);
+    setEveryone(!!editing.public);
+    setAthleteIds(editing.public ? [] : [editing.athleteId]);
     setKind(editing.kind ?? 'individual');
     setSessionTypes(typesOf(editing));
     setName(editing.name);
@@ -142,8 +145,8 @@ export default function Schedule() {
   // A coached session with more than one athlete is ONE document, so the run is one
   // per date. Individual work is one per athlete per date: separate workouts that
   // happen to have been typed in once.
-  const sharedSession = kind === 'coached' && chosen.length > 1;
-  const writes = dates.length * (sharedSession ? 1 : Math.max(1, chosen.length));
+  const sharedSession = !everyone && kind === 'coached' && chosen.length > 1;
+  const writes = dates.length * (everyone || sharedSession ? 1 : Math.max(1, chosen.length));
   const roster = Object.values(athletesById);
   // Their guardian has no uid until the family signs up, and the rules refuse a
   // shared session whose membership list is missing one. Individual sessions are
@@ -151,7 +154,7 @@ export default function Schedule() {
   const unshareable = sharedSession ? chosen.filter((a) => !canShareWith(a)) : [];
   const canSave =
     name.trim().length > 0 &&
-    chosen.length > 0 &&
+    (everyone || chosen.length > 0) &&
     writes <= MAX_SCHEDULED &&
     unshareable.length === 0;
 
@@ -174,6 +177,7 @@ export default function Schedule() {
         });
       } else {
         await scheduleWorkout({
+          everyone,
           athletes: athleteIds.map((id) => athletesById[id]).filter(Boolean),
           type: sessionTypes[0],
           types: sessionTypes,
@@ -206,10 +210,28 @@ export default function Schedule() {
 
       {/* --- who ------------------------------------------------------------ */}
       <Text style={s.label}>{editing ? 'Athlete' : 'Who is training'}</Text>
-      {roster.length === 0 ? (
-        <Body>Nobody is on the roster yet. Invite a family first.</Body>
-      ) : (
-        <View style={s.wrap}>
+      <View style={s.wrap}>
+        {/* Blake posts open gyms and team events for everyone. First in the row, and
+            exclusive: a session is either public or for named athletes, never both. */}
+        <Pressable
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked: everyone, disabled: !!editing }}
+          accessibilityLabel="Everyone. Public, on every family's calendar"
+          disabled={!!editing}
+          onPress={() => {
+            setEveryone((on) => !on);
+            setAthleteIds([]);
+          }}
+          style={({ pressed }) => [
+            s.pill,
+            everyone && s.pillOn,
+            pressed && !everyone && { backgroundColor: color.inkHover },
+            !!editing && { opacity: 0.6 },
+          ]}
+        >
+          <Icon name={everyone ? 'checkmark' : 'people-outline'} size={14} color={everyone ? color.bone : color.chalk} />
+          <Text style={[s.pillText, everyone && { color: color.bone }]}>Everyone</Text>
+        </Pressable>
           {roster.map((a) => {
             const on = athleteIds.includes(a.id);
             return (
@@ -219,11 +241,12 @@ export default function Schedule() {
                 accessibilityState={{ checked: on, disabled: !!editing }}
                 accessibilityLabel={a.playerName}
                 disabled={!!editing}
-                onPress={() =>
+                onPress={() => {
+                  setEveryone(false);
                   setAthleteIds((ids) =>
                     ids.includes(a.id) ? ids.filter((x) => x !== a.id) : [...ids, a.id]
-                  )
-                }
+                  );
+                }}
                 style={({ pressed }) => [
                   s.pill,
                   on && s.pillOn,
@@ -236,8 +259,16 @@ export default function Schedule() {
               </Pressable>
             );
           })}
-        </View>
-      )}
+      </View>
+      {roster.length === 0 && !everyone ? (
+        <Text style={s.hint}>Nobody is on the roster yet. Invite a family, or post it for everyone.</Text>
+      ) : null}
+      {everyone ? (
+        <Text style={s.hint}>
+          Public. Every family on the app sees this on their calendar, including families
+          who join later.
+        </Text>
+      ) : null}
       {!editing && chosen.length > 1 && (
         <Text style={s.hint}>
           {sharedSession
