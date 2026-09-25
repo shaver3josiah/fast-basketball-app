@@ -67,7 +67,7 @@ const rnd = (i: number, salt: number) => {
 /** Red, orange, gold: the ramp an ember cools along. */
 const RAMP = [color.fastRed, color.redHot, '#FF7A18', '#FFB020', '#FFD34D'];
 
-const MOTES = 16;
+const MOTES = 20;
 
 export function Dust() {
   const [on] = useDustSetting();
@@ -90,7 +90,7 @@ function Mote({ i, w, h }: { i: number; w: number; h: number }) {
   const sway = 10 + rnd(i, 4) * 26;
   const turns = 1 + rnd(i, 5) * 1.5;
   const phase = rnd(i, 6);
-  const peak = 0.35 + rnd(i, 7) * 0.45;
+  const peak = 0.45 + rnd(i, 7) * 0.45;
   const ms = 9000 + rnd(i, 8) * 9000;
 
   const p = useSharedValue(0);
