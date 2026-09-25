@@ -7,6 +7,7 @@ import { useSession } from '../../src/session';
 import { subscribeThreads } from '../../src/data';
 import { color, semantic } from '../../src/theme';
 import { Loading } from '../../src/ui';
+import { FastMark } from '../../src/Logo';
 import { Pending } from '../../src/Pending';
 import { RewardsIntro } from '../../src/RewardsIntro';
 import { readState } from '../../src/rewards';
@@ -44,6 +45,11 @@ export default function TabsLayout() {
         headerTintColor: color.chalk,
         headerTitleStyle: { color: color.chalk, fontWeight: '800' },
         headerShadowVisible: false,
+        // The brand on every tab's top bar. FAST alone, not the full lockup: at header
+        // height the BASKETBALL line would be a smudge. Centred titles on both platforms
+        // so Android's left-aligned title never collides with it.
+        headerLeft: () => <FastMark height={17} style={{ marginLeft: 16 }} />,
+        headerTitleAlign: 'center',
         sceneStyle: { backgroundColor: semantic.surfacePage },
         tabBarStyle: {
           backgroundColor: semantic.surfaceBand,

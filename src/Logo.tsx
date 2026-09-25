@@ -242,6 +242,40 @@ export function Logo({
 }
 
 /**
+ * FAST on its own: the lockup's letters, speed lines and notch, with the BASKETBALL line,
+ * its rules and the crescent left out, cropped to the box those parts occupy in the
+ * brand file (x 24 to 1515, y 24 to 294, measured off the paths). Nothing is redrawn or
+ * set in type; it is the real vector, fewer parts of it.
+ *
+ * For a top bar, where the full lockup would have to go under its 250px floor and the
+ * small word would be unreadable. A derived mark, so it is the owner's call rather than
+ * the design system's: the kit's own answer at this size is the square icon.
+ */
+const FAST_VIEW_BOX = '24 24 1491 270';
+const FAST_PARTS = [...LOGO.lines, ...LOGO.f, ...LOGO.a, ...LOGO.st, ...LOGO.notch];
+
+export function FastMark({
+  height = 18,
+  fill = color.fastRed,
+  style,
+}: {
+  height?: number;
+  fill?: string;
+  style?: StyleProp<ViewStyle>;
+}) {
+  const width = (height * 1491) / 270;
+  return (
+    <View style={[{ width, height }, style]} accessibilityRole="image" accessibilityLabel="FAST Basketball">
+      <Svg width={width} height={height} viewBox={FAST_VIEW_BOX}>
+        {FAST_PARTS.map((d, i) => (
+          <Path key={i} d={d} fill={fill} fillRule="evenodd" />
+        ))}
+      </Svg>
+    </View>
+  );
+}
+
+/**
  * The square mark, static.
  *
  * This is the correct brand asset below the lockup's 250px floor, and the design
