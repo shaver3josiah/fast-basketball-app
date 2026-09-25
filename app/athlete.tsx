@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Redirect, Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import Ionicons from '@expo/vector-icons/Ionicons';
+import { Icon } from '../src/Icon';
+import { SessionGlyph } from '../src/SessionGlyph';
 import { useSession } from '../src/session';
 import { hasConsent, subscribeEvents } from '../src/data';
 import type { SessionEvent } from '../src/types';
@@ -105,7 +106,6 @@ export default function AthleteScreen() {
             const cats = typesOf(e);
             const t = SESSION_TYPES[cats[0]] ?? {
               label: e.type,
-              icon: 'ellipse-outline' as const,
               color: color.slate,
             };
             const catLabel = cats.map((k) => SESSION_TYPES[k]?.label ?? k).join(' + ');
@@ -118,7 +118,7 @@ export default function AthleteScreen() {
                 onPress={() => router.push({ pathname: '/schedule', params: { eventId: e.id } })}
                 style={({ pressed }) => [s.row, pressed && { backgroundColor: color.inkHover }]}
               >
-                <Ionicons name={t.icon} size={16} color={t.color} />
+                <SessionGlyph kind={cats[0]} size={20} muted={e.canceled} />
                 <View style={{ flex: 1 }}>
                   <Text style={[s.rowName, e.canceled && s.struck]} numberOfLines={1}>
                     {e.name}
@@ -131,7 +131,7 @@ export default function AthleteScreen() {
                     {e.canceled ? ' · Canceled' : ''}
                   </Text>
                 </View>
-                <Ionicons name="chevron-forward" size={16} color={color.textFaint} />
+                <Icon name="chevron-forward" size={16} color={color.textFaint} />
               </Pressable>
             );
           })
@@ -163,7 +163,7 @@ const s = StyleSheet.create({
     backgroundColor: semantic.surfaceCard,
     borderWidth: 1,
     borderColor: semantic.border,
-    borderRadius: radius.cardLg,
+    borderRadius: radius.cardLg, borderCurve: 'continuous',
     padding: 14,
     marginBottom: 12,
   },
