@@ -10,6 +10,7 @@ import {
 import { Redirect, Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { Icon } from '../src/Icon';
 import { SessionGlyph } from '../src/SessionGlyph';
+import { FlowFill } from '../src/FlowFill';
 import { useSession } from '../src/session';
 import {
   MAX_SCHEDULED,
@@ -269,10 +270,10 @@ export default function Schedule() {
                 onPress={() => applyTemplate(t)}
                 style={({ pressed }) => [
                   s.tpl,
-                  templateId === t.id && s.tplOn,
                   pressed && { backgroundColor: color.inkHover },
                 ]}
               >
+                {templateId === t.id ? <FlowFill tint={color.fastRed} still /> : null}
                 {typesOf(t).map((k) => (
                   <SessionGlyph key={k} kind={k} size={16} />
                 ))}
@@ -678,7 +679,7 @@ const s = StyleSheet.create({
     backgroundColor: semantic.surfaceInput,
     borderWidth: 1,
     borderColor: semantic.borderStrong,
-    borderRadius: radius.input,
+    borderRadius: radius.input, borderCurve: 'continuous',
     color: color.chalk,
     fontSize: 16,
     minHeight: 48,
@@ -704,18 +705,18 @@ const s = StyleSheet.create({
   pillText: { fontSize: 13, fontWeight: '700', color: color.textBody },
 
   tpl: {
+    overflow: 'hidden',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 7,
     minHeight: 44,
     maxWidth: 220,
     paddingHorizontal: 12,
-    borderRadius: radius.card,
+    borderRadius: radius.card, borderCurve: 'continuous',
     borderWidth: 1,
     borderColor: semantic.borderStrong,
     backgroundColor: semantic.surfaceCard,
   },
-  tplOn: { borderColor: color.redHot },
   tplName: { fontSize: 13.5, fontWeight: '700', color: color.chalk, flexShrink: 1 },
   tplMin: { fontSize: 11.5, color: color.textDim },
 
@@ -731,7 +732,7 @@ const s = StyleSheet.create({
     gap: 4,
     minHeight: 64,
     paddingHorizontal: 4,
-    borderRadius: radius.card,
+    borderRadius: radius.card, borderCurve: 'continuous',
     borderWidth: 1,
     borderColor: semantic.borderStrong,
     backgroundColor: semantic.surfaceInput,
@@ -746,10 +747,10 @@ const s = StyleSheet.create({
     backgroundColor: semantic.surfaceInput,
     borderWidth: 1,
     borderColor: semantic.borderStrong,
-    borderRadius: radius.card,
+    borderRadius: radius.card, borderCurve: 'continuous',
     padding: 3,
   },
-  dayBtn: { width: 48, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: radius.chip },
+  dayBtn: { width: 48, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: radius.chip, borderCurve: 'continuous' },
   dayText: { flex: 1, textAlign: 'center', fontSize: 15, fontWeight: '800', color: color.chalk },
 
   time: {

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Icon } from '../../src/Icon';
+import { FlowFill } from '../../src/FlowFill';
 import { useSession, useNames } from '../../src/session';
 import { hasConsent, savePrefs, setConsent, setMuted, subscribeThreads } from '../../src/data';
 import { Celebrate } from '../../src/Celebrate';
@@ -524,11 +525,11 @@ function CelebrationRow({
       onPress={onPress}
       style={({ pressed }) => [
         s.celeb,
-        chosen && { borderColor: color.fastRed, backgroundColor: color.redTint },
         pressed && { backgroundColor: color.inkHover },
         !unlocked && { opacity: 0.72 },
       ]}
     >
+      {chosen ? <FlowFill tint={color.fastRed} /> : null}
       <Icon
         name={!unlocked ? 'lock-closed' : chosen ? 'radio-button-on' : 'radio-button-off'}
         size={20}
@@ -610,6 +611,7 @@ const s = StyleSheet.create({
   dot: { width: 20, height: 20, borderRadius: 10, borderWidth: 1, borderColor: semantic.borderStrong, marginTop: 1 },
 
   celeb: {
+    overflow: 'hidden',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
@@ -618,7 +620,7 @@ const s = StyleSheet.create({
     paddingHorizontal: 10,
     borderWidth: 1,
     borderColor: semantic.borderStrong,
-    borderRadius: radius.chip,
+    borderRadius: radius.chip, borderCurve: 'continuous',
     marginTop: 8,
   },
   celebName: { fontSize: 14.5, fontWeight: '700', color: color.chalk },

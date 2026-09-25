@@ -3,9 +3,12 @@ import Animated, { Easing, FadeInDown } from 'react-native-reanimated';
 import { CalendarDays, ChevronRight, Play, SquarePen, Users } from 'lucide-react-native';
 import { blockAmount, totalMinutes } from './data';
 import { SessionGlyph } from './SessionGlyph';
+import { FlowFill } from './FlowFill';
 import type { SessionEvent } from './types';
 import { SESSION_TYPES, color, radius, semantic, type, typesOf } from './theme';
 
+const HERO_R = 28;
+const HERO_PAD = 16;
 const EASE_OUT = Easing.bezier(0.23, 1, 0.32, 1);
 const enter = (i: number) => FadeInDown.duration(260).delay(i * 60).easing(EASE_OUT);
 
@@ -133,15 +136,16 @@ function Hero({
   const verb = e.canceled ? 'View' : isCoach ? 'Edit session' : next ? 'Start workout' : 'Open workout';
 
   return (
-    <View style={[s.hero, next && { borderColor: tint }, (past || e.canceled) && { opacity: 0.62 }]}>
+    <View style={[s.hero, (past || e.canceled) && { opacity: 0.62 }]}>
+      {next ? <FlowFill tint={tint} peak={0.14} /> : null}
       <View style={s.heroTop}>
-        <View style={[s.glyphWell, next && { borderColor: `${tint}66` }]}>
+        <View style={s.glyphWell}>
           <SessionGlyph kind={primary} size={next ? 64 : 52} animated={next} muted={e.canceled} />
         </View>
         <View style={{ flex: 1 }}>
           <View style={s.markRow}>
             {next ? (
-              <View style={[s.mark, { borderColor: tint }]}>
+              <View style={[s.mark, { backgroundColor: `${tint}26` }]}>
                 <View style={[s.dot, { backgroundColor: tint }]} />
                 <Text style={[s.markText, { color: tint }]}>Up next</Text>
               </View>
@@ -240,12 +244,14 @@ const s = StyleSheet.create({
   },
   calBtnText: { fontSize: 13, fontWeight: '700', color: color.chalk },
 
+  // Concentric corners: every rounded thing inside sits 16 in from the card's edge, so
+  // its radius is the card's minus 16 (28 - 16 = 12). That shared centre is what makes
+  // nested iOS shapes look machined rather than stacked.
   hero: {
     backgroundColor: semantic.surfaceCard,
-    borderRadius: radius.cardLg,
-    borderWidth: 1,
-    borderColor: semantic.border,
-    padding: 16,
+    borderRadius: HERO_R,
+    overflow: 'hidden',
+    padding: HERO_PAD,
     marginBottom: 12,
     gap: 14,
   },
@@ -253,19 +259,17 @@ const s = StyleSheet.create({
   glyphWell: {
     width: 80,
     height: 80,
-    borderRadius: radius.card,
+    borderRadius: HERO_R - HERO_PAD,
+    borderCurve: 'continuous',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: color.courtBlack,
-    borderWidth: 1,
-    borderColor: semantic.border,
   },
   markRow: { flexDirection: 'row', gap: 8, marginBottom: 4, minHeight: 20, alignItems: 'center' },
   mark: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    borderWidth: 1,
     borderRadius: radius.pill,
     paddingHorizontal: 8,
     paddingVertical: 2,
@@ -305,7 +309,8 @@ const s = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
     minHeight: 48,
-    borderRadius: radius.card,
+    borderRadius: HERO_R - HERO_PAD,
+    borderCurve: 'continuous',
     borderWidth: 1,
     borderColor: semantic.borderStrong,
   },
@@ -318,7 +323,7 @@ const s = StyleSheet.create({
     gap: 10,
     minHeight: 52,
     paddingHorizontal: 16,
-    borderRadius: radius.card,
+    borderRadius: radius.card, borderCurve: 'continuous',
     borderWidth: 1,
     borderColor: semantic.borderStrong,
     marginTop: 4,

@@ -23,6 +23,7 @@ import type { SessionEvent } from '../../src/types';
 import { Empty, Eyebrow, GhostButton } from '../../src/ui';
 import { SessionGlyph } from '../../src/SessionGlyph';
 import { TodaySnapshot, nextUp } from '../../src/TodaySnapshot';
+import { FlowFill } from '../../src/FlowFill';
 import { SESSION_TYPES, color, radius, semantic, type, typesOf } from '../../src/theme';
 
 const DOW = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
@@ -309,6 +310,7 @@ export default function CalendarScreen() {
 
       {clipboard && isCoach && (
         <View style={s.clip}>
+          <FlowFill tint={color.miamiTeal} />
           <Icon name="copy-outline" size={16} color={color.chalk} />
           <Text style={s.clipText}>
             {clipboard.events.length} {clipboard.events.length === 1 ? 'session' : 'sessions'} copied
@@ -723,7 +725,7 @@ function SessionCard({
           onPress={onOpen}
           style={s.evInner}
         >
-          <View style={[s.evIcon, { borderColor: `${t.color}55` }]}>
+          <View style={s.evIcon}>
             <SessionGlyph kind={cats[0]} size={26} muted={event.canceled} />
           </View>
 
@@ -856,7 +858,7 @@ const s = StyleSheet.create({
     minHeight: 56,
     paddingHorizontal: 12,
     marginBottom: 14,
-    borderRadius: radius.card,
+    borderRadius: radius.card, borderCurve: 'continuous',
     borderWidth: 1,
     borderColor: semantic.borderStrong,
     backgroundColor: semantic.surfaceCard,
@@ -867,7 +869,7 @@ const s = StyleSheet.create({
   calHead: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 },
   month: { fontSize: 24, fontWeight: '900', color: color.chalk, letterSpacing: -0.4 },
   year: { fontSize: 13, fontWeight: '700', color: color.textDim, marginTop: 1 },
-  navBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: radius.chip },
+  navBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: radius.chip, borderCurve: 'continuous' },
 
   filterRow: { gap: 6, paddingBottom: 12 },
   filter: {
@@ -896,7 +898,7 @@ const s = StyleSheet.create({
   cell: {
     width: `${100 / 7}%`,
     aspectRatio: 0.84,
-    borderRadius: radius.chip,
+    borderRadius: radius.chip, borderCurve: 'continuous',
     borderWidth: 1,
     borderColor: 'transparent',
   },
@@ -936,10 +938,8 @@ const s = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: color.tealTint,
-    borderWidth: 1,
-    borderColor: color.tealLine,
-    borderRadius: radius.card,
+    overflow: 'hidden',
+    borderRadius: radius.card, borderCurve: 'continuous',
     paddingVertical: 10,
     paddingLeft: 12,
     paddingRight: 4,
@@ -948,17 +948,19 @@ const s = StyleSheet.create({
   clipText: { flex: 1, fontSize: 13, color: color.chalk, lineHeight: 18 },
   clipClear: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
 
+  // 20 outside, 12 of padding, so the symbol's well is 8: concentric, see TodaySnapshot.
   ev: {
     backgroundColor: semantic.surfaceCard,
     borderWidth: 1,
     borderColor: semantic.borderStrong,
-    borderRadius: radius.card,
+    borderRadius: 20,
+    borderCurve: 'continuous',
     marginBottom: 8,
   },
   // An offset and a real blur, so the card reads as lifted off the page rather than
   // ringed. A zero-offset glow is decoration; this is depth.
   evHeld: {
-    borderRadius: radius.card,
+    borderRadius: radius.card, borderCurve: 'continuous',
     borderWidth: 1,
     borderColor: color.miamiTeal,
     backgroundColor: color.inkHover,
@@ -969,8 +971,8 @@ const s = StyleSheet.create({
     width: 40,
     height: 40,
     backgroundColor: color.courtBlack,
-    borderRadius: radius.chip,
-    borderWidth: 1,
+    borderRadius: 8,
+    borderCurve: 'continuous',
     alignItems: 'center',
     justifyContent: 'center',
   },

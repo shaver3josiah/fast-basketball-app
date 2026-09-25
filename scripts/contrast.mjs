@@ -979,18 +979,18 @@ addDyn('Switch', 'knob on the teal track', 'color.courtBlack', 'color.miamiTeal'
 addDyn('Switch', 'off track outline', 'color.textDim', 'rgba(255,255,255,0.14)', 'semantic.surfaceCard',
   'ui', null, null, 'src/ui.tsx s.track when off', 'the fill alone is 1.42, so the outline is the boundary');
 
-// Banner tones (src/ui.tsx). Banners render directly inside <Screen>, i.e. on the page.
-const BANNER_LINE = { watch: 'color.tealLine', lock: 'color.fastRed', ok: 'color.slate' };
+// Banner tones (src/ui.tsx). Banners render directly inside <Screen>, i.e. on the page,
+// over a FlowFill wash with no outline. Text is measured against the wash at its PEAK
+// alpha, the brightest point the gradient reaches under the words.
 const BANNERS = [
-  ['watch', guard("rgba(37,224,208,0.10)", 'Banner watch bg'), 'color.miamiTeal'],
-  ['lock', 'color.redTint', 'color.redHot'],
-  ['ok', guard("rgba(245,243,239,0.06)", 'Banner ok bg'), 'color.chalk'],
+  ['watch', 'rgba(37,224,208,0.16)', 'color.miamiTeal', guard('flow: color.miamiTeal, peak: 0.16', 'Banner watch flow')],
+  ['lock', 'rgba(230,12,32,0.16)', 'color.redHot', guard('flow: color.fastRed, peak: 0.16', 'Banner lock flow')],
+  ['ok', 'rgba(245,243,239,0.07)', 'color.chalk', guard('flow: color.chalk, peak: 0.07', 'Banner ok flow')],
 ];
 for (const [tone, bg, fg] of BANNERS) {
   addDyn('Banner tones', `${tone} - title`, fg, bg, 'semantic.surfacePage', 'text', 13, '800', 'src/ui.tsx s.bannerTitle', null);
   addDyn('Banner tones', `${tone} - icon glyph`, fg, bg, 'semantic.surfacePage', 'text', 15, '400', 'src/ui.tsx s.bannerIcon', null);
   addDyn('Banner tones', `${tone} - body`, 'color.textBody', bg, 'semantic.surfacePage', 'text', 13, '400', 'src/ui.tsx s.bannerBody', null);
-  addDyn('Banner tones', `${tone} - border`, BANNER_LINE[tone], bg, 'semantic.surfacePage', 'ui', null, null, 'src/ui.tsx s.banner borderColor', null);
 }
 
 // Tag tones (src/ui.tsx). Tags render inside thread rows and cards.
@@ -1001,7 +1001,6 @@ const TAGS = [
 ];
 for (const [tone, bg, fg, line] of TAGS) {
   addDyn('Tag tones', `${tone} - label`, fg, bg, 'semantic.surfaceCard', 'text', 10.5, '700', 'src/ui.tsx Tag', null);
-  addDyn('Tag tones', `${tone} - border`, line, bg, 'semantic.surfaceCard', 'ui', null, null, 'src/ui.tsx s.tag borderColor', null);
 }
 
 /* -------------------------------------------------------------- reporting --- */

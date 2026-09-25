@@ -305,7 +305,7 @@ const s = StyleSheet.create({
     backgroundColor: semantic.surfaceInput,
     borderWidth: 1,
     borderColor: semantic.borderStrong,
-    borderRadius: radius.input,
+    borderRadius: radius.input, borderCurve: 'continuous',
     color: color.chalk,
     fontSize: 15,
     minHeight: 44,

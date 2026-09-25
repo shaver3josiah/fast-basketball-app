@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Icon } from '../../src/Icon';
+import { FlowFill } from '../../src/FlowFill';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSession, useNames } from '../../src/session';
@@ -279,11 +280,11 @@ function SubmissionRow({
       accessibilityLabel={`Open submission: ${workflow?.name ?? 'workflow'}${period ? `, ${period}` : ''}`}
       style={({ pressed }) => [
         s.row,
-        { borderColor: color.tealLine },
         pressed && { backgroundColor: color.ink },
       ]}
     >
-      <View style={[s.icon, { backgroundColor: color.tealTint, borderColor: color.tealLine }]}>
+      <FlowFill tint={color.miamiTeal} still />
+      <View style={[s.icon, { backgroundColor: color.tealTint }]}>
         <Icon name="checkmark" size={17} color={color.miamiTeal} />
       </View>
       <View style={{ flex: 1 }}>
@@ -306,13 +307,14 @@ const formatSize = (bytes: number) =>
 
 const s = StyleSheet.create({
   row: {
+    overflow: 'hidden',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
     backgroundColor: semantic.surfaceCard,
     borderWidth: 1,
     borderColor: semantic.borderStrong,
-    borderRadius: radius.cardLg,
+    borderRadius: radius.cardLg, borderCurve: 'continuous',
     padding: 13,
     marginBottom: 10,
     minHeight: 64,
@@ -320,10 +322,8 @@ const s = StyleSheet.create({
   icon: {
     width: 44,
     height: 44,
-    borderRadius: radius.chip,
+    borderRadius: radius.chip, borderCurve: 'continuous',
     backgroundColor: color.redTint,
-    borderWidth: 1,
-    borderColor: color.fastRed,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -334,9 +334,7 @@ const s = StyleSheet.create({
     alignSelf: 'flex-start',
     marginTop: 7,
     backgroundColor: color.tealTint,
-    borderWidth: 1,
-    borderColor: color.tealLine,
-    borderRadius: radius.badge,
+    borderRadius: radius.badge, borderCurve: 'continuous',
     paddingHorizontal: 7,
     paddingVertical: 2,
   },
