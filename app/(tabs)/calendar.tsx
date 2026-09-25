@@ -8,6 +8,7 @@ import Animated, {
   useAnimatedStyle,
   useReducedMotion,
   useSharedValue,
+  FadeIn,
   withSpring,
   withTiming,
   type SharedValue,
@@ -15,10 +16,13 @@ import Animated, {
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { ChevronRight } from 'lucide-react-native';
 import { useSession } from '../../src/session';
 import { deleteEvent, moveEvent, pasteEvents, subscribeEvents } from '../../src/data';
 import type { SessionEvent } from '../../src/types';
 import { Empty, Eyebrow, GhostButton } from '../../src/ui';
+import { SessionGlyph } from '../../src/SessionGlyph';
+import { TodaySnapshot, nextUp } from '../../src/TodaySnapshot';
 import { SESSION_TYPES, color, radius, semantic, type, typesOf } from '../../src/theme';
 
 const DOW = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
@@ -64,6 +68,10 @@ export default function CalendarScreen() {
   /** Which card is armed for deletion. One at a time, deliberately: a list of sessions
    *  each showing its own confirm row is a list nobody can read. */
   const [confirmId, setConfirmId] = useState<string | null>(null);
+  /** null until someone chooses: the snapshot then shows by itself whenever today has
+   *  sessions. Once they pick the month it stays picked for as long as the tab lives. */
+  const [view, setView] = useState<'snapshot' | 'calendar' | null>(null);
+  const scrollRef = useRef<ScrollView>(null);
 
   // Direct manipulation is never decoration, so the drag itself always works. What
   // Reduce Motion turns off is the spring: the card snaps home instead of overshooting.
@@ -97,6 +105,30 @@ export default function CalendarScreen() {
     }
     return m;
   }, [visible, month, year]);
+
+  const todayEvents = useMemo(
+    () =>
+      visible
+        .filter((e) => e.startsAt?.toDate && sameDay(e.startsAt.toDate(), new Date()))
+        .sort((a, b) => a.startsAt.toMillis() - b.startsAt.toMillis()),
+    [visible]
+  );
+  const snapshot = todayEvents.length > 0 && view !== 'calendar';
+  const show = (v: 'snapshot' | 'calendar') => {
+    setView(v);
+    if (v === 'calendar') {
+      setCursor(today);
+      setSelected(today);
+    }
+    scrollRef.current?.scrollTo({ y: 0, animated: false });
+  };
+  const open = (e: SessionEvent) =>
+    router.push(
+      // The coach opens a session to change it. Everyone else opens it to do it.
+      isCoach
+        ? { pathname: '/schedule', params: { eventId: e.id } }
+        : { pathname: '/train/[id]', params: { id: e.id } }
+    );
 
   const dayEvents = useMemo(
     () => visible.filter((e) => e.startsAt?.toDate && sameDay(e.startsAt.toDate(), selected)),
@@ -179,11 +211,27 @@ export default function CalendarScreen() {
 
   return (
     <ScrollView
+      ref={scrollRef}
       style={s.page}
       contentContainerStyle={s.pad}
       // A drag that also scrolls the page is a drag that lands somewhere else.
       scrollEnabled={!dragging}
     >
+      {snapshot ? (
+        <Animated.View key="snap" entering={FadeIn.duration(180)}>
+          <TodaySnapshot
+            events={todayEvents}
+            isCoach={isCoach}
+            namesOn={namesOn}
+            onOpen={open}
+            onCalendar={() => show('calendar')}
+          />
+        </Animated.View>
+      ) : (
+      <Animated.View key="cal" entering={view ? FadeIn.duration(180) : undefined}>
+      {todayEvents.length > 0 && (
+        <TodayStrip events={todayEvents} onPress={() => show('snapshot')} />
+      )}
       <View style={s.calHead}>
         <View style={{ flex: 1 }}>
           <Text style={s.month}>{cursor.toLocaleDateString([], { month: 'long' })}</Text>
@@ -348,14 +396,7 @@ export default function CalendarScreen() {
           gridOrigin={gridOrigin}
           cellRects={cellRects}
           hoverDay={hoverDay}
-          // The coach opens a session to change it. Everyone else opens it to do it.
-          onOpen={() =>
-            router.push(
-              isCoach
-                ? { pathname: '/schedule', params: { eventId: e.id } }
-                : { pathname: '/train/[id]', params: { id: e.id } }
-            )
-          }
+          onOpen={() => open(e)}
           onCopy={() => {
             setClipboard({ from: selected, events: [e] });
             setFlash('Session copied');
@@ -384,7 +425,39 @@ export default function CalendarScreen() {
           Press and hold a session to pick it up, then drop it on any day above.
         </Text>
       )}
+      </Animated.View>
+      )}
     </ScrollView>
+  );
+}
+
+// --- the way back to the snapshot --------------------------------------------
+
+/** Sits above the month whenever today has sessions, so the snapshot is one tap away
+ *  from anywhere in the calendar, not only on the first open. */
+function TodayStrip({ events, onPress }: { events: SessionEvent[]; onPress: () => void }) {
+  const live = events.filter((e) => !e.canceled);
+  const next = nextUp(events);
+  const lead = next ?? live[0] ?? events[0];
+  const when = next
+    ? `next ${next.timeLabel || next.startsAt.toDate().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`
+    : 'all done';
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`Today's snapshot: ${live.length} ${live.length === 1 ? 'session' : 'sessions'}, ${when}`}
+      onPress={onPress}
+      style={({ pressed }) => [s.strip, pressed && { backgroundColor: color.inkHover }]}
+    >
+      <SessionGlyph kind={typesOf(lead)[0]} size={28} muted={!next} />
+      <View style={{ flex: 1 }}>
+        <Text style={s.stripTitle}>Today's snapshot</Text>
+        <Text style={s.stripMeta}>
+          {live.length} {live.length === 1 ? 'session' : 'sessions'} · {when}
+        </Text>
+      </View>
+      <ChevronRight size={18} color={color.textDim} strokeWidth={2} />
+    </Pressable>
   );
 }
 
@@ -480,7 +553,7 @@ function Legend() {
       <View style={s.legend}>
         {Object.entries(SESSION_TYPES).map(([k, v]) => (
           <View key={k} style={s.legendItem}>
-            <Ionicons name={v.icon} size={13} color={v.color} />
+            <SessionGlyph kind={k as keyof typeof SESSION_TYPES} size={15} />
             <Text style={s.legendText}>{v.label}</Text>
           </View>
         ))}
@@ -543,7 +616,6 @@ function SessionCard({
     icon: 'ellipse-outline' as const,
     color: color.slate,
   };
-  const extra = cats.slice(1).map((k) => SESSION_TYPES[k]).filter(Boolean);
   const d = event.startsAt.toDate();
 
   const tx = useSharedValue(0);
@@ -652,8 +724,8 @@ function SessionCard({
           onPress={onOpen}
           style={s.evInner}
         >
-          <View style={[s.evIcon, { backgroundColor: `${t.color}22`, borderColor: t.color }]}>
-            <Ionicons name={t.icon} size={16} color={t.color} />
+          <View style={[s.evIcon, { borderColor: `${t.color}55` }]}>
+            <SessionGlyph kind={cats[0]} size={26} muted={event.canceled} />
           </View>
 
           <View style={{ flex: 1 }}>
@@ -672,10 +744,10 @@ function SessionCard({
                   </Text>
                 </View>
               ) : null}
-              {extra.map((x) => (
-                <View key={x.label} style={s.evType}>
-                  <Ionicons name={x.icon} size={11} color={x.color} />
-                  <Text style={[s.evTypeText, { color: x.color }]}>{x.label}</Text>
+              {cats.slice(1).filter((k) => SESSION_TYPES[k]).map((k) => (
+                <View key={k} style={s.evType}>
+                  <SessionGlyph kind={k} size={13} />
+                  <Text style={[s.evTypeText, { color: SESSION_TYPES[k].color }]}>{SESSION_TYPES[k].label}</Text>
                 </View>
               ))}
             </View>
@@ -777,6 +849,21 @@ function FilterChip({ label, on, onPress }: { label: string; on: boolean; onPres
 const s = StyleSheet.create({
   page: { flex: 1, backgroundColor: semantic.surfacePage },
   pad: { padding: 16, paddingBottom: 40 },
+
+  strip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    minHeight: 56,
+    paddingHorizontal: 12,
+    marginBottom: 14,
+    borderRadius: radius.card,
+    borderWidth: 1,
+    borderColor: semantic.borderStrong,
+    backgroundColor: semantic.surfaceCard,
+  },
+  stripTitle: { fontSize: 14, fontWeight: '800', color: color.chalk },
+  stripMeta: { ...type.meta, marginTop: 2 },
 
   calHead: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 },
   month: { fontSize: 24, fontWeight: '900', color: color.chalk, letterSpacing: -0.4 },
@@ -880,8 +967,9 @@ const s = StyleSheet.create({
   },
   evInner: { flexDirection: 'row', gap: 11, padding: 12, alignItems: 'flex-start' },
   evIcon: {
-    width: 34,
-    height: 34,
+    width: 40,
+    height: 40,
+    backgroundColor: color.courtBlack,
     borderRadius: radius.chip,
     borderWidth: 1,
     alignItems: 'center',
