@@ -457,7 +457,9 @@ export function GhostButton({
 }
 
 const s = StyleSheet.create({
-  page: { flex: 1, backgroundColor: semantic.surfacePage },
+  // Transparent: a tab screen shows the dust layer behind it, and every stack screen
+  // already sits on the root Stack's court-black contentStyle.
+  page: { flex: 1, backgroundColor: 'transparent' },
   pad: { padding: 16, paddingBottom: 32 },
 
   banner: {

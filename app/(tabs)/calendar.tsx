@@ -853,7 +853,8 @@ function FilterChip({ label, on, onPress }: { label: string; on: boolean; onPres
 }
 
 const s = StyleSheet.create({
-  page: { flex: 1, backgroundColor: semantic.surfacePage },
+  // Transparent so the tab layout's dust shows through; see src/Ambience.tsx.
+  page: { flex: 1, backgroundColor: 'transparent' },
   pad: { padding: 16, paddingBottom: 40 },
 
   strip: {

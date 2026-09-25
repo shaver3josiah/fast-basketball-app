@@ -2,12 +2,13 @@ import { Redirect } from 'expo-router';
 import { Tabs } from 'expo-router/js-tabs';
 import { Icon } from '../../src/Icon';
 import { useEffect, useState } from 'react';
-import { StyleSheet } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { useSession } from '../../src/session';
 import { subscribeThreads } from '../../src/data';
 import { color, semantic } from '../../src/theme';
 import { Loading } from '../../src/ui';
 import { FastMark } from '../../src/Logo';
+import { Dust } from '../../src/Ambience';
 import { Pending } from '../../src/Pending';
 import { RewardsIntro } from '../../src/RewardsIntro';
 import { readState } from '../../src/rewards';
@@ -36,7 +37,10 @@ export default function TabsLayout() {
   if (needsVerification || notInvited) return <Pending />;
 
   return (
-    <>
+    // Court black under everything, and the dust on it. The scenes are transparent so it
+    // shows between cards; the tab bar and headers keep their own band colour.
+    <View style={{ flex: 1, backgroundColor: semantic.surfacePage }}>
+    <Dust />
     {/* Once per device, and never for the coach: the streak is the athlete's. */}
     {role !== 'coach' && <RewardsIntro state={readState(prefs)} />}
     <Tabs
@@ -50,7 +54,7 @@ export default function TabsLayout() {
         // so Android's left-aligned title never collides with it.
         headerLeft: () => <FastMark height={17} style={{ marginLeft: 16 }} />,
         headerTitleAlign: 'center',
-        sceneStyle: { backgroundColor: semantic.surfacePage },
+        sceneStyle: { backgroundColor: 'transparent' },
         tabBarStyle: {
           backgroundColor: semantic.surfaceBand,
           borderTopColor: semantic.border,
@@ -110,6 +114,6 @@ export default function TabsLayout() {
         }}
       />
     </Tabs>
-    </>
+    </View>
   );
 }
