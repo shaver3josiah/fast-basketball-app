@@ -15,7 +15,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
-import Ionicons from '@expo/vector-icons/Ionicons';
+import { Icon } from '../../src/Icon';
 import { ChevronRight } from 'lucide-react-native';
 import { useSession } from '../../src/session';
 import { deleteEvent, moveEvent, pasteEvents, subscribeEvents } from '../../src/data';
@@ -302,14 +302,14 @@ export default function CalendarScreen() {
       ) : null}
       {flash ? (
         <View style={s.flash} accessibilityLiveRegion="polite">
-          <Ionicons name="checkmark-circle" size={15} color={color.miamiTeal} />
+          <Icon name="checkmark-circle" size={15} color={color.miamiTeal} />
           <Text style={s.flashText}>{flash}</Text>
         </View>
       ) : null}
 
       {clipboard && isCoach && (
         <View style={s.clip}>
-          <Ionicons name="copy-outline" size={16} color={color.chalk} />
+          <Icon name="copy-outline" size={16} color={color.chalk} />
           <Text style={s.clipText}>
             {clipboard.events.length} {clipboard.events.length === 1 ? 'session' : 'sessions'} copied
             from {clipboard.from.toLocaleDateString([], { weekday: 'short', day: 'numeric' })}
@@ -320,7 +320,7 @@ export default function CalendarScreen() {
             onPress={() => setClipboard(null)}
             style={s.clipClear}
           >
-            <Ionicons name="close" size={16} color={color.textDim} />
+            <Icon name="close" size={16} color={color.textDim} />
           </Pressable>
         </View>
       )}
@@ -342,7 +342,7 @@ export default function CalendarScreen() {
             }}
             style={({ pressed }) => [s.todayBtn, pressed && { backgroundColor: color.inkHover }]}
           >
-            <Ionicons name="return-up-back" size={14} color={color.redHot} />
+            <Icon name="return-up-back" size={14} color={color.redHot} />
             <Text style={s.todayLink}>Go to today</Text>
           </Pressable>
         )}
@@ -558,7 +558,7 @@ function Legend() {
           </View>
         ))}
         <View style={s.legendItem}>
-          <Ionicons name="close-circle-outline" size={13} color={color.slate} />
+          <Icon name="close-circle-outline" size={13} color={color.slate} />
           <Text style={s.legendText}>Canceled</Text>
         </View>
       </View>
@@ -613,7 +613,6 @@ function SessionCard({
   const cats = typesOf(event);
   const t = SESSION_TYPES[cats[0]] ?? {
     label: event.type,
-    icon: 'ellipse-outline' as const,
     color: color.slate,
   };
   const d = event.startsAt.toDate();
@@ -736,7 +735,7 @@ function SessionCard({
               {event.durationMin ? <Text style={s.evDur}>{event.durationMin} min</Text> : null}
               {event.kind === 'coached' ? (
                 <View style={s.coached}>
-                  <Ionicons name="people-outline" size={11} color={color.miamiTeal} />
+                  <Icon name="people-outline" size={11} color={color.miamiTeal} />
                   <Text style={s.coachedText}>
                     {(event.athleteIds?.length ?? 1) > 1
                       ? `Coached, ${event.athleteIds?.length} athletes`
@@ -775,7 +774,7 @@ function SessionCard({
                 hitSlop={6}
                 style={s.evCopy}
               >
-                <Ionicons name="copy-outline" size={16} color={color.textDim} />
+                <Icon name="copy-outline" size={16} color={color.textDim} />
               </Pressable>
               <Pressable
                 accessibilityRole="button"
@@ -785,7 +784,7 @@ function SessionCard({
                 hitSlop={6}
                 style={s.evCopy}
               >
-                <Ionicons
+                <Icon
                   name={confirming ? 'close' : 'trash-outline'}
                   size={16}
                   color={confirming ? color.chalk : color.textDim}
@@ -816,7 +815,7 @@ function NavBtn({
   label,
   onPress,
 }: {
-  icon: React.ComponentProps<typeof Ionicons>['name'];
+  icon: import('../../src/Icon').IconName;
   label: string;
   onPress: () => void;
 }) {
@@ -827,7 +826,7 @@ function NavBtn({
       onPress={onPress}
       style={({ pressed }) => [s.navBtn, pressed && { backgroundColor: color.inkHover }]}
     >
-      <Ionicons name={icon} size={20} color={color.chalk} />
+      <Icon name={icon} size={20} color={color.chalk} />
     </Pressable>
   );
 }

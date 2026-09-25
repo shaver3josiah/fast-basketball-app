@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import Ionicons from '@expo/vector-icons/Ionicons';
+import { Icon } from './Icon';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Celebrate, SPECS } from './Celebrate';
@@ -78,7 +78,7 @@ export function RewardsIntro({ state }: { state: RewardState }) {
           {HOW.map((h) => (
             <View key={h.title} style={s.how}>
               <View style={s.howIcon}>
-                <Ionicons name={h.icon} size={19} color={color.redHot} />
+                <Icon name={h.icon} size={19} color={color.redHot} />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={s.howTitle}>{h.title}</Text>
@@ -113,7 +113,7 @@ export function RewardsIntro({ state }: { state: RewardState }) {
                     <Text style={[s.tileWord, { color: SPECS[c.id]?.colors[0] ?? color.redHot }]}>
                       {SPECS[c.id]?.word ?? c.label}
                     </Text>
-                    <Ionicons
+                    <Icon
                       name={unlocked ? 'play-circle' : 'lock-closed'}
                       size={16}
                       color={unlocked ? color.redHot : color.textFaint}

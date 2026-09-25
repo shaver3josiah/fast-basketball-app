@@ -49,6 +49,7 @@ export function SessionGlyph({
   size = 34,
   animated = false,
   muted = false,
+  color: override,
 }: {
   kind: SessionType;
   size?: number;
@@ -57,9 +58,11 @@ export function SessionGlyph({
   animated?: boolean;
   /** Canceled: drawn in slate and never animated, so it reads as switched off. */
   muted?: boolean;
+  /** Overrides the type's colour, for an unselected option in a picker. */
+  color?: string;
 }) {
   const g = GLYPHS[kind] ?? GLYPHS.skills;
-  const tint = muted ? color.slate : (SESSION_TYPES[kind]?.color ?? color.slate);
+  const tint = override ?? (muted ? color.slate : (SESSION_TYPES[kind]?.color ?? color.slate));
   const reduced = useReducedMotion();
   const live = animated && !muted && !reduced;
 

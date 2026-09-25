@@ -920,7 +920,7 @@ const guard = (needle, what) => {
 
 /**
  * SESSION_TYPES: one colour per type, used at several sizes with different criteria.
- * In the calendar it is an Ionicons glyph, a 12x3.5 grid chip, and (if a text label is
+ * In the calendar it is a drawn SessionGlyph, a 12x3.5 grid chip, and (if a text label is
  * ever reintroduced) small bold type. The style keys are named so that the guard below
  * shouts when the screen is restyled out from under this list.
  */
@@ -934,16 +934,14 @@ for (const key of ['evIcon', 'gridChip', 'cellInner', 'legendItem']) {
 
 for (const [k, v] of Object.entries(THEME.SESSION_TYPES ?? {})) {
   const c = v.color;
-  const solid = colorCandidates(c)[0];
-  // `${t.color}22` - the type colour at 13% behind its own glyph.
-  const tint = solid ? `${hex(solid.rgb)}22` : c;
-
-  addDyn('SESSION_TYPES', `${k} - row icon glyph 16px`, c, tint, 'semantic.surfaceCard',
-    'ui', null, null, 'calendar.tsx s.evIcon + <Ionicons size={16}>', 'icon on its own 13% tint');
-  addDyn('SESSION_TYPES', `${k} - row icon ring`, c, tint, 'semantic.surfaceCard',
-    'ui', null, null, 'calendar.tsx s.evIcon borderColor', 'ring vs the tint it encloses');
-  addDyn('SESSION_TYPES', `${k} - legend icon glyph 13px`, c, 'semantic.surfacePage', 'semantic.surfacePage',
-    'ui', null, null, 'calendar.tsx Legend <Ionicons size={13}>', 'icon on the page');
+  // The row symbol sits in a court-black well (s.evIcon); its tinted ring is decoration,
+  // the symbol and the word carry the type.
+  addDyn('SESSION_TYPES', `${k} - row symbol 26px`, c, 'color.courtBlack', 'semantic.surfaceCard',
+    'ui', null, null, 'calendar.tsx s.evIcon + <SessionGlyph size={26}>', 'symbol in its well');
+  addDyn('SESSION_TYPES', `${k} - legend symbol 15px`, c, 'semantic.surfacePage', 'semantic.surfacePage',
+    'ui', null, null, 'calendar.tsx Legend <SessionGlyph size={15}>', 'symbol on the page');
+  addDyn('SESSION_TYPES', `${k} - chip symbol 14px`, c, 'semantic.surfaceCard', 'semantic.surfaceCard',
+    'ui', null, null, 'ui.tsx TypeChip <SessionGlyph size={14}>', 'symbol on a card');
   addDyn('SESSION_TYPES', `${k} - grid chip, plain cell`, c, 'semantic.surfacePage', 'semantic.surfacePage',
     'ui', null, null, 'calendar.tsx s.gridChip (12x3.5)', 'graphical object in the month grid');
   addDyn('SESSION_TYPES', `${k} - grid chip, drag-target cell`, c, 'color.tealTint', 'semantic.surfacePage',

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import Ionicons from '@expo/vector-icons/Ionicons';
+import { Icon } from '../../src/Icon';
 import { useSession, useNames } from '../../src/session';
 import { hasConsent, savePrefs, setConsent, setMuted, subscribeThreads } from '../../src/data';
 import { Celebrate } from '../../src/Celebrate';
@@ -253,7 +253,7 @@ export default function You() {
                       onPress={() => save({ chatColor: k })}
                       style={[s.swatch, { backgroundColor: CHAT_COLORS[k].bg }, on && s.swatchOn]}
                     >
-                      {on ? <Ionicons name="checkmark-sharp" size={20} color={color.bone} /> : null}
+                      {on ? <Icon name="checkmark-sharp" size={20} color={color.bone} /> : null}
                     </Pressable>
                   );
                 })}
@@ -378,7 +378,7 @@ function Streak({ streak, best, workouts }: { streak: number; best: number; work
   return (
     <View style={[s.row, s.rowFirst]}>
       <View style={[s.flame, hot && { backgroundColor: 'rgba(255,122,24,0.14)', borderColor: '#FF7A18' }]}>
-        <Ionicons name={hot ? 'flame' : 'flame-outline'} size={19} color={hot ? '#FF7A18' : color.textDim} />
+        <Icon name={hot ? 'flame' : 'flame-outline'} size={19} color={hot ? '#FF7A18' : color.textDim} />
       </View>
       <View style={{ flex: 1 }}>
         {streak === 0 ? (
@@ -440,7 +440,7 @@ function Row({
   const body = (
     <>
       {icon ? (
-        <Ionicons
+        <Icon
           name={icon}
           size={18}
           color={danger ? color.redHot : color.textDim}
@@ -467,11 +467,11 @@ function Row({
       </View>
       {swatch ? <View style={[s.dot, { backgroundColor: swatch }]} /> : null}
       {expanded !== undefined ? (
-        <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={17} color={color.textDim} />
+        <Icon name={expanded ? 'chevron-up' : 'chevron-down'} size={17} color={color.textDim} />
       ) : external ? (
-        <Ionicons name="open-outline" size={16} color={color.textDim} />
+        <Icon name="open-outline" size={16} color={color.textDim} />
       ) : onPress ? (
-        <Ionicons name="chevron-forward" size={17} color={color.textDim} />
+        <Icon name="chevron-forward" size={17} color={color.textDim} />
       ) : null}
     </>
   );
@@ -529,7 +529,7 @@ function CelebrationRow({
         !unlocked && { opacity: 0.72 },
       ]}
     >
-      <Ionicons
+      <Icon
         name={!unlocked ? 'lock-closed' : chosen ? 'radio-button-on' : 'radio-button-off'}
         size={20}
         color={!unlocked ? color.textFaint : chosen ? color.redHot : color.textDim}
@@ -538,7 +538,7 @@ function CelebrationRow({
         <Text style={s.celebName}>{c.label}</Text>
         <Text style={s.rowHint}>{unlocked ? c.blurb : `${c.blurb} Unlocks at ${need}.`}</Text>
       </View>
-      {chosen ? <Tag tone="mon">On</Tag> : <Ionicons name="play-circle-outline" size={19} color={color.textDim} />}
+      {chosen ? <Tag tone="mon">On</Tag> : <Icon name="play-circle-outline" size={19} color={color.textDim} />}
     </Pressable>
   );
 }

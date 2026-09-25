@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import Ionicons from '@expo/vector-icons/Ionicons';
+import { Icon } from '../../src/Icon';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSession, useNames } from '../../src/session';
@@ -123,7 +123,7 @@ export default function Locker() {
                 </Text>
                 {done.slice(0, 3).map((w) => (
                   <View key={w.id} style={s.logRow}>
-                    <Ionicons name="checkmark-circle" size={15} color={color.miamiTeal} />
+                    <Icon name="checkmark-circle" size={15} color={color.miamiTeal} />
                     <Text style={s.logName} numberOfLines={1}>
                       {w.name}
                     </Text>
@@ -284,7 +284,7 @@ function SubmissionRow({
       ]}
     >
       <View style={[s.icon, { backgroundColor: color.tealTint, borderColor: color.tealLine }]}>
-        <Ionicons name="checkmark" size={17} color={color.miamiTeal} />
+        <Icon name="checkmark" size={17} color={color.miamiTeal} />
       </View>
       <View style={{ flex: 1 }}>
         <Text style={s.name}>

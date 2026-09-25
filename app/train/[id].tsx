@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Stack, useLocalSearchParams } from 'expo-router';
-import Ionicons from '@expo/vector-icons/Ionicons';
+import { Icon } from '../../src/Icon';
 import * as Haptics from 'expo-haptics';
 import Animated, {
   Easing,
@@ -426,7 +426,7 @@ function RepsPanel({
   return (
     <View style={s.clock}>
       <View style={s.clockTop}>
-        <Ionicons
+        <Icon
           name={done ? 'checkmark-circle' : 'repeat-outline'}
           size={13}
           color={done ? color.miamiTeal : color.textFaint}
@@ -481,7 +481,7 @@ function BlockRow({
         hitSlop={8}
         style={({ pressed }) => [s.check, done && s.checkOn, pressed && !done && { borderColor: color.redHot }]}
       >
-        <Ionicons
+        <Icon
           name={done ? 'checkmark-sharp' : 'ellipse-outline'}
           size={done ? 20 : 18}
           color={done ? color.bone : color.textFaint}

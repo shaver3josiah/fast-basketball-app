@@ -9,7 +9,8 @@ import {
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
-import Ionicons from '@expo/vector-icons/Ionicons';
+import { Icon } from './Icon';
+import { SessionGlyph } from './SessionGlyph';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import {
   SESSION_TYPES,
@@ -126,7 +127,7 @@ export function Banner({
   }[tone];
   return (
     <View style={[s.banner, { backgroundColor: tint.bg, borderColor: tint.line }]}>
-      <Ionicons name={tint.ic} size={16} color={tint.fg} style={s.bannerIcon} />
+      <Icon name={tint.ic} size={16} color={tint.fg} style={s.bannerIcon} />
       <View style={{ flex: 1 }}>
         <Text style={[s.bannerTitle, { color: tint.fg }]}>{title}</Text>
         <Text style={s.bannerBody}>{children}</Text>
@@ -190,7 +191,7 @@ export function Tag({
   }[tone];
   return (
     <View style={[s.tag, { backgroundColor: tint.bg, borderColor: tint.bd }]}>
-      {icon ? <Ionicons name={icon} size={10.5} color={tint.fg} /> : null}
+      {icon ? <Icon name={icon} size={10.5} color={tint.fg} /> : null}
       <Text style={{ color: tint.fg, fontSize: 10.5, fontWeight: '700', letterSpacing: 0.6 }}>
         {children}
       </Text>
@@ -261,7 +262,7 @@ export function Setting({
  *  drawn icon, not a box-drawing character standing in for one. */
 export const Empty = ({ icon, children }: { icon: IconName; children: React.ReactNode }) => (
   <View style={s.empty}>
-    <Ionicons name={icon} size={30} color={color.textFaint} style={{ marginBottom: 10 }} />
+    <Icon name={icon} size={30} color={color.textFaint} style={{ marginBottom: 10 }} />
     <Text style={[type.body, { textAlign: 'center', color: color.textDim }]}>{children}</Text>
   </View>
 );
@@ -343,7 +344,7 @@ export function Segmented<T extends string>({
             ]}
           >
             {o.icon ? (
-              <Ionicons name={o.icon} size={14} color={on ? color.bone : color.textDim} />
+              <Icon name={o.icon} size={14} color={on ? color.bone : color.textDim} />
             ) : null}
             <Text style={[s.segLabel, on && s.segLabelOn]} numberOfLines={1}>
               {o.label}
@@ -387,7 +388,7 @@ export function Stepper({
         onPress={() => onChange(clamp(value - step))}
         style={({ pressed }) => [s.stepBtn, pressed && { backgroundColor: color.inkHover }, value <= min && { opacity: 0.35 }]}
       >
-        <Ionicons name="remove" size={18} color={color.chalk} />
+        <Icon name="remove" size={18} color={color.chalk} />
       </Pressable>
       <Text style={s.stepValue}>
         {value}
@@ -400,7 +401,7 @@ export function Stepper({
         onPress={() => onChange(clamp(value + step))}
         style={({ pressed }) => [s.stepBtn, pressed && { backgroundColor: color.inkHover }, value >= max && { opacity: 0.35 }]}
       >
-        <Ionicons name="add" size={18} color={color.chalk} />
+        <Icon name="add" size={18} color={color.chalk} />
       </Pressable>
     </View>
   );
@@ -412,7 +413,7 @@ export function TypeChip({ type, compact }: { type: SessionType; compact?: boole
   const t = SESSION_TYPES[type];
   return (
     <View style={[s.chip, compact && { paddingVertical: 2 }]}>
-      <Ionicons name={t.icon} size={compact ? 11 : 13} color={t.color} />
+      <SessionGlyph kind={type} size={compact ? 12 : 14} />
       <Text style={[s.chipText, { color: t.color }, compact && { fontSize: 10 }]}>{t.label}</Text>
     </View>
   );
@@ -446,7 +447,7 @@ export function GhostButton({
         disabled && { opacity: 0.4 },
       ]}
     >
-      {icon ? <Ionicons name={icon} size={15} color={fg} /> : null}
+      {icon ? <Icon name={icon} size={15} color={fg} /> : null}
       <Text style={[s.ghostLabel, { color: fg }]}>{label}</Text>
     </Pressable>
   );
@@ -464,7 +465,7 @@ const s = StyleSheet.create({
     padding: 12,
     marginBottom: 12,
   },
-  bannerIcon: { fontSize: 15, marginTop: 1 },
+  bannerIcon: { marginTop: 1 },
   bannerTitle: { fontSize: 13, fontWeight: '800', marginBottom: 3, letterSpacing: 0.2 },
   bannerBody: { fontSize: 13, lineHeight: 18.5, color: color.textBody },
 
