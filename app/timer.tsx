@@ -147,8 +147,8 @@ export default function Timer() {
         <Svg width={SIZE} height={SIZE}>
           <Defs>
             <LinearGradient id="timerArc" x1="0" y1="0" x2="1" y2="1">
-              <Stop offset="0" stopColor="#FFD34D" />
-              <Stop offset="0.5" stopColor="#FF7A18" />
+              <Stop offset="0" stopColor="#FF4A26" />
+              <Stop offset="0.5" stopColor={color.redHot} />
               <Stop offset="1" stopColor={color.fastRed} />
             </LinearGradient>
           </Defs>
@@ -183,7 +183,7 @@ export default function Timer() {
               />
               {!reduce && !done ? (
                 <>
-                  <ACircle r={STROKE * 1.4} fill="#FFD34D" fillOpacity={0.25} animatedProps={head} />
+                  <ACircle r={STROKE * 1.2} fill={color.redHot} fillOpacity={0.3} animatedProps={head} />
                   <ACircle r={STROKE * 0.55} fill="#FFFFFF" animatedProps={head} />
                 </>
               ) : null}

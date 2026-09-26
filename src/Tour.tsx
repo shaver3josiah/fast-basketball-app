@@ -60,7 +60,7 @@ interface Page {
   tint: string[];
 }
 
-const EMBER = [color.fastRed, color.redHot, '#FF7A18', '#FFD34D'];
+const EMBER = [color.fastRed, color.redHot, color.fastRed, color.redHot, '#FF4A26'];
 const TEAL = [color.miamiTeal, '#8FF3E8', '#FFFFFF'];
 
 function pagesFor(role: Role | null, state: RewardState): Page[] {
@@ -114,7 +114,7 @@ function pagesFor(role: Role | null, state: RewardState): Page[] {
       ? 'Each athlete’s submissions fold up under the newest, so a season of weekly forms stays one line. There is a timer here too.'
       : 'Fill in what Coach Kingsley assigns, and use the timer for a set, a wall sit or a rest. Your newest submission sits on top.',
     art: (on) => <TimerArt on={on} />,
-    tint: ['#FF7A18', '#FFD34D', color.fastRed],
+    tint: EMBER,
   };
   const rewards: Page = {
     key: 'rewards',
@@ -124,7 +124,7 @@ function pagesFor(role: Role | null, state: RewardState): Page[] {
       isUnlocked(CELEBRATIONS[CELEBRATIONS.length - 1], state) ? '' : ', locked or not'
     }.`,
     art: (on) => <FlameArt on={on} />,
-    tint: ['#FF7A18', '#FFD34D', color.redHot],
+    tint: EMBER,
   };
   const you: Page = {
     key: 'you',
@@ -345,7 +345,7 @@ function Rising({ i, tint }: { i: number; tint: string }) {
           height: size,
           borderRadius: size,
           backgroundColor: tint,
-          boxShadow: `0 0 ${Math.round(size * 3)}px ${Math.round(size)}px ${tint}`,
+          boxShadow: `0 0 ${Math.round(size * 2)}px 0px ${tint}`,
         },
         st,
       ]}
@@ -415,7 +415,7 @@ function TimerArt({ on }: { on: boolean }) {
       <Svg width={180} height={180}>
         <Defs>
           <LinearGradient id="tourArc" x1="0" y1="0" x2="1" y2="1">
-            <Stop offset="0" stopColor="#FFD34D" />
+            <Stop offset="0" stopColor="#FF4A26" />
             <Stop offset="1" stopColor={color.fastRed} />
           </LinearGradient>
         </Defs>
@@ -434,7 +434,7 @@ function TimerArt({ on }: { on: boolean }) {
         />
       </Svg>
       <View style={[StyleSheet.absoluteFill, s.center]}>
-        <Icon name="stopwatch-outline" size={40} color="#FFD34D" />
+        <Icon name="stopwatch-outline" size={40} color={color.redHot} />
       </View>
     </View>
   );
@@ -454,7 +454,7 @@ function FlameArt({ on }: { on: boolean }) {
   return (
     <View style={s.center}>
       <Animated.View style={[s.flame, st]}>
-        <Icon name="flame" size={72} color="#FF7A18" />
+        <Icon name="flame" size={72} color={color.redHot} />
       </Animated.View>
     </View>
   );
@@ -563,7 +563,7 @@ const s = StyleSheet.create({
   onRecord: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'center', marginTop: 6 },
   onRecordText: { fontSize: 12, fontWeight: '700', color: color.miamiTeal },
 
-  flame: { boxShadow: '0 0 60px 10px rgba(255,122,24,0.35)', borderRadius: 60, padding: 16 },
+  flame: { boxShadow: '0 0 40px 0px rgba(230,12,32,0.35)', borderRadius: 60, padding: 16 },
   swatch: { width: 30, height: 30, borderRadius: 15, borderWidth: 2, borderColor: 'rgba(255,255,255,0.18)' },
 
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 16 },

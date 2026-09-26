@@ -91,8 +91,8 @@ export default function Locker() {
         accessibilityLabel="Open the timer. Countdown or stopwatch."
         style={({ pressed }) => [s.row, pressed && { backgroundColor: color.ink }]}
       >
-        <View style={[s.icon, { backgroundColor: 'rgba(255,122,24,0.14)' }]}>
-          <Icon name="stopwatch-outline" size={21} color="#FF9A3D" />
+        <View style={[s.icon, { backgroundColor: color.redTint }]}>
+          <Icon name="stopwatch-outline" size={21} color={color.redHot} />
         </View>
         <View style={{ flex: 1 }}>
           <Text style={s.name}>Timer</Text>

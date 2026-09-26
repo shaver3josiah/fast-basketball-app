@@ -13,8 +13,8 @@ import Animated, {
 import { color } from './theme';
 
 /**
- * Glowing dust: a few embers drifting up behind the app's black screens, red at the
- * cool end of the ramp through orange to gold.
+ * Glowing dust: a few embers drifting up behind the app's black screens. Mostly brand
+ * red, with the odd red-orange spark; no gold, which read as yellow glare on black.
  *
  * It takes no layout space: one absolutely positioned layer under the tab screens,
  * whose pages are transparent so it shows in the gaps between cards and never on top
@@ -64,8 +64,8 @@ const rnd = (i: number, salt: number) => {
   return v - Math.floor(v);
 };
 
-/** Red, orange, gold: the ramp an ember cools along. */
-const RAMP = [color.fastRed, color.redHot, '#FF7A18', '#FFB020', '#FFD34D'];
+/** Four in five red, one red-orange. */
+const RAMP = [color.fastRed, color.redHot, color.fastRed, color.redHot, '#FF4A26'];
 
 const MOTES = 20;
 
@@ -129,7 +129,7 @@ function Mote({ i, w, h }: { i: number; w: number; h: number }) {
           backgroundColor: tint,
           // The glow. A zero-offset shadow in the mote's own colour; new-architecture
           // boxShadow draws it on both platforms without a blur view or an image.
-          boxShadow: `0 0 ${Math.round(size * 3.5)}px ${Math.round(size)}px ${tint}`,
+          boxShadow: `0 0 ${Math.round(size * 2)}px 0px ${tint}`,
         },
         st,
       ]}

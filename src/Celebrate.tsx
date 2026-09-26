@@ -50,12 +50,12 @@ interface Spec {
 }
 
 export const SPECS: Record<string, Spec> = {
-  spark: { colors: [color.fastRed, color.redHot, '#FFD34D'], word: 'DONE', shards: 22, spread: 160, ms: 1100, rings: 1 },
-  swish: { colors: ['#FFD34D', '#FFF1C2', color.fastRed], word: 'SWISH', shards: 28, spread: 200, ms: 1200, bar: true, rings: 2 },
-  fire: { colors: ['#FF7A18', '#FFD34D', color.fastRed], word: 'HEAT CHECK', shards: 34, spread: 230, ms: 1300, bar: true, rings: 3, flash: 'rgba(255,122,24,0.30)' },
+  spark: { colors: [color.redHot, color.fastRed, '#FF4A26'], word: 'DONE', shards: 22, spread: 160, ms: 1100, rings: 1 },
+  swish: { colors: [color.redHot, '#FFFFFF', color.fastRed], word: 'SWISH', shards: 28, spread: 200, ms: 1200, bar: true, rings: 2 },
+  fire: { colors: ['#FF4A26', color.fastRed, color.redHot], word: 'HEAT CHECK', shards: 34, spread: 230, ms: 1300, bar: true, rings: 3, flash: 'rgba(230,12,32,0.26)' },
   quake: { colors: ['#F5F3EF', color.redHot, '#8E8E9B'], word: 'POSTER', shards: 30, spread: 270, ms: 1300, rings: 4, flash: 'rgba(245,243,239,0.22)' },
   bolt: { colors: ['#8FD8FF', '#FFFFFF', color.miamiTeal], word: 'LIGHTS OUT', shards: 36, spread: 290, ms: 1350, bar: true, rings: 5, flash: 'rgba(143,216,255,0.34)' },
-  nova: { colors: ['#FFFFFF', '#FFD34D', color.redHot], word: 'SUPERNOVA', shards: 44, spread: 330, ms: 1500, rings: 7, flash: 'rgba(255,255,255,0.40)' },
+  nova: { colors: ['#FFFFFF', color.redHot, color.fastRed], word: 'SUPERNOVA', shards: 44, spread: 330, ms: 1500, rings: 7, flash: 'rgba(255,255,255,0.40)' },
 };
 
 const MAX_EMBERS = 44;
@@ -145,7 +145,7 @@ export function Celebrate({
         <Svg width={B} height={B}>
           <Defs>
             <RadialGradient id="celebrateBloom" cx="50%" cy="50%" r="50%">
-              <Stop offset="0" stopColor="#FFFFFF" stopOpacity={0.9} />
+              <Stop offset="0" stopColor="#FFFFFF" stopOpacity={0.55} />
               <Stop offset="0.25" stopColor={spec.colors[0]} stopOpacity={0.7} />
               <Stop offset="1" stopColor={spec.colors[0]} stopOpacity={0} />
             </RadialGradient>
@@ -241,8 +241,8 @@ function Ember({ i, t, spec, cx, cy, still }: LayerProps) {
           width: size,
           height: size,
           borderRadius: size,
-          backgroundColor: i % 3 === 0 ? '#FFFFFF' : tint,
-          boxShadow: `0 0 ${Math.round(size * 2.5)}px ${Math.round(size * 0.8)}px ${tint}`,
+          backgroundColor: i % 6 === 0 ? '#FFFFFF' : tint,
+          boxShadow: `0 0 ${Math.round(size * 1.8)}px 0px ${tint}`,
         },
         st,
       ]}
@@ -281,8 +281,8 @@ function Glitter({ i, t, spec, cx, cy, still }: LayerProps) {
           width: size,
           height: size,
           borderRadius: size,
-          backgroundColor: '#FFFFFF',
-          boxShadow: `0 0 ${Math.round(size * 3)}px ${Math.round(size)}px ${tint}`,
+          backgroundColor: tint,
+          boxShadow: `0 0 ${Math.round(size * 2)}px 0px ${tint}`,
         },
         st,
       ]}
@@ -316,7 +316,7 @@ function Ring({ i, t, spec, cx, cy, still }: LayerProps) {
     <Animated.View
       style={[
         s.ring,
-        { left: cx - 90, top: cy - 90, borderColor: tint, boxShadow: `0 0 18px 2px ${tint}` },
+        { left: cx - 90, top: cy - 90, borderColor: tint, boxShadow: `0 0 10px 0px ${tint}` },
         st,
       ]}
       pointerEvents="none"
