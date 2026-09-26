@@ -38,7 +38,7 @@ canvas{display:block;width:100%;aspect-ratio:360/440;border-radius:14px;
 .pips{display:flex;gap:4px;flex:none}
 .pip{width:9px;height:9px;border-radius:5px;background:#2A2A34}
 .pip.on{background:#E60C20}
-.cue{font-size:.84rem;color:#FFD34D;margin:10px 2px 0;min-height:1.6em;font-weight:600}
+.cue{font-size:.84rem;color:#FF3A41;margin:10px 2px 0;min-height:1.6em;font-weight:600}
 .log{display:flex;gap:8px;margin-top:10px}
 button{font:inherit;font-size:.82rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;
   border-radius:12px;border:1px solid rgba(255,255,255,.16);background:#1B1B22;color:#F5F3EF;
@@ -52,16 +52,16 @@ button:active{transform:translateY(1px)}
 .st{flex:1;background:#131318;border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:7px 4px;text-align:center}
 .st b{display:block;font-size:1.1rem;font-weight:800;color:#fff;line-height:1.25}
 .st span{font-size:.58rem;text-transform:uppercase;letter-spacing:.09em;color:#9C9CA9;font-weight:700}
-.st.hot b{color:#FF7A18}
+.st.hot b{color:#FF3A41}
 .bar{height:8px;border-radius:5px;background:#1B1B22;overflow:hidden;border:1px solid rgba(255,255,255,.08);margin-top:12px}
-.bar i{display:block;height:100%;width:0;border-radius:5px;background:linear-gradient(90deg,#E60C20,#FF7A18);
+.bar i{display:block;height:100%;width:0;border-radius:5px;background:linear-gradient(90deg,#E60C20,#FF3A41);
   transition:width .45s cubic-bezier(.2,.9,.25,1)}
 .tot{font-size:.74rem;color:#9C9CA9;margin-top:6px;letter-spacing:.03em}
 table{width:100%;border-collapse:collapse;margin-top:6px}
 th{text-align:left;font-size:.62rem;text-transform:uppercase;letter-spacing:.1em;color:#9C9CA9;padding:0 0 7px}
 th:not(:first-child),td:not(:first-child){width:62px;text-align:center}
 td{padding:7px 0;font-size:.84rem;border-top:1px solid rgba(255,255,255,.08);color:#E8E8EE}
-tr.now td{color:#FFD34D;font-weight:700}
+tr.now td{color:#FF3A41;font-weight:700}
 tr.full td{color:#8E8E9B}
 section{margin-top:22px}
 h2{font-size:.7rem;text-transform:uppercase;letter-spacing:.13em;color:#9C9CA9;margin-bottom:9px;
@@ -150,7 +150,7 @@ then log it. The ball on this page only moves when you do.</p>
 
   var ball = { x: LX, y: LY, vx: 0, vy: 0, live: false, made: false, scored: false };
   var trail = [], parts = [];
-  var netT = 0, shake = 0, flashT = 0, glow = 0, swish = 0, clear = 0, t = 0;
+  var netT = 0, shake = 0, flashT = 0, glow = 0, clear = 0, t = 0;
 
   // Cues, not scoring. The page's job between reps is to send them back up for another.
   var AFTER_MAKE = ['Same feet. Again.', 'That is the one. Repeat it.', 'Hold the follow through.', 'Do not drift. Again.'];
@@ -258,8 +258,8 @@ then log it. The ball on this page only moves when you do.</p>
     if (!ball.scored && py < RY && ball.y >= RY && ball.vy > 0 && ball.x > RX1 + 5 && ball.x < RX2 - 5) {
       ball.scored = true;
       if (ball.made) {
-        netT = 1; flashT = 1; swish = 1; glow = 1;
-        burst(RX1 + 25, RY + 18, 26, streak >= 3 ? '#FF7A18' : '#FFD34D', 4.2);
+        netT = 1; flashT = 1; glow = 1;
+        burst(RX1 + 25, RY + 18, 26, '#E60C20', 4.2);
       }
     }
     if (ball.vx > 0 && ball.x + R > BX && ball.y > BY1 && ball.y < BY2) {
@@ -347,7 +347,7 @@ then log it. The ball on this page only moves when you do.</p>
     if (glow > 0.01) {                                           // the rim lights up
       ctx.globalAlpha = glow * 0.5;
       var rg = ctx.createRadialGradient(275, RY, 4, 275, RY, 130);
-      rg.addColorStop(0, '#FF7A18'); rg.addColorStop(1, 'rgba(255,122,24,0)');
+      rg.addColorStop(0, '#E60C20'); rg.addColorStop(1, 'rgba(230,12,32,0)');
       ctx.fillStyle = rg; ctx.fillRect(140, 45, 230, 250);
       ctx.globalAlpha = 1; glow *= 0.93;
     }
@@ -363,10 +363,10 @@ then log it. The ball on this page only moves when you do.</p>
 
     player();
 
-    for (var p = 0; p < trail.length; p++) {                     // flaming on a streak
+    for (var p = 0; p < trail.length; p++) {                     // the ball's trail
       var a = p / trail.length;
       ctx.globalAlpha = a * 0.5;
-      ctx.fillStyle = streak >= 3 ? (p % 2 ? '#FF7A18' : '#FFD34D') : '#E60C20';
+      ctx.fillStyle = '#E60C20';
       ctx.beginPath(); ctx.arc(trail[p].x, trail[p].y, R * a * 0.8, 0, 6.3); ctx.fill();
     }
     ctx.globalAlpha = 1;
@@ -381,16 +381,8 @@ then log it. The ball on this page only moves when you do.</p>
     }
     ctx.globalAlpha = 1;
 
-    if (swish > 0.01) {                                          // the word, slamming in
-      var e = 1 - swish;
-      ctx.globalAlpha = Math.min(1, swish * 2.4);
-      ctx.font = '800 ' + (30 + e * 14) + 'px -apple-system,Segoe UI,Roboto,sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillStyle = '#FFD34D';
-      ctx.fillText(streak >= 3 ? 'HEAT CHECK' : 'SWISH', W / 2, 238 - e * 26);
-      ctx.globalAlpha = 1;
-      swish -= 0.022;
-    }
+    // No SWISH or HEAT CHECK slam here. Celebrations belong to finishing a workout on
+    // the timer; this sheet only logs reps, so a make drops through and that is all.
     if (clear > 0.01) {
       ctx.globalAlpha = Math.min(1, clear * 2);
       ctx.font = '800 26px -apple-system,Segoe UI,Roboto,sans-serif';
