@@ -82,7 +82,26 @@ export default function Locker() {
         </Banner>
       )}
 
-      <Eyebrow>Training workflows</Eyebrow>
+      {/* A tool, not a worksheet: nothing is filed, so it sits above the worksheets
+          rather than among them. */}
+      <Eyebrow>Tools</Eyebrow>
+      <Pressable
+        onPress={() => router.push('/timer')}
+        accessibilityRole="button"
+        accessibilityLabel="Open the timer. Countdown or stopwatch."
+        style={({ pressed }) => [s.row, pressed && { backgroundColor: color.ink }]}
+      >
+        <View style={[s.icon, { backgroundColor: color.redTint }]}>
+          <Icon name="stopwatch-outline" size={21} color={color.redHot} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={s.name}>Timer</Text>
+          <Text style={s.meta}>Countdown or stopwatch, for a set, a sit or a rest</Text>
+        </View>
+        <Text style={s.chev}>›</Text>
+      </Pressable>
+
+      <Eyebrow style={{ marginTop: 22 }}>Training workflows</Eyebrow>
 
       {workflows === null && <Text style={type.meta}>Loading…</Text>}
       {workflows?.length === 0 && (
@@ -147,12 +166,12 @@ export default function Locker() {
                 {subs.length === 0 ? (
                   <Text style={[type.meta, { marginTop: 4 }]}>Nothing submitted yet.</Text>
                 ) : (
-                  subs.map(([sid, sub]) => (
-                    <SubmissionRow
-                      key={sid}
-                      submission={sub}
-                      workflow={byWorkflow[sub.workflowId ?? '']}
-                      onPress={() =>
+                  groupByWorkflow(subs).map((group) => (
+                    <SubmissionGroup
+                      key={group[0][0]}
+                      group={group}
+                      workflow={byWorkflow[group[0][1].workflowId ?? '']}
+                      onOpen={(sid, sub) =>
                         router.push({
                           pathname: '/workflow/[id]',
                           params: { id: sub.workflowId ?? '', athlete: aid, sid },
@@ -175,12 +194,12 @@ export default function Locker() {
               Nothing saved yet.{'\n'}Open a workflow, fill it in, hit Save.
             </Empty>
           ) : (
-            sortSubmissions(mine).map(([sid, sub]) => (
-              <SubmissionRow
-                key={sid}
-                submission={sub}
-                workflow={byWorkflow[sub.workflowId ?? '']}
-                onPress={() =>
+            groupByWorkflow(sortSubmissions(mine)).map((group) => (
+              <SubmissionGroup
+                key={group[0][0]}
+                group={group}
+                workflow={byWorkflow[group[0][1].workflowId ?? '']}
+                onOpen={(sid, sub) =>
                   router.push({
                     pathname: '/workflow/[id]',
                     params: { id: sub.workflowId ?? '', athlete: athlete?.id ?? '', sid },
@@ -221,6 +240,64 @@ const sortSubmissions = (subs: Record<string, SavedWorkflow>): [string, SavedWor
   Object.entries(subs).sort(
     ([, a], [, b]) => (b.updatedAt?.toMillis() ?? Infinity) - (a.updatedAt?.toMillis() ?? Infinity)
   );
+
+/**
+ * One worksheet's submissions, newest first, in the order they arrived: a weekly
+ * evaluation files a new one every week, so a season of them buried every other
+ * worksheet under one. Grouped by workflow and ordered by each group's newest entry.
+ */
+const groupByWorkflow = (sorted: [string, SavedWorkflow][]): [string, SavedWorkflow][][] => {
+  const groups = new Map<string, [string, SavedWorkflow][]>();
+  for (const entry of sorted) {
+    const k = entry[1].workflowId ?? entry[0];
+    groups.set(k, [...(groups.get(k) ?? []), entry]);
+  }
+  return [...groups.values()];
+};
+
+/**
+ * The newest submission as a full row, the rest folded behind one quiet line. Collapsed
+ * by default, every time: the latest is what anyone opens the Locker to see, and the
+ * history is there on a tap, not in the way.
+ */
+function SubmissionGroup({
+  group,
+  workflow,
+  onOpen,
+}: {
+  group: [string, SavedWorkflow][];
+  workflow?: Workflow;
+  onOpen: (sid: string, sub: SavedWorkflow) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [[sid, sub], ...earlier] = group;
+  return (
+    <View>
+      <SubmissionRow submission={sub} workflow={workflow} onPress={() => onOpen(sid, sub)} />
+      {earlier.length > 0 ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ expanded: open }}
+          accessibilityLabel={`${open ? 'Hide' : 'Show'} ${earlier.length} earlier ${workflow?.name ?? 'worksheet'} submission${earlier.length === 1 ? '' : 's'}`}
+          onPress={() => setOpen((o) => !o)}
+          style={({ pressed }) => [s.more, pressed && { backgroundColor: color.ink }]}
+        >
+          <Icon name={open ? 'chevron-up' : 'chevron-down'} size={15} color={color.textDim} />
+          <Text style={s.moreText}>
+            {open ? 'Hide' : 'Show'} {earlier.length} earlier
+          </Text>
+        </Pressable>
+      ) : null}
+      {open
+        ? earlier.map(([esid, esub]) => (
+            <View key={esid} style={s.earlier}>
+              <SubmissionRow submission={esub} workflow={workflow} onPress={() => onOpen(esid, esub)} />
+            </View>
+          ))
+        : null}
+    </View>
+  );
+}
 
 function WorkflowRow({
   workflow,
@@ -342,6 +419,20 @@ const s = StyleSheet.create({
   },
   pillText: { fontSize: 10.5, fontWeight: '700', color: color.miamiTeal },
   chev: { fontSize: 22, color: color.textDim, paddingHorizontal: 2 },
+  // Pulled up under the row it belongs to, so it reads as that row's footnote.
+  more: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    alignSelf: 'flex-start',
+    minHeight: 44,
+    paddingHorizontal: 12,
+    marginTop: -6,
+    marginBottom: 8,
+    borderRadius: radius.pill,
+  },
+  moreText: { fontSize: 13, fontWeight: '700', color: color.textDim },
+  earlier: { marginLeft: 14 },
   progLabel: {
     ...type.eyebrow,
     fontSize: 10,

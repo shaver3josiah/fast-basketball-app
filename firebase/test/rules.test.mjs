@@ -502,6 +502,48 @@ describe('a coached session is one shared document', () => {
   });
 });
 
+describe("a public session is on everyone's calendar", () => {
+  const pub = (over = {}) => ({
+    public: true,
+    athleteId: 'public',
+    type: 'team',
+    name: 'Open gym',
+    location: 'the gym',
+    startsAt: new Date(),
+    ...over,
+  });
+
+  test('only the coach posts one', async () => {
+    await seed();
+    await assertFails(setDoc(doc(as(PARENT), 'events', 'p1'), pub()));
+    await assertFails(setDoc(doc(as(PLAYER), 'events', 'p1'), pub()));
+    await assertSucceeds(setDoc(doc(as(COACH), 'events', 'p1'), pub()));
+  });
+
+  test('every family reads it, by id and by the query the app runs', async () => {
+    await seed();
+    await assertSucceeds(setDoc(doc(as(COACH), 'events', 'p2'), pub()));
+    await assertSucceeds(getDoc(doc(as(PARENT), 'events', 'p2')));
+    await assertSucceeds(getDoc(doc(as(PLAYER), 'events', 'p2')));
+    await assertSucceeds(
+      getDocs(query(collection(as(PARENT), 'events'), where('public', '==', true)))
+    );
+  });
+
+  test('public means signed in, never anonymous', async () => {
+    await seed();
+    await assertSucceeds(setDoc(doc(as(COACH), 'events', 'p3'), pub()));
+    await assertFails(getDoc(doc(env.unauthenticatedContext().firestore(), 'events', 'p3')));
+  });
+
+  test('a private session stays private to a stranger', async () => {
+    await seed();
+    await assertSucceeds(setDoc(doc(as(COACH), 'events', 'p4'), pub({ public: false, athleteId: ATHLETE })));
+    await assertFails(getDoc(doc(as(STRANGER), 'events', 'p4')));
+    await assertSucceeds(getDoc(doc(as(PARENT), 'events', 'p4')));
+  });
+});
+
 describe('the Locker', () => {
   test('only the coach publishes, and the html has a size ceiling', async () => {
     await seed();

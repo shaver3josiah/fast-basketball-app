@@ -266,6 +266,13 @@ service cloud.firestore {
     // his word for it: see audienceOk below.
     match /events/{eid} {
       allow read: if isCoach()
+                  // A PUBLIC session: open gym, a camp, a team event. Posted by the
+                  // coach for everyone, so any signed-in account may read it, the same
+                  // bar /workflows has. FIRST on purpose: a public session carries no
+                  // real athleteId, and the get() in the branches below would error on
+                  // it; short-circuiting here keeps a family's `public == true` query
+                  // provable from the query alone.
+                  || ('public' in resource.data && resource.data.public == true && isSignedIn())
                   // The shared branch. Covers every athlete on a coached session.
                   || ('memberUids' in resource.data
                       && request.auth.uid in resource.data.memberUids)

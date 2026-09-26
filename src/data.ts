@@ -396,6 +396,9 @@ export function subscribeEvents(
 
   const stops = [watch("own", query(base, where("athleteId", "==", athleteId)))];
   if (uid) stops.push(watch("shared", query(base, where("memberUids", "array-contains", uid))));
+  // The coach's public posts. A third question the other two cannot ask, because a
+  // public session names no athlete and no member.
+  stops.push(watch("public", query(base, where("public", "==", true))));
   return () => stops.forEach((s) => s());
 }
 
@@ -722,6 +725,8 @@ export const MAX_SCHEDULED = 480;
 const newId = () => doc(collection(db, "ids")).id;
 
 export interface ScheduleInput {
+  /** Post it to everyone's calendar instead of named athletes. `athletes` is ignored. */
+  everyone?: boolean;
   /**
    * The athlete records, not just their ids: a shared session has to write each
    * family's uids into memberUids, and the rules check them against these same
@@ -779,8 +784,8 @@ export async function scheduleWorkout(input: ScheduleInput): Promise<number> {
   const shared = input.kind === 'coached' && input.athletes.length > 1;
   // A coached session is one document per DATE. Individual work is one per athlete
   // per date, because those are separate workouts that happen to have been typed in
-  // once.
-  const perDate = shared ? 1 : input.athletes.length;
+  // once. A public session is one per date as well: it names nobody.
+  const perDate = input.everyone ? 1 : shared ? 1 : input.athletes.length;
   const total = dates.length * perDate;
   if (total === 0) return 0;
   if (total > MAX_SCHEDULED) {
@@ -791,9 +796,15 @@ export async function scheduleWorkout(input: ScheduleInput): Promise<number> {
   const blocks = input.blocks.map(blockBody);
 
   const base = (athletes: Athlete[], date: Date) => ({
-    athleteId: athletes[0].id,
-    athleteIds: athletes.map((a) => a.id),
-    memberUids: audienceOf(athletes),
+    // A public session has no audience list: the rule reads `public` instead, and an
+    // athleteIds field would put it back under the per-athlete audience check.
+    ...(input.everyone
+      ? { public: true, athleteId: 'public' }
+      : {
+          athleteId: athletes[0].id,
+          athleteIds: athletes.map((a) => a.id),
+          memberUids: audienceOf(athletes),
+        }),
     type: input.type,
     types: input.types?.length ? input.types : [input.type],
     name: input.name.trim(),
@@ -810,7 +821,7 @@ export async function scheduleWorkout(input: ScheduleInput): Promise<number> {
 
   const writes: Promise<unknown>[] = [];
   for (const date of dates) {
-    if (shared) {
+    if (input.everyone || shared) {
       writes.push(setDoc(doc(collection(db, 'events')), base(input.athletes, date)));
     } else {
       for (const a of input.athletes) {
@@ -927,6 +938,7 @@ export async function pasteEvents(events: SessionEvent[], onto: Date): Promise<n
       // write, and rightly so: a session nobody can read is worse than no session.
       ...(e.athleteIds ? { athleteIds: e.athleteIds } : {}),
       ...(e.memberUids ? { memberUids: e.memberUids } : {}),
+      ...(e.public ? { public: true } : {}),
       type: e.type,
       ...(e.types?.length ? { types: e.types } : {}),
       name: e.name,

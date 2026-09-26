@@ -41,6 +41,7 @@ export default function RootLayout() {
           <Stack.Screen name="thread/[id]" options={{ title: 'Messages' }} />
           <Stack.Screen name="workflow/[id]" options={{ title: 'Workflow' }} />
           <Stack.Screen name="train/[id]" options={{ title: 'Session' }} />
+          <Stack.Screen name="timer" options={{ title: 'Timer' }} />
         </Stack>
       </SessionProvider>
     </SafeAreaProvider>

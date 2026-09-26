@@ -18,6 +18,8 @@ import {
 } from '../../src/rewards';
 import type { Thread, UserPrefs } from '../../src/types';
 import { Avatar, Body, Button, Card, Eyebrow, Screen, Setting, Tag } from '../../src/ui';
+import { useDustSetting } from '../../src/Ambience';
+import { openTour } from '../../src/Tour';
 import { CHAT_COLORS, bubbleColor, color, radius, semantic, type, type IconName } from '../../src/theme';
 
 /**
@@ -31,6 +33,7 @@ import { CHAT_COLORS, bubbleColor, color, radius, semantic, type, type IconName 
  * the same group instead of two.
  */
 export default function You() {
+  const [dustOn, setDustOn] = useDustSetting();
   const { user, role, athlete, athletesById, consent, prefs } = useSession();
   const names = useNames();
   const router = useRouter();
@@ -266,6 +269,12 @@ export default function You() {
               <Text style={s.rowHint}>Only yours change. Everyone else keeps theirs.</Text>
             </View>
           )}
+          <Setting
+            title="Glowing dust"
+            description="Embers drifting behind the black screens, red through orange to gold. This phone only."
+            value={dustOn}
+            onChange={setDustOn}
+          />
         </Card>
 
         {/* One home for every notification control. The streak reminder used to sit
@@ -316,6 +325,7 @@ export default function You() {
         <Eyebrow>Account</Eyebrow>
         <Card>
           <Row first icon="mail-outline" label="Signed in as" value={user?.email ?? ''} />
+          <Row icon="sparkles-outline" label="Replay the tour" onPress={openTour} />
           <Row
             icon="shield-checkmark-outline"
             label="Privacy policy"

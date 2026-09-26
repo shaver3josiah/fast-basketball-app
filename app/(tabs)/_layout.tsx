@@ -2,13 +2,15 @@ import { Redirect } from 'expo-router';
 import { Tabs } from 'expo-router/js-tabs';
 import { Icon } from '../../src/Icon';
 import { useEffect, useState } from 'react';
-import { StyleSheet } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { useSession } from '../../src/session';
 import { subscribeThreads } from '../../src/data';
 import { color, semantic } from '../../src/theme';
 import { Loading } from '../../src/ui';
+import { FastMark } from '../../src/Logo';
+import { Dust } from '../../src/Ambience';
 import { Pending } from '../../src/Pending';
-import { RewardsIntro } from '../../src/RewardsIntro';
+import { Tour } from '../../src/Tour';
 import { readState } from '../../src/rewards';
 
 /** Unread is approximated by "threads you can see" until read receipts exist.
@@ -35,16 +37,24 @@ export default function TabsLayout() {
   if (needsVerification || notInvited) return <Pending />;
 
   return (
-    <>
-    {/* Once per device, and never for the coach: the streak is the athlete's. */}
-    {role !== 'coach' && <RewardsIntro state={readState(prefs)} />}
+    // Court black under everything, and the dust on it. The scenes are transparent so it
+    // shows between cards; the tab bar and headers keep their own band colour.
+    <View style={{ flex: 1, backgroundColor: semantic.surfacePage }}>
+    <Dust />
+    {/* Once per device, for every role, and again from the You tab's Replay. */}
+    <Tour role={role} state={readState(prefs)} />
     <Tabs
       screenOptions={{
         headerStyle: { backgroundColor: semantic.surfaceBand },
         headerTintColor: color.chalk,
         headerTitleStyle: { color: color.chalk, fontWeight: '800' },
         headerShadowVisible: false,
-        sceneStyle: { backgroundColor: semantic.surfacePage },
+        // The brand on every tab's top bar. FAST alone, not the full lockup: at header
+        // height the BASKETBALL line would be a smudge. Centred titles on both platforms
+        // so Android's left-aligned title never collides with it.
+        headerLeft: () => <FastMark height={17} style={{ marginLeft: 16 }} />,
+        headerTitleAlign: 'center',
+        sceneStyle: { backgroundColor: 'transparent' },
         tabBarStyle: {
           backgroundColor: semantic.surfaceBand,
           borderTopColor: semantic.border,
@@ -104,6 +114,6 @@ export default function TabsLayout() {
         }}
       />
     </Tabs>
-    </>
+    </View>
   );
 }

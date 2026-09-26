@@ -89,7 +89,8 @@ export default function CalendarScreen() {
   const visible = useMemo(
     () =>
       (events ?? []).filter(
-        (e) => filter === 'all' || e.athleteId === filter || e.athleteIds?.includes(filter)
+        // A public session is on every athlete's calendar, so no filter hides it.
+        (e) => filter === 'all' || e.public || e.athleteId === filter || e.athleteIds?.includes(filter)
       ),
     [events, filter]
   );
@@ -392,7 +393,7 @@ export default function CalendarScreen() {
         <SessionCard
           key={e.id}
           event={e}
-          names={isCoach && filter === 'all' ? namesOn(e) : []}
+          names={e.public ? ['Everyone'] : isCoach && filter === 'all' ? namesOn(e) : []}
           draggable={isCoach}
           reduceMotion={reduceMotion}
           gridRef={gridRef}
@@ -852,7 +853,8 @@ function FilterChip({ label, on, onPress }: { label: string; on: boolean; onPres
 }
 
 const s = StyleSheet.create({
-  page: { flex: 1, backgroundColor: semantic.surfacePage },
+  // Transparent so the tab layout's dust shows through; see src/Ambience.tsx.
+  page: { flex: 1, backgroundColor: 'transparent' },
   pad: { padding: 16, paddingBottom: 40 },
 
   strip: {

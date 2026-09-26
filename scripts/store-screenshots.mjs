@@ -192,17 +192,18 @@ const signIn = ({ email, password }) => `
 `;
 
 /**
- * The rewards explainer is shown once per device and covers the whole screen. Clicking
+ * The first-run tour is shown once per device and covers the whole screen. Clicking
  * its button is unreliable to find, so the flag it writes is written first: the app's
- * AsyncStorage is plain localStorage on web. The click stays as a fallback for a
- * session that had already booted past the check.
+ * AsyncStorage is plain localStorage on web. The Skip click stays as a fallback for a
+ * session that had already booted past the check. The tour's root carries
+ * nativeID="fb-tour", which react-native-web renders as an id; that is the marker.
  */
 const DISMISS_INTRO = `
-  try { window.localStorage.setItem('fb_seen_rewards_intro', '1'); } catch (e) {}
+  try { window.localStorage.setItem('fb_seen_tour', '1'); } catch (e) {}
   const leaves = Array.prototype.slice.call(document.querySelectorAll('div,span'));
   for (const el of leaves) {
     if (el.children.length) continue;
-    if ((el.textContent || '').trim().toLowerCase() !== 'got it') continue;
+    if ((el.textContent || '').trim().toLowerCase() !== 'skip') continue;
     let hit = el;
     for (let i = 0; i < 5 && hit; i++) {
       if (typeof hit.click === 'function' && (hit.getAttribute('role') === 'button' || hit.tagName === 'BUTTON')) break;
@@ -213,7 +214,7 @@ const DISMISS_INTRO = `
     break;
   }
   await new Promise(r => setTimeout(r, 900));
-  return !document.body.innerText.includes('keeps score of the work');
+  return !document.getElementById('fb-tour');
 `;
 
 /**
@@ -271,14 +272,14 @@ async function capture(page, device, dir) {
 
   if (!(await page.evaluate(`return !!(${SIGNED_IN});`))) {
     await page.evaluate(signIn(DEMO), 'sign in');
-    await page.waitFor(`${SIGNED_IN} || document.body.innerText.includes('keeps score')`, { timeout: 60000 });
+    await page.waitFor(`${SIGNED_IN} || !!document.getElementById('fb-tour')`, { timeout: 60000 });
   }
   await page.evaluate(DISMISS_INTRO, 'dismiss intro (post)');
 
   // Five identical pictures is what this failure looks like, and it looks like
   // success in every log. Refuse to capture behind the overlay.
-  if (await page.evaluate("return document.body.innerText.includes('keeps score of the work');")) {
-    throw new Error('the rewards explainer is still covering the screen');
+  if (await page.evaluate("return !!document.getElementById('fb-tour');")) {
+    throw new Error('the first-run tour is still covering the screen');
   }
 
   for (const shot of SHOTS) {

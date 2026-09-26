@@ -31,6 +31,8 @@ import {
   MessagesSquare,
   Minus,
   Palette,
+  Pause,
+  Play,
   Plus,
   RefreshCw,
   Repeat,
@@ -101,13 +103,15 @@ const ICONS = {
   'play-circle': CirclePlay,
   'film-outline': Film,
   'color-palette-outline': Palette,
+  play: Play,
+  pause: Pause,
 } satisfies Record<string, LucideIcon>;
 
 export type IconName = keyof typeof ICONS;
 
 /** Ionicons had solid variants for "on" states. Lucide is line only, so the ones that
  *  meant "lit" are filled here with a quiet tint of their own colour. */
-const FILLED = new Set<IconName>(['flame']);
+const FILLED = new Set<IconName>(['flame', 'play', 'pause']);
 
 export function Icon({
   name,
