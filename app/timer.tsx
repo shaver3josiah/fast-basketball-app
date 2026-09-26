@@ -10,12 +10,10 @@ import Animated, {
   useAnimatedProps,
   useReducedMotion,
   useSharedValue,
+  withSequence,
   withTiming,
 } from 'react-native-reanimated';
 import { Icon } from '../src/Icon';
-import { Celebrate } from '../src/Celebrate';
-import { useSession } from '../src/session';
-import { activeCelebration, readState } from '../src/rewards';
 import { Segmented } from '../src/ui';
 import { color, radius, semantic } from '../src/theme';
 
@@ -44,31 +42,31 @@ const presetLabel = (sec: number) => (sec < 60 ? `${sec}s` : `${sec / 60} min`);
  * thread, so it sweeps smoothly while the digits tick at ten a second. The screen stays
  * awake while this is open, because a timer that goes dark mid-set is useless.
  *
- * Reaching zero fires the athlete's own celebration and a success haptic. It logs
- * nothing: the workout timer is what pays out rewards, and a timer anyone can start
- * and walk away from must not be a way to earn them.
+ * Reaching zero is a plain TIME'S UP: the ring flashes red twice and the phone buzzes
+ * twice. No celebration. Celebrations belong to finishing a workout on the workout
+ * timer; this one logs nothing, and a timer anyone can start and walk away from must
+ * not look like a reward either.
  */
 export default function Timer() {
   useKeepAwake();
-  const { prefs, role } = useSession();
   const reduce = useReducedMotion();
   const [mode, setMode] = useState<'down' | 'up'>('down');
   const [total, setTotal] = useState(60);
   const [running, setRunning] = useState(false);
   // Seconds shown. For the countdown: remaining. For the stopwatch: elapsed.
   const [shown, setShown] = useState(60);
-  const [burst, setBurst] = useState(0);
   const deadline = useRef(0);
   const startedAt = useRef(0);
   const banked = useRef(0); // stopwatch seconds before the current run
   const progress = useSharedValue(0); // 0 full ring, 1 empty
-
-  const celebration = role === 'coach' ? 'spark' : activeCelebration(readState(prefs));
+  const pulse = useSharedValue(0); // the time's-up flash, 0 dark to 1 lit
 
   function reset(nextTotal = total, nextMode = mode) {
     setRunning(false);
     cancelAnimation(progress);
     progress.set(0);
+    cancelAnimation(pulse);
+    pulse.set(0);
     banked.current = 0;
     setShown(nextMode === 'down' ? nextTotal : 0);
   }
@@ -102,10 +100,7 @@ export default function Timer() {
           setShown(0);
           setRunning(false);
           progress.set(1);
-          setBurst((b) => b + 1);
-          if (Platform.OS !== 'web') {
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-          }
+          timesUp();
         } else {
           setShown(left);
         }
@@ -125,6 +120,24 @@ export default function Timer() {
   });
 
   const done = mode === 'down' && shown <= 0;
+
+  // Two flashes of the whole ring, then it stays faintly lit so "done" still reads at a
+  // glance. Opacity only, so it is the same under Reduce Motion.
+  function timesUp() {
+    pulse.set(
+      withSequence(
+        withTiming(1, { duration: 110 }),
+        withTiming(0.15, { duration: 260 }),
+        withTiming(1, { duration: 110 }),
+        withTiming(0.35, { duration: 500 })
+      )
+    );
+    if (Platform.OS !== 'web') {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
+      setTimeout(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {}), 380);
+    }
+  }
+  const flash = useAnimatedProps(() => ({ strokeOpacity: pulse.get() }));
 
   return (
     <ScrollView style={s.page} contentContainerStyle={s.pad}>
@@ -153,6 +166,16 @@ export default function Timer() {
             </LinearGradient>
           </Defs>
           <Circle cx={SIZE / 2} cy={SIZE / 2} r={R} stroke={semantic.surfaceCard} strokeWidth={STROKE} fill="none" />
+          {/* Time's up: the whole ring, lit by the pulse, dark the rest of the time. */}
+          <ACircle
+            cx={SIZE / 2}
+            cy={SIZE / 2}
+            r={R}
+            stroke={color.redHot}
+            strokeWidth={STROKE}
+            fill="none"
+            animatedProps={flash}
+          />
           {mode === 'down' ? (
             <>
               {/* Bloom under the arc: the same arc, wide and faint. */}
@@ -193,7 +216,7 @@ export default function Timer() {
         <View style={s.readout}>
           <Text style={[s.digits, done && { color: color.redHot }]}>{clock(mode === 'down' ? Math.ceil(shown) : shown)}</Text>
           <Text style={s.sub}>
-            {mode === 'down' ? (done ? 'Time' : `of ${clock(total)}`) : running ? 'Running' : shown > 0 ? 'Paused' : 'Ready'}
+            {mode === 'down' ? (done ? "Time's up" : `of ${clock(total)}`) : running ? 'Running' : shown > 0 ? 'Paused' : 'Ready'}
           </Text>
         </View>
       </View>
@@ -245,13 +268,13 @@ export default function Timer() {
         </View>
       ) : null}
 
-      <Celebrate id={celebration} nonce={burst} label="Time" />
     </ScrollView>
   );
 
   // "Again" on a finished countdown: back to full, then straight into a new run.
   function startFresh() {
     deadline.current = Date.now() + total * 1000;
+    pulse.set(0);
     progress.set(0);
     progress.set(withTiming(1, { duration: total * 1000, easing: Easing.linear }));
     setShown(total);
