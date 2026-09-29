@@ -77,6 +77,11 @@ export function daysSince(lastDay: string, now: Date): number {
 export function visit(state: RewardState, now: Date): Partial<RewardState> | null {
   const today = dayKey(now);
   if (state.lastDay === today) return null;
+  // Flown west across the date line: the last open is dated tomorrow (up to two days
+  // ahead, +14 to -12) here. That day is already counted; writing today over it would
+  // reset the run and move lastDay backwards. Bounded, so a clock set years ahead by
+  // mistake cannot freeze a streak.
+  if ([1, 2].some((n) => dayKey(daysBefore(now, -n)) === state.lastDay)) return null;
   // Yesterday continues the run. Anything older starts a new one at 1, because a
   // streak that survives a gap is not a streak.
   const streak = daysSince(state.lastDay, now) === 1 ? state.streak + 1 : 1;
@@ -255,6 +260,18 @@ export function demo(): string {
     'a streak survives the daylight-saving change'
   );
   eq(daysSince('2026-10-31', new Date(2026, 10, 1, 0, 30)), 1, 'just past midnight is still one day back');
+
+  // Westward across the date line: opened Wednesday in Tokyo, now it is Tuesday in
+  // Los Angeles. Tuesday is not a new day, and Wednesday here continues the run.
+  const flown = state({ streak: 9, bestStreak: 9, lastDay: '2026-09-30' });
+  eq(visit(flown, at(2026, 9, 29, 20)), null, 'flying west over the date line keeps the streak');
+  eq(visit(flown, at(2026, 9, 30, 9)), null, 'and the day it was opened is still counted once');
+  eq(visit(flown, at(2026, 10, 1)), { streak: 10, bestStreak: 10, lastDay: '2026-10-01' }, 'and the next day continues it');
+  eq(
+    visit(state({ streak: 9, bestStreak: 9, lastDay: '2027-09-30' }), at(2026, 9, 29)),
+    { streak: 1, bestStreak: 9, lastDay: '2026-09-29' },
+    'a clock set a year ahead by mistake does not freeze the streak'
+  );
 
   // Workouts pay once each.
   const one = finishWorkout(EMPTY, 'ev1');

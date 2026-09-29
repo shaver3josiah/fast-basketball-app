@@ -760,6 +760,36 @@ export const audienceOf = (athletes: Athlete[]) =>
  *  the family signs up. */
 export const canShareWith = (a: Athlete) => !!a.guardianUid;
 
+/** The most athletes one shared session can carry. The rules unroll their audience
+ *  check to exactly this many (firestore.rules `audienceWritten`), so a ninth is
+ *  refused on every write. */
+export const MAX_SHARED = 8;
+
+/**
+ * The audience as it stands NOW, for any coach write to a shared session.
+ *
+ * memberUids is written when a session is scheduled, but the rules re-check it
+ * against the athlete records on EVERY write. A child who got their own login since
+ * would otherwise make the session impossible to move, edit or cancel, and invisible
+ * to that child. Rebuilding it on each write fixes both the next time the coach
+ * touches the session. An event with no athleteIds predates sharing and needs nothing.
+ */
+async function freshAudience(ids: string[] | undefined): Promise<{ memberUids?: string[] }> {
+  if (!ids?.length) return {};
+  const snaps = await Promise.all(ids.map((id) => getDoc(doc(db, 'athletes', id))));
+  return { memberUids: audienceOf(snaps.map((s) => ({ id: s.id, ...s.data() }) as Athlete)) };
+}
+
+/** freshAudience, read once per distinct group however many sessions share it. */
+function audienceReader() {
+  const seen = new Map<string, ReturnType<typeof freshAudience>>();
+  return (ids: string[] | undefined) => {
+    const key = ids?.join('|') ?? '';
+    if (!seen.has(key)) seen.set(key, freshAudience(ids));
+    return seen.get(key)!;
+  };
+}
+
 /**
  * Write a workout onto one or more calendars, projected out as far as asked.
  *
@@ -783,6 +813,9 @@ export async function scheduleWorkout(input: ScheduleInput): Promise<number> {
   const perDate = shared ? 1 : input.athletes.length;
   const total = dates.length * perDate;
   if (total === 0) return 0;
+  if (shared && input.athletes.length > MAX_SHARED) {
+    throw new Error(`The limit is ${MAX_SHARED} athletes on one coached session.`);
+  }
   if (total > MAX_SCHEDULED) {
     throw new Error(`That would write ${total} sessions. The limit is ${MAX_SCHEDULED} in one go.`);
   }
@@ -824,8 +857,11 @@ export async function scheduleWorkout(input: ScheduleInput): Promise<number> {
 
 /** Edit one session in place. startsAt is handled by moveEvent, which also has to
  *  rewrite the stored clock label. */
-export function updateEvent(id: string, patch: Partial<SessionEvent>) {
-  return updateDoc(doc(db, 'events', id), patch as Record<string, unknown>);
+export async function updateEvent(e: SessionEvent, patch: Partial<SessionEvent>) {
+  return updateDoc(doc(db, 'events', e.id), {
+    ...patch,
+    ...(await freshAudience(e.athleteIds)),
+  } as Record<string, unknown>);
 }
 
 /**
@@ -835,13 +871,14 @@ export function updateEvent(id: string, patch: Partial<SessionEvent>) {
  * different day. Dropping a 4pm Tuesday onto Thursday must not silently move it to
  * midnight, which is what writing the target day alone would do.
  */
-export function moveEvent(e: SessionEvent, to: Date, keepTime = true) {
+export async function moveEvent(e: SessionEvent, to: Date, keepTime = true) {
   const from = e.startsAt.toDate();
   const next = new Date(to);
   if (keepTime) next.setHours(from.getHours(), from.getMinutes(), 0, 0);
   return updateDoc(doc(db, 'events', e.id), {
     startsAt: Timestamp.fromDate(next),
     timeLabel: clockLabel(next, e.type),
+    ...(await freshAudience(e.athleteIds)),
   });
 }
 
@@ -852,15 +889,16 @@ export function moveEvent(e: SessionEvent, to: Date, keepTime = true) {
  * row showing 4:00 PM on a session that is now at 5:00, and the calendar prints the
  * label in preference to the timestamp, so that row would lie until someone noticed.
  */
-export function editEvent(
-  id: string,
+export async function editEvent(
+  e: SessionEvent,
   when: Date,
   patch: Omit<Partial<SessionEvent>, "id" | "startsAt" | "timeLabel"> & { type: SessionType }
 ) {
-  return updateDoc(doc(db, "events", id), {
+  return updateDoc(doc(db, "events", e.id), {
     ...patch,
     startsAt: Timestamp.fromDate(when),
     timeLabel: clockLabel(when, patch.type),
+    ...(await freshAudience(e.athleteIds)),
   } as Record<string, unknown>);
 }
 
@@ -887,11 +925,17 @@ export async function applyToSeries(
   // Updates run the audience check in the rules, which costs a document get per
   // athlete on each session. A batch would share one document-access budget across
   // the whole series and be refused partway through a long run.
+  const audience = audienceReader();
   const writes = members
     .slice(0, MAX_SCHEDULED)
     .map((e) => ({ e, patch: op(e) }))
     .filter((x) => x.patch)
-    .map((x) => updateDoc(doc(db, 'events', x.e.id), x.patch as Record<string, unknown>));
+    .map(async (x) =>
+      updateDoc(doc(db, 'events', x.e.id), {
+        ...x.patch,
+        ...(await audience(x.e.athleteIds)),
+      } as Record<string, unknown>)
+    );
   await Promise.all(writes);
   return writes.length;
 }
@@ -917,16 +961,18 @@ export async function pasteEvents(events: SessionEvent[], onto: Date): Promise<n
   // Not a batch, for the same reason scheduleWorkout is not: each of these spends a
   // document get per athlete inside the rule, and a batched write shares one
   // document-access budget across every document in it.
-  const writes = events.map((e) => {
+  const audience = audienceReader();
+  const writes = events.map(async (e) => {
     const from = e.startsAt.toDate();
     const next = new Date(onto);
     next.setHours(from.getHours(), from.getMinutes(), 0, 0);
     return setDoc(doc(collection(db, 'events')), {
       athleteId: e.athleteId,
-      // The copy carries the original's audience. Without it the rules reject the
+      // The copy carries the original's audience, as it stands today rather than
+      // as it was when the original was scheduled. Without it the rules reject the
       // write, and rightly so: a session nobody can read is worse than no session.
       ...(e.athleteIds ? { athleteIds: e.athleteIds } : {}),
-      ...(e.memberUids ? { memberUids: e.memberUids } : {}),
+      ...(e.athleteIds ? await audience(e.athleteIds) : e.memberUids ? { memberUids: e.memberUids } : {}),
       type: e.type,
       ...(e.types?.length ? { types: e.types } : {}),
       name: e.name,

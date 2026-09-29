@@ -12,6 +12,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSession } from '../src/session';
 import {
   MAX_SCHEDULED,
+  MAX_SHARED,
   canShareWith,
   deleteEvent,
   deleteSeries,
@@ -147,11 +148,13 @@ export default function Schedule() {
   // shared session whose membership list is missing one. Individual sessions are
   // fine: their read resolves through a get() and starts working on signup.
   const unshareable = sharedSession ? chosen.filter((a) => !canShareWith(a)) : [];
+  const tooManyShared = sharedSession && chosen.length > MAX_SHARED;
   const canSave =
     name.trim().length > 0 &&
     chosen.length > 0 &&
     writes <= MAX_SCHEDULED &&
-    unshareable.length === 0;
+    unshareable.length === 0 &&
+    !tooManyShared;
 
   if (role !== 'coach') return <Redirect href="/(tabs)" />;
 
@@ -160,7 +163,7 @@ export default function Schedule() {
     setError(null);
     try {
       if (editing) {
-        await editEvent(editing.id, when, {
+        await editEvent(editing, when, {
           type: sessionTypes[0],
           types: sessionTypes,
           name: name.trim(),
@@ -251,6 +254,15 @@ export default function Schedule() {
             {unshareable.length === 1 ? 'has' : 'have'} no account on the family side yet,
             and a shared session has to name everyone who may read it. Schedule them
             individually for now, or wait until they sign up.
+          </Banner>
+        </View>
+      )}
+
+      {tooManyShared && (
+        <View style={{ marginTop: 12 }}>
+          <Banner tone="lock" title="Too many for one session">
+            A coached session holds up to {MAX_SHARED} athletes, and {chosen.length} are
+            picked. Split them into two sessions at the same time.
           </Banner>
         </View>
       )}
@@ -544,7 +556,7 @@ function EditActions({
           label={event.canceled ? 'Put it back on' : 'Cancel this session'}
           icon={event.canceled ? 'refresh-outline' : 'close-circle-outline'}
           disabled={busy}
-          onPress={() => run(() => updateEvent(event.id, { canceled: !event.canceled }))}
+          onPress={() => run(() => updateEvent(event, { canceled: !event.canceled }))}
         />
         <GhostButton
           label="Delete"

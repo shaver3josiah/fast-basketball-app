@@ -21,8 +21,10 @@ import type { SessionType } from './theme';
  * days, keeps the wall clock, and rolls months and years over by itself.
  */
 export function projectDates(start: Date, occurrences: number, everyWeeks: number): Date[] {
-  const n = Math.max(1, Math.floor(occurrences));
-  const step = Math.max(1, Math.floor(everyWeeks));
+  // `|| 1` because Math.max(1, NaN) is NaN: a blank count would write nothing and a
+  // blank step would write Invalid Dates.
+  const n = Math.max(1, Math.floor(occurrences) || 1);
+  const step = Math.max(1, Math.floor(everyWeeks) || 1);
   const out: Date[] = [];
   for (let i = 0; i < n; i++) {
     const d = new Date(start);
@@ -53,6 +55,10 @@ export function demo(): string {
   const once = projectDates(new Date(2026, 8, 15, 16, 0), 1, 1);
   eq(once.length, 1, 'one occurrence writes one date');
   eq(ymd(once[0]), '2026-09-15', 'the one date is the start');
+
+  // A blank or garbled number from a form must not write nothing, or Invalid Dates.
+  eq(projectDates(new Date(2026, 8, 15), NaN, 1).length, 1, 'a NaN count writes one session');
+  eq(projectDates(new Date(2026, 8, 15), 3, NaN).map(ymd).join(' '), '2026-09-15 2026-09-22 2026-09-29', 'a NaN step repeats weekly');
 
   // Weekly, across a month boundary.
   const weekly = projectDates(new Date(2026, 8, 15, 16, 0), 4, 1);

@@ -500,6 +500,41 @@ describe('a coached session is one shared document', () => {
       }))
     );
   });
+
+  // memberUids is a snapshot, and update re-runs audienceWritten over the whole
+  // document. So once a child on a shared session gets their own login, a write that
+  // leaves the list alone is refused (the coach could not move, edit or cancel it) and
+  // the child cannot read it. src/data.ts rebuilds the list on every coach write
+  // (freshAudience); this pins both halves of why.
+  test('a shared session stays writable after a child on it gets their own login', async () => {
+    await seed();
+    await seedSecondFamily();
+    // Scheduled while the second child had no login of their own.
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await updateDoc(doc(ctx.firestore(), 'athletes', A2), { playerUid: '' });
+    });
+    await assertSucceeds(
+      setDoc(doc(as(COACH), 'events', 'late'), shared({ memberUids: [PARENT, PLAYER, P2] }))
+    );
+    // The child signs up afterwards.
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await updateDoc(doc(ctx.firestore(), 'athletes', A2), { playerUid: K2 });
+    });
+    // The stale list is refused, which is the bug the app used to hit...
+    await assertFails(
+      updateDoc(doc(as(COACH), 'events', 'late'), { startsAt: new Date(), timeLabel: '5:00 PM' })
+    );
+    await assertFails(getDoc(doc(as(K2), 'events', 'late')));
+    // ...and moveEvent's write now, with the audience rebuilt, goes through.
+    await assertSucceeds(
+      updateDoc(doc(as(COACH), 'events', 'late'), {
+        startsAt: new Date(),
+        timeLabel: '5:00 PM',
+        memberUids: [PARENT, PLAYER, P2, K2],
+      })
+    );
+    await assertSucceeds(getDoc(doc(as(K2), 'events', 'late')));
+  });
 });
 
 describe('the Locker', () => {
