@@ -178,6 +178,52 @@ console.log('play-upload self-check\n');
   });
 }
 
+// ---- Play refuses to send for review automatically -------------------------------
+// What v1.0.6 hit on 30 September 2026: the upload worked and the commit came back
+// 400, because the app has had a change reviewed before. The edit is still open, so
+// the fix is to commit it again with the flag Google names, not to throw it away.
+const NOT_AUTO = 'Changes cannot be sent for review automatically. Please set the query parameter changesNotSentForReview to true.';
+{
+  const logs = [];
+  const { calls, fetchImpl } = recorder([
+    ['oauth2.googleapis.com/token', { body: { access_token: 'tok-123' } }],
+    ['uploadType=media', { body: { versionCode: 41 } }],
+    [':commit', (c) => c.url.includes('changesNotSentForReview=true')
+      ? { body: {} }
+      : { ok: false, status: 400, body: { error: { code: 400, message: NOT_AUTO } } }],
+    ['/edits', { body: { id: 'edit-abc' } }],
+  ]);
+  const out = await publish({ aab: AAB, key: KEY, fetchImpl, log: (l) => logs.push(l) });
+
+  check('a commit Play will not auto-review is retried with the flag on the same edit', () => {
+    const commits = calls.filter((c) => c.url.includes(':commit'));
+    assert.equal(commits.length, 2);
+    assert.match(commits[1].url, /\/edits\/edit-abc:commit\?changesNotSentForReview=true$/);
+    assert.equal(calls.some((c) => c.method === 'DELETE'), false, 'the edit must not be thrown away');
+  });
+  check('it says the release still has to be sent for review by hand', () => {
+    assert.equal(out.sentForReview, false);
+    assert.ok(logs.some((l) => /::warning.*Send changes for review/.test(l)));
+  });
+}
+
+// ---- any other commit failure still fails, and still cleans up --------------------
+{
+  const { calls, fetchImpl } = recorder([
+    ['oauth2.googleapis.com/token', { body: { access_token: 'tok-123' } }],
+    ['uploadType=media', { body: { versionCode: 41 } }],
+    [':commit', { ok: false, status: 400, body: { error: { message: 'APK specifies a version code that has already been used.' } } }],
+    ['/edits', { body: { id: 'edit-abc' } }],
+  ]);
+  let threw = null;
+  await publish({ aab: AAB, key: KEY, fetchImpl, log: () => {} }).catch((e) => { threw = e; });
+  check('an unrelated commit error is not retried with the flag', () => {
+    assert.ok(threw);
+    assert.equal(calls.filter((c) => c.url.includes(':commit')).length, 1);
+    assert.equal(calls.at(-1).method, 'DELETE');
+  });
+}
+
 // ---- a bad token is reported as a token failure ----------------------------------
 {
   const { fetchImpl } = recorder([

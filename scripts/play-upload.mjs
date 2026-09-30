@@ -122,9 +122,23 @@ export async function publish({
       },
     });
 
-    await call(`${app}/edits/${editId}:commit`, { method: 'POST' });
+    // Once an app has had a change reviewed (Play rejected version code 18 on
+    // 21 September 2026), Play refuses to send later changes for review on its own
+    // and fails the commit with 400 "Changes cannot be sent for review
+    // automatically". The edit is still open, so commit it again with the flag
+    // Google names. The release is then saved but NOT sent: someone has to press
+    // "Send changes for review" in the Play Console, so the log says so loudly.
+    let sentForReview = true;
+    try {
+      await call(`${app}/edits/${editId}:commit`, { method: 'POST' });
+    } catch (err) {
+      if (!/changesNotSentForReview/.test(err.message)) throw err;
+      await call(`${app}/edits/${editId}:commit?changesNotSentForReview=true`, { method: 'POST' });
+      sentForReview = false;
+      log('::warning title=Send it for review in the Play Console::Uploaded and saved, but Google would not send it for review automatically. Play Console, Publishing overview, Send changes for review.');
+    }
     log(`committed to ${track}`);
-    return { versionCode, editId, track };
+    return { versionCode, editId, track, sentForReview };
   } catch (err) {
     // Leave no half-open edit behind. A failed delete must not mask the real error.
     await call(`${app}/edits/${editId}`, { method: 'DELETE' }).catch(() => {});
