@@ -234,7 +234,7 @@ const s = StyleSheet.create({
     backgroundColor: semantic.surfaceCard,
     borderWidth: 1,
     borderColor: semantic.borderStrong,
-    borderRadius: radius.cardLg,
+    borderRadius: radius.cardLg, borderCurve: 'continuous',
     padding: 13,
     marginBottom: 10,
     minHeight: 64,

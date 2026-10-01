@@ -4,8 +4,6 @@
  * #E60C20 and nothing in here is allowed to drift from it.
  */
 
-import Ionicons from '@expo/vector-icons/Ionicons';
-
 export const color = {
   courtBlack: '#0A0A0C',
   ink: '#131318',
@@ -78,10 +76,8 @@ export const radius = {
 
 export const space = (n: number) => n * 4;
 
-/** Every icon in the app comes from Ionicons, which ships with @expo/vector-icons and
- *  already draws the tab bar. Unicode glyphs used to stand in here; they render at the
- *  mercy of whichever font the platform substitutes, which is not an icon system. */
-export type IconName = keyof typeof Ionicons.glyphMap;
+/** UI icons are Lucide, through src/Icon.tsx. Session types are drawn by SessionGlyph. */
+export type { IconName } from './Icon';
 
 /**
  * Session types. Color is NEVER the only signal — every consumer must render the
@@ -89,18 +85,18 @@ export type IconName = keyof typeof Ionicons.glyphMap;
  * are red-green colorblind and this app's primary accent is red.
  */
 export const SESSION_TYPES = {
-  skills: { label: 'Skills', icon: 'flash-outline', color: color.redHot },
-  shoot: { label: 'Shooting', icon: 'locate-outline', color: color.miamiTeal },
+  skills: { label: 'Skills', color: color.redHot },
+  shoot: { label: 'Shooting', color: color.miamiTeal },
   // Red and teal are the only two hues this palette has, and both were already spent,
   // so these two take steps off the same light-grey ramp as Small Group and Rest.
   // Measured on every surface they are drawn on: textLede is 12.0:1 on the page and
   // 10.4:1 on a card, textBody 9.6:1 and 8.3:1, both well past the 7.3:1 Rest has
   // shipped with. The icon and the word are what actually tell them apart.
-  handle: { label: 'Ball Handling', icon: 'basketball-outline', color: color.textLede },
-  cond: { label: 'Conditioning', icon: 'pulse-outline', color: color.textBody },
-  team: { label: 'Small Group', icon: 'people-outline', color: color.chalk },
-  rest: { label: 'Rest / Film', icon: 'film-outline', color: '#9C9CA9' },
-} as const satisfies Record<string, { label: string; icon: IconName; color: string }>;
+  handle: { label: 'Ball Handling', color: color.textLede },
+  cond: { label: 'Conditioning', color: color.textBody },
+  team: { label: 'Small Group', color: color.chalk },
+  rest: { label: 'Rest / Film', color: '#9C9CA9' },
+} as const satisfies Record<string, { label: string; color: string }>;
 
 export type SessionType = keyof typeof SESSION_TYPES;
 

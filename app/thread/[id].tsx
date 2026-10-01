@@ -8,7 +8,7 @@ import {
   View,
 } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import Ionicons from '@expo/vector-icons/Ionicons';
+import { Icon } from '../../src/Icon';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { useAnimatedStyle } from 'react-native-reanimated';
 import { KeyboardStickyView, useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller';
@@ -108,7 +108,7 @@ export default function ThreadScreen() {
                     hitSlop={8}
                     style={{ paddingHorizontal: 4, minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}
                   >
-                    <Ionicons name="calendar-outline" size={21} color={color.chalk} />
+                    <Icon name="calendar-outline" size={21} color={color.chalk} />
                   </Pressable>
                 )
               : undefined,
@@ -182,11 +182,11 @@ export default function ThreadScreen() {
           }
           style={({ pressed }) => [s.calBar, pressed && { backgroundColor: color.inkHover }]}
         >
-          <Ionicons name="calendar-outline" size={16} color={color.redHot} />
+          <Icon name="calendar-outline" size={16} color={color.redHot} />
           <Text style={s.calText}>
             {role === 'coach' ? 'Add a session to the calendar' : 'Open the calendar'}
           </Text>
-          <Ionicons name="chevron-forward" size={15} color={color.textDim} />
+          <Icon name="chevron-forward" size={15} color={color.textDim} />
         </Pressable>
 
         {canPost ? (

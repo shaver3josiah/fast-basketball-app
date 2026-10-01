@@ -7,7 +7,8 @@ import {
   View,
 } from 'react-native';
 import { Redirect, useRouter } from 'expo-router';
-import Ionicons from '@expo/vector-icons/Ionicons';
+import { Icon } from '../../src/Icon';
+import { SessionGlyph } from '../../src/SessionGlyph';
 import { useSession } from '../../src/session';
 import {
   blockAmount,
@@ -131,7 +132,7 @@ function TemplateCard({
             </Text>
           </View>
         </View>
-        <Ionicons name="chevron-forward" size={18} color={color.textFaint} />
+        <Icon name="chevron-forward" size={18} color={color.textFaint} />
       </Pressable>
 
       {template.blocks.length > 0 && (
@@ -316,7 +317,7 @@ function Editor({
           onPress={onDone}
           style={s.backBtn}
         >
-          <Ionicons name="chevron-back" size={20} color={color.chalk} />
+          <Icon name="chevron-back" size={20} color={color.chalk} />
         </Pressable>
         <Text style={s.editorTitle}>{draft.id ? 'Edit workout' : 'New workout'}</Text>
       </View>
@@ -358,9 +359,9 @@ function Editor({
                   coach which ones are on. It sits in the corner so the category's own
                   icon, which is what names it, stays put. */}
               {on ? (
-                <Ionicons name="checkmark-circle" size={13} color={t.color} style={s.typeTick} />
+                <Icon name="checkmark-circle" size={13} color={t.color} style={s.typeTick} />
               ) : null}
-              <Ionicons name={t.icon} size={17} color={on ? t.color : color.textDim} />
+              <SessionGlyph kind={k} size={20} color={on ? undefined : color.textDim} />
               <Text style={[s.typeLabel, on && { color: color.chalk }]} numberOfLines={2}>
                 {t.label}
               </Text>
@@ -568,7 +569,7 @@ function IconBtn({
   disabled,
   tone,
 }: {
-  name: React.ComponentProps<typeof Ionicons>['name'];
+  name: import('../../src/Icon').IconName;
   label: string;
   onPress: () => void;
   disabled?: boolean;
@@ -587,7 +588,7 @@ function IconBtn({
         disabled && { opacity: 0.3 },
       ]}
     >
-      <Ionicons name={name} size={17} color={tone === 'danger' ? color.redHot : color.chalk} />
+      <Icon name={name} size={17} color={tone === 'danger' ? color.redHot : color.chalk} />
     </Pressable>
   );
 }
@@ -624,7 +625,7 @@ const s = StyleSheet.create({
     backgroundColor: semantic.surfaceInput,
     borderWidth: 1,
     borderColor: semantic.borderStrong,
-    borderRadius: radius.input,
+    borderRadius: radius.input, borderCurve: 'continuous',
     color: color.chalk,
     fontSize: 16,
     minHeight: 48,
@@ -643,7 +644,7 @@ const s = StyleSheet.create({
     gap: 4,
     minHeight: 64,
     paddingHorizontal: 4,
-    borderRadius: radius.card,
+    borderRadius: radius.card, borderCurve: 'continuous',
     borderWidth: 1,
     borderColor: semantic.borderStrong,
     backgroundColor: semantic.surfaceInput,
@@ -658,7 +659,7 @@ const s = StyleSheet.create({
     backgroundColor: semantic.surfaceCard,
     borderWidth: 1,
     borderColor: semantic.border,
-    borderRadius: radius.card,
+    borderRadius: radius.card, borderCurve: 'continuous',
     padding: 10,
     marginBottom: 8,
   },
@@ -686,7 +687,7 @@ const s = StyleSheet.create({
     marginTop: 6,
   },
   blockTools: { flexDirection: 'row', gap: 2 },
-  iconBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: radius.chip },
+  iconBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: radius.chip, borderCurve: 'continuous' },
 
   error: { marginTop: 14, color: color.redHot, fontSize: 13.5, lineHeight: 19 },
   hint: { ...type.meta, marginTop: 10, lineHeight: 17 },

@@ -1,6 +1,6 @@
 import { Redirect } from 'expo-router';
 import { Tabs } from 'expo-router/js-tabs';
-import Ionicons from '@expo/vector-icons/Ionicons';
+import { Icon } from '../../src/Icon';
 import { useEffect, useState } from 'react';
 import { StyleSheet } from 'react-native';
 import { useSession } from '../../src/session';
@@ -63,7 +63,7 @@ export default function TabsLayout() {
         name="index"
         options={{
           title: 'Messages',
-          tabBarIcon: ({ color: c, size }) => <Ionicons name="chatbubble-outline" size={size} color={c} />,
+          tabBarIcon: ({ color: c, size }) => <Icon name="chatbubble-outline" size={size} color={c} />,
           tabBarBadge: threads > 0 ? threads : undefined,
           tabBarBadgeStyle: { backgroundColor: color.fastRed, color: color.bone, fontSize: 10 },
         }}
@@ -72,7 +72,7 @@ export default function TabsLayout() {
         name="calendar"
         options={{
           title: 'Calendar',
-          tabBarIcon: ({ color: c, size }) => <Ionicons name="calendar-outline" size={size} color={c} />,
+          tabBarIcon: ({ color: c, size }) => <Icon name="calendar-outline" size={size} color={c} />,
         }}
       />
       <Tabs.Screen
@@ -80,7 +80,7 @@ export default function TabsLayout() {
         options={{
           title: 'Workout Builder',
           tabBarLabel: 'Workouts',
-          tabBarIcon: ({ color: c, size }) => <Ionicons name="barbell-outline" size={size} color={c} />,
+          tabBarIcon: ({ color: c, size }) => <Icon name="barbell-outline" size={size} color={c} />,
           // Only the coach has a workout library, and the rules say so too: a read of
           // /workoutTemplates from a family account is denied. href null removes the
           // tab without removing the route, so a stale deep link still resolves and
@@ -93,14 +93,14 @@ export default function TabsLayout() {
         options={{
           title: 'The Locker',
           tabBarLabel: 'Locker',
-          tabBarIcon: ({ color: c, size }) => <Ionicons name="document-text-outline" size={size} color={c} />,
+          tabBarIcon: ({ color: c, size }) => <Icon name="document-text-outline" size={size} color={c} />,
         }}
       />
       <Tabs.Screen
         name="you"
         options={{
           title: 'You',
-          tabBarIcon: ({ color: c, size }) => <Ionicons name="person-outline" size={size} color={c} />,
+          tabBarIcon: ({ color: c, size }) => <Icon name="person-outline" size={size} color={c} />,
         }}
       />
     </Tabs>

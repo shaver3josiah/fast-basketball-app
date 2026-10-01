@@ -920,7 +920,7 @@ const guard = (needle, what) => {
 
 /**
  * SESSION_TYPES: one colour per type, used at several sizes with different criteria.
- * In the calendar it is an Ionicons glyph, a 12x3.5 grid chip, and (if a text label is
+ * In the calendar it is a drawn SessionGlyph, a 12x3.5 grid chip, and (if a text label is
  * ever reintroduced) small bold type. The style keys are named so that the guard below
  * shouts when the screen is restyled out from under this list.
  */
@@ -934,16 +934,14 @@ for (const key of ['evIcon', 'gridChip', 'cellInner', 'legendItem']) {
 
 for (const [k, v] of Object.entries(THEME.SESSION_TYPES ?? {})) {
   const c = v.color;
-  const solid = colorCandidates(c)[0];
-  // `${t.color}22` - the type colour at 13% behind its own glyph.
-  const tint = solid ? `${hex(solid.rgb)}22` : c;
-
-  addDyn('SESSION_TYPES', `${k} - row icon glyph 16px`, c, tint, 'semantic.surfaceCard',
-    'ui', null, null, 'calendar.tsx s.evIcon + <Ionicons size={16}>', 'icon on its own 13% tint');
-  addDyn('SESSION_TYPES', `${k} - row icon ring`, c, tint, 'semantic.surfaceCard',
-    'ui', null, null, 'calendar.tsx s.evIcon borderColor', 'ring vs the tint it encloses');
-  addDyn('SESSION_TYPES', `${k} - legend icon glyph 13px`, c, 'semantic.surfacePage', 'semantic.surfacePage',
-    'ui', null, null, 'calendar.tsx Legend <Ionicons size={13}>', 'icon on the page');
+  // The row symbol sits in a court-black well (s.evIcon); its tinted ring is decoration,
+  // the symbol and the word carry the type.
+  addDyn('SESSION_TYPES', `${k} - row symbol 26px`, c, 'color.courtBlack', 'semantic.surfaceCard',
+    'ui', null, null, 'calendar.tsx s.evIcon + <SessionGlyph size={26}>', 'symbol in its well');
+  addDyn('SESSION_TYPES', `${k} - legend symbol 15px`, c, 'semantic.surfacePage', 'semantic.surfacePage',
+    'ui', null, null, 'calendar.tsx Legend <SessionGlyph size={15}>', 'symbol on the page');
+  addDyn('SESSION_TYPES', `${k} - chip symbol 14px`, c, 'semantic.surfaceCard', 'semantic.surfaceCard',
+    'ui', null, null, 'ui.tsx TypeChip <SessionGlyph size={14}>', 'symbol on a card');
   addDyn('SESSION_TYPES', `${k} - grid chip, plain cell`, c, 'semantic.surfacePage', 'semantic.surfacePage',
     'ui', null, null, 'calendar.tsx s.gridChip (12x3.5)', 'graphical object in the month grid');
   addDyn('SESSION_TYPES', `${k} - grid chip, drag-target cell`, c, 'color.tealTint', 'semantic.surfacePage',
@@ -981,18 +979,18 @@ addDyn('Switch', 'knob on the teal track', 'color.courtBlack', 'color.miamiTeal'
 addDyn('Switch', 'off track outline', 'color.textDim', 'rgba(255,255,255,0.14)', 'semantic.surfaceCard',
   'ui', null, null, 'src/ui.tsx s.track when off', 'the fill alone is 1.42, so the outline is the boundary');
 
-// Banner tones (src/ui.tsx). Banners render directly inside <Screen>, i.e. on the page.
-const BANNER_LINE = { watch: 'color.tealLine', lock: 'color.fastRed', ok: 'color.slate' };
+// Banner tones (src/ui.tsx). Banners render directly inside <Screen>, i.e. on the page,
+// over a FlowFill wash with no outline. Text is measured against the wash at its PEAK
+// alpha, the brightest point the gradient reaches under the words.
 const BANNERS = [
-  ['watch', guard("rgba(37,224,208,0.10)", 'Banner watch bg'), 'color.miamiTeal'],
-  ['lock', 'color.redTint', 'color.redHot'],
-  ['ok', guard("rgba(245,243,239,0.06)", 'Banner ok bg'), 'color.chalk'],
+  ['watch', 'rgba(37,224,208,0.16)', 'color.miamiTeal', guard('flow: color.miamiTeal, peak: 0.16', 'Banner watch flow')],
+  ['lock', 'rgba(230,12,32,0.16)', 'color.redHot', guard('flow: color.fastRed, peak: 0.16', 'Banner lock flow')],
+  ['ok', 'rgba(245,243,239,0.07)', 'color.chalk', guard('flow: color.chalk, peak: 0.07', 'Banner ok flow')],
 ];
 for (const [tone, bg, fg] of BANNERS) {
   addDyn('Banner tones', `${tone} - title`, fg, bg, 'semantic.surfacePage', 'text', 13, '800', 'src/ui.tsx s.bannerTitle', null);
   addDyn('Banner tones', `${tone} - icon glyph`, fg, bg, 'semantic.surfacePage', 'text', 15, '400', 'src/ui.tsx s.bannerIcon', null);
   addDyn('Banner tones', `${tone} - body`, 'color.textBody', bg, 'semantic.surfacePage', 'text', 13, '400', 'src/ui.tsx s.bannerBody', null);
-  addDyn('Banner tones', `${tone} - border`, BANNER_LINE[tone], bg, 'semantic.surfacePage', 'ui', null, null, 'src/ui.tsx s.banner borderColor', null);
 }
 
 // Tag tones (src/ui.tsx). Tags render inside thread rows and cards.
@@ -1003,7 +1001,6 @@ const TAGS = [
 ];
 for (const [tone, bg, fg, line] of TAGS) {
   addDyn('Tag tones', `${tone} - label`, fg, bg, 'semantic.surfaceCard', 'text', 10.5, '700', 'src/ui.tsx Tag', null);
-  addDyn('Tag tones', `${tone} - border`, line, bg, 'semantic.surfaceCard', 'ui', null, null, 'src/ui.tsx s.tag borderColor', null);
 }
 
 /* -------------------------------------------------------------- reporting --- */

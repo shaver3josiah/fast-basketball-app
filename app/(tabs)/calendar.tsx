@@ -8,17 +8,23 @@ import Animated, {
   useAnimatedStyle,
   useReducedMotion,
   useSharedValue,
+  FadeIn,
   withSpring,
   withTiming,
   type SharedValue,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
-import Ionicons from '@expo/vector-icons/Ionicons';
+import { Icon } from '../../src/Icon';
+import { ChevronRight } from 'lucide-react-native';
 import { useSession } from '../../src/session';
 import { deleteEvent, moveEvent, pasteEvents, subscribeEvents } from '../../src/data';
 import type { SessionEvent } from '../../src/types';
 import { Empty, Eyebrow, GhostButton } from '../../src/ui';
+import { SessionGlyph } from '../../src/SessionGlyph';
+import { TodaySnapshot, nextUp } from '../../src/TodaySnapshot';
+import { FlowFill } from '../../src/FlowFill';
+import { Surface, SquircleLayer, shell } from '../../src/Surface';
 import { SESSION_TYPES, color, radius, semantic, type, typesOf } from '../../src/theme';
 
 const DOW = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
@@ -64,6 +70,10 @@ export default function CalendarScreen() {
   /** Which card is armed for deletion. One at a time, deliberately: a list of sessions
    *  each showing its own confirm row is a list nobody can read. */
   const [confirmId, setConfirmId] = useState<string | null>(null);
+  /** null until someone chooses: the snapshot then shows by itself whenever today has
+   *  sessions. Once they pick the month it stays picked for as long as the tab lives. */
+  const [view, setView] = useState<'snapshot' | 'calendar' | null>(null);
+  const scrollRef = useRef<ScrollView>(null);
 
   // Direct manipulation is never decoration, so the drag itself always works. What
   // Reduce Motion turns off is the spring: the card snaps home instead of overshooting.
@@ -97,6 +107,30 @@ export default function CalendarScreen() {
     }
     return m;
   }, [visible, month, year]);
+
+  const todayEvents = useMemo(
+    () =>
+      visible
+        .filter((e) => e.startsAt?.toDate && sameDay(e.startsAt.toDate(), new Date()))
+        .sort((a, b) => a.startsAt.toMillis() - b.startsAt.toMillis()),
+    [visible]
+  );
+  const snapshot = todayEvents.length > 0 && view !== 'calendar';
+  const show = (v: 'snapshot' | 'calendar') => {
+    setView(v);
+    if (v === 'calendar') {
+      setCursor(today);
+      setSelected(today);
+    }
+    scrollRef.current?.scrollTo({ y: 0, animated: false });
+  };
+  const open = (e: SessionEvent) =>
+    router.push(
+      // The coach opens a session to change it. Everyone else opens it to do it.
+      isCoach
+        ? { pathname: '/schedule', params: { eventId: e.id } }
+        : { pathname: '/train/[id]', params: { id: e.id } }
+    );
 
   const dayEvents = useMemo(
     () => visible.filter((e) => e.startsAt?.toDate && sameDay(e.startsAt.toDate(), selected)),
@@ -179,11 +213,27 @@ export default function CalendarScreen() {
 
   return (
     <ScrollView
+      ref={scrollRef}
       style={s.page}
       contentContainerStyle={s.pad}
       // A drag that also scrolls the page is a drag that lands somewhere else.
       scrollEnabled={!dragging}
     >
+      {snapshot ? (
+        <Animated.View key="snap" entering={FadeIn.duration(180)}>
+          <TodaySnapshot
+            events={todayEvents}
+            isCoach={isCoach}
+            namesOn={namesOn}
+            onOpen={open}
+            onCalendar={() => show('calendar')}
+          />
+        </Animated.View>
+      ) : (
+      <Animated.View key="cal" entering={view ? FadeIn.duration(180) : undefined}>
+      {todayEvents.length > 0 && (
+        <TodayStrip events={todayEvents} onPress={() => show('snapshot')} />
+      )}
       <View style={s.calHead}>
         <View style={{ flex: 1 }}>
           <Text style={s.month}>{cursor.toLocaleDateString([], { month: 'long' })}</Text>
@@ -254,14 +304,15 @@ export default function CalendarScreen() {
       ) : null}
       {flash ? (
         <View style={s.flash} accessibilityLiveRegion="polite">
-          <Ionicons name="checkmark-circle" size={15} color={color.miamiTeal} />
+          <Icon name="checkmark-circle" size={15} color={color.miamiTeal} />
           <Text style={s.flashText}>{flash}</Text>
         </View>
       ) : null}
 
       {clipboard && isCoach && (
-        <View style={s.clip}>
-          <Ionicons name="copy-outline" size={16} color={color.chalk} />
+        <Surface style={s.clip}>
+          <FlowFill tint={color.miamiTeal} />
+          <Icon name="copy-outline" size={16} color={color.chalk} />
           <Text style={s.clipText}>
             {clipboard.events.length} {clipboard.events.length === 1 ? 'session' : 'sessions'} copied
             from {clipboard.from.toLocaleDateString([], { weekday: 'short', day: 'numeric' })}
@@ -272,9 +323,9 @@ export default function CalendarScreen() {
             onPress={() => setClipboard(null)}
             style={s.clipClear}
           >
-            <Ionicons name="close" size={16} color={color.textDim} />
+            <Icon name="close" size={16} color={color.textDim} />
           </Pressable>
-        </View>
+        </Surface>
       )}
 
       <View style={s.dayHead}>
@@ -294,7 +345,7 @@ export default function CalendarScreen() {
             }}
             style={({ pressed }) => [s.todayBtn, pressed && { backgroundColor: color.inkHover }]}
           >
-            <Ionicons name="return-up-back" size={14} color={color.redHot} />
+            <Icon name="return-up-back" size={14} color={color.redHot} />
             <Text style={s.todayLink}>Go to today</Text>
           </Pressable>
         )}
@@ -348,14 +399,7 @@ export default function CalendarScreen() {
           gridOrigin={gridOrigin}
           cellRects={cellRects}
           hoverDay={hoverDay}
-          // The coach opens a session to change it. Everyone else opens it to do it.
-          onOpen={() =>
-            router.push(
-              isCoach
-                ? { pathname: '/schedule', params: { eventId: e.id } }
-                : { pathname: '/train/[id]', params: { id: e.id } }
-            )
-          }
+          onOpen={() => open(e)}
           onCopy={() => {
             setClipboard({ from: selected, events: [e] });
             setFlash('Session copied');
@@ -384,7 +428,41 @@ export default function CalendarScreen() {
           Press and hold a session to pick it up, then drop it on any day above.
         </Text>
       )}
+      </Animated.View>
+      )}
     </ScrollView>
+  );
+}
+
+// --- the way back to the snapshot --------------------------------------------
+
+/** Sits above the month whenever today has sessions, so the snapshot is one tap away
+ *  from anywhere in the calendar, not only on the first open. */
+function TodayStrip({ events, onPress }: { events: SessionEvent[]; onPress: () => void }) {
+  const live = events.filter((e) => !e.canceled);
+  const next = nextUp(events);
+  const lead = next ?? live[0] ?? events[0];
+  const when = next
+    ? `next ${next.timeLabel || next.startsAt.toDate().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`
+    : 'all done';
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`Today's snapshot: ${live.length} ${live.length === 1 ? 'session' : 'sessions'}, ${when}`}
+      onPress={onPress}
+      // The press tint sits on the container over the painted shape: a flash, not a state.
+      style={({ pressed }) => [shell(s.strip), pressed && { backgroundColor: color.inkHover }]}
+    >
+      <SquircleLayer style={s.strip} />
+      <SessionGlyph kind={typesOf(lead)[0]} size={28} muted={!next} />
+      <View style={{ flex: 1 }}>
+        <Text style={s.stripTitle}>Today's snapshot</Text>
+        <Text style={s.stripMeta}>
+          {live.length} {live.length === 1 ? 'session' : 'sessions'} · {when}
+        </Text>
+      </View>
+      <ChevronRight size={18} color={color.textDim} strokeWidth={2} />
+    </Pressable>
   );
 }
 
@@ -480,12 +558,12 @@ function Legend() {
       <View style={s.legend}>
         {Object.entries(SESSION_TYPES).map(([k, v]) => (
           <View key={k} style={s.legendItem}>
-            <Ionicons name={v.icon} size={13} color={v.color} />
+            <SessionGlyph kind={k as keyof typeof SESSION_TYPES} size={15} />
             <Text style={s.legendText}>{v.label}</Text>
           </View>
         ))}
         <View style={s.legendItem}>
-          <Ionicons name="close-circle-outline" size={13} color={color.slate} />
+          <Icon name="close-circle-outline" size={13} color={color.slate} />
           <Text style={s.legendText}>Canceled</Text>
         </View>
       </View>
@@ -540,10 +618,8 @@ function SessionCard({
   const cats = typesOf(event);
   const t = SESSION_TYPES[cats[0]] ?? {
     label: event.type,
-    icon: 'ellipse-outline' as const,
     color: color.slate,
   };
-  const extra = cats.slice(1).map((k) => SESSION_TYPES[k]).filter(Boolean);
   const d = event.startsAt.toDate();
 
   const tx = useSharedValue(0);
@@ -640,7 +716,8 @@ function SessionCard({
 
   return (
     <GestureDetector gesture={pan}>
-      <Animated.View style={[s.ev, card]}>
+      <Animated.View style={[shell(s.ev), card]}>
+        <SquircleLayer style={s.ev} />
         <Animated.View style={[StyleSheet.absoluteFill, s.evHeld, heldStyle]} pointerEvents="none" />
 
         <Pressable
@@ -652,8 +729,8 @@ function SessionCard({
           onPress={onOpen}
           style={s.evInner}
         >
-          <View style={[s.evIcon, { backgroundColor: `${t.color}22`, borderColor: t.color }]}>
-            <Ionicons name={t.icon} size={16} color={t.color} />
+          <View style={s.evIcon}>
+            <SessionGlyph kind={cats[0]} size={26} muted={event.canceled} />
           </View>
 
           <View style={{ flex: 1 }}>
@@ -664,7 +741,7 @@ function SessionCard({
               {event.durationMin ? <Text style={s.evDur}>{event.durationMin} min</Text> : null}
               {event.kind === 'coached' ? (
                 <View style={s.coached}>
-                  <Ionicons name="people-outline" size={11} color={color.miamiTeal} />
+                  <Icon name="people-outline" size={11} color={color.miamiTeal} />
                   <Text style={s.coachedText}>
                     {(event.athleteIds?.length ?? 1) > 1
                       ? `Coached, ${event.athleteIds?.length} athletes`
@@ -672,10 +749,10 @@ function SessionCard({
                   </Text>
                 </View>
               ) : null}
-              {extra.map((x) => (
-                <View key={x.label} style={s.evType}>
-                  <Ionicons name={x.icon} size={11} color={x.color} />
-                  <Text style={[s.evTypeText, { color: x.color }]}>{x.label}</Text>
+              {cats.slice(1).filter((k) => SESSION_TYPES[k]).map((k) => (
+                <View key={k} style={s.evType}>
+                  <SessionGlyph kind={k} size={13} />
+                  <Text style={[s.evTypeText, { color: SESSION_TYPES[k].color }]}>{SESSION_TYPES[k].label}</Text>
                 </View>
               ))}
             </View>
@@ -703,7 +780,7 @@ function SessionCard({
                 hitSlop={6}
                 style={s.evCopy}
               >
-                <Ionicons name="copy-outline" size={16} color={color.textDim} />
+                <Icon name="copy-outline" size={16} color={color.textDim} />
               </Pressable>
               <Pressable
                 accessibilityRole="button"
@@ -713,7 +790,7 @@ function SessionCard({
                 hitSlop={6}
                 style={s.evCopy}
               >
-                <Ionicons
+                <Icon
                   name={confirming ? 'close' : 'trash-outline'}
                   size={16}
                   color={confirming ? color.chalk : color.textDim}
@@ -744,7 +821,7 @@ function NavBtn({
   label,
   onPress,
 }: {
-  icon: React.ComponentProps<typeof Ionicons>['name'];
+  icon: import('../../src/Icon').IconName;
   label: string;
   onPress: () => void;
 }) {
@@ -755,7 +832,7 @@ function NavBtn({
       onPress={onPress}
       style={({ pressed }) => [s.navBtn, pressed && { backgroundColor: color.inkHover }]}
     >
-      <Ionicons name={icon} size={20} color={color.chalk} />
+      <Icon name={icon} size={20} color={color.chalk} />
     </Pressable>
   );
 }
@@ -778,10 +855,25 @@ const s = StyleSheet.create({
   page: { flex: 1, backgroundColor: semantic.surfacePage },
   pad: { padding: 16, paddingBottom: 40 },
 
+  strip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    minHeight: 56,
+    paddingHorizontal: 12,
+    marginBottom: 14,
+    borderRadius: radius.card, borderCurve: 'continuous',
+    borderWidth: 1,
+    borderColor: semantic.borderStrong,
+    backgroundColor: semantic.surfaceCard,
+  },
+  stripTitle: { fontSize: 14, fontWeight: '800', color: color.chalk },
+  stripMeta: { ...type.meta, marginTop: 2 },
+
   calHead: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 },
   month: { fontSize: 24, fontWeight: '900', color: color.chalk, letterSpacing: -0.4 },
   year: { fontSize: 13, fontWeight: '700', color: color.textDim, marginTop: 1 },
-  navBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: radius.chip },
+  navBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: radius.chip, borderCurve: 'continuous' },
 
   filterRow: { gap: 6, paddingBottom: 12 },
   filter: {
@@ -810,7 +902,7 @@ const s = StyleSheet.create({
   cell: {
     width: `${100 / 7}%`,
     aspectRatio: 0.84,
-    borderRadius: radius.chip,
+    borderRadius: radius.chip, borderCurve: 'continuous',
     borderWidth: 1,
     borderColor: 'transparent',
   },
@@ -850,10 +942,8 @@ const s = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: color.tealTint,
-    borderWidth: 1,
-    borderColor: color.tealLine,
-    borderRadius: radius.card,
+    overflow: 'hidden',
+    borderRadius: radius.card, borderCurve: 'continuous',
     paddingVertical: 10,
     paddingLeft: 12,
     paddingRight: 4,
@@ -862,17 +952,19 @@ const s = StyleSheet.create({
   clipText: { flex: 1, fontSize: 13, color: color.chalk, lineHeight: 18 },
   clipClear: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
 
+  // 20 outside, 12 of padding, so the symbol's well is 8: concentric, see TodaySnapshot.
   ev: {
     backgroundColor: semantic.surfaceCard,
     borderWidth: 1,
     borderColor: semantic.borderStrong,
-    borderRadius: radius.card,
+    borderRadius: 20,
+    borderCurve: 'continuous',
     marginBottom: 8,
   },
   // An offset and a real blur, so the card reads as lifted off the page rather than
   // ringed. A zero-offset glow is decoration; this is depth.
   evHeld: {
-    borderRadius: radius.card,
+    borderRadius: radius.card, borderCurve: 'continuous',
     borderWidth: 1,
     borderColor: color.miamiTeal,
     backgroundColor: color.inkHover,
@@ -880,10 +972,11 @@ const s = StyleSheet.create({
   },
   evInner: { flexDirection: 'row', gap: 11, padding: 12, alignItems: 'flex-start' },
   evIcon: {
-    width: 34,
-    height: 34,
-    borderRadius: radius.chip,
-    borderWidth: 1,
+    width: 40,
+    height: 40,
+    backgroundColor: color.courtBlack,
+    borderRadius: 8,
+    borderCurve: 'continuous',
     alignItems: 'center',
     justifyContent: 'center',
   },
