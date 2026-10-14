@@ -12,6 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSession } from '../src/session';
 import { backend, isConfigured } from '../src/firebase';
 import { Logo } from '../src/Logo';
+import { FlowFill } from '../src/FlowFill';
 import { Button, KeyboardForm } from '../src/ui';
 import { color, radius, semantic, type } from '../src/theme';
 
@@ -79,6 +80,7 @@ export default function SignIn() {
 
         {backend.kind === 'emulator' && (
           <View style={s.notice}>
+            <FlowFill tint={color.fastRed} />
             <Text style={s.noticeText}>
               Pointing at the LOCAL EMULATOR, not your Firebase project. If sign-in fails to
               connect, either start it with `npm run emulators` or run `npm run use-cloud` to
@@ -89,6 +91,7 @@ export default function SignIn() {
 
         {!isConfigured && (
           <View style={s.notice}>
+            <FlowFill tint={color.fastRed} />
             <Text style={s.noticeText}>
               No Firebase project is configured. Copy .env.example to .env and fill it in, or set
               EXPO_PUBLIC_USE_EMULATOR=1 and run the local emulator.
@@ -128,6 +131,7 @@ export default function SignIn() {
 
         {resetSent ? (
           <View style={s.reset} accessibilityLiveRegion="polite">
+            <FlowFill tint={color.miamiTeal} />
             <Text style={s.resetText}>
               If there is an account for {email.trim().toLowerCase()}, a reset link is on
               its way. Open it on this phone, choose a new password, then come back and
@@ -185,7 +189,7 @@ const s = StyleSheet.create({
     backgroundColor: semantic.surfaceInput,
     borderWidth: 1,
     borderColor: semantic.borderStrong,
-    borderRadius: radius.input,
+    borderRadius: radius.input, borderCurve: 'continuous',
     color: color.chalk,
     fontSize: 16,
     minHeight: 48,
@@ -193,10 +197,8 @@ const s = StyleSheet.create({
   },
   error: { marginTop: 14, color: color.redHot, fontSize: 13.5, lineHeight: 19 },
   notice: {
-    backgroundColor: 'rgba(230,12,32,0.07)',
-    borderWidth: 1,
-    borderColor: color.fastRed,
-    borderRadius: radius.card,
+    overflow: 'hidden',
+    borderRadius: radius.card, borderCurve: 'continuous',
     padding: 12,
     marginBottom: 8,
   },
@@ -206,10 +208,8 @@ const s = StyleSheet.create({
   reset: {
     marginTop: 12,
     padding: 12,
-    borderRadius: radius.card,
-    borderWidth: 1,
-    borderColor: color.tealLine,
-    backgroundColor: color.tealTint,
+    borderRadius: radius.card, borderCurve: 'continuous',
+    overflow: 'hidden',
   },
   resetText: { fontSize: 13, lineHeight: 18.5, color: color.chalk },
   linkRow: { minHeight: 44, justifyContent: 'center', alignItems: 'center', marginTop: 18 },

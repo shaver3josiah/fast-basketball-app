@@ -61,7 +61,8 @@
           "mode": "production"
         }
       ],
-      "./plugins/with-play-manifest"
+      "./plugins/with-play-manifest",
+      "expo-asset"
     ]
   }
 }

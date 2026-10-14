@@ -8,7 +8,9 @@ import {
   View,
 } from 'react-native';
 import { Redirect, Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import Ionicons from '@expo/vector-icons/Ionicons';
+import { Icon } from '../src/Icon';
+import { SessionGlyph } from '../src/SessionGlyph';
+import { FlowFill } from '../src/FlowFill';
 import { useSession } from '../src/session';
 import {
   MAX_SCHEDULED,
@@ -232,7 +234,7 @@ export default function Schedule() {
                   !!editing && { opacity: 0.6 },
                 ]}
               >
-                {on ? <Ionicons name="checkmark" size={14} color={color.bone} /> : null}
+                {on ? <Icon name="checkmark" size={14} color={color.bone} /> : null}
                 <Text style={[s.pillText, on && { color: color.bone }]}>{a.playerName}</Text>
               </Pressable>
             );
@@ -280,17 +282,12 @@ export default function Schedule() {
                 onPress={() => applyTemplate(t)}
                 style={({ pressed }) => [
                   s.tpl,
-                  templateId === t.id && s.tplOn,
                   pressed && { backgroundColor: color.inkHover },
                 ]}
               >
+                {templateId === t.id ? <FlowFill tint={color.fastRed} still /> : null}
                 {typesOf(t).map((k) => (
-                  <Ionicons
-                    key={k}
-                    name={SESSION_TYPES[k].icon}
-                    size={14}
-                    color={SESSION_TYPES[k].color}
-                  />
+                  <SessionGlyph key={k} kind={k} size={16} />
                 ))}
                 <Text style={s.tplName} numberOfLines={1}>
                   {t.name}
@@ -351,9 +348,9 @@ export default function Schedule() {
               {/* Four of the six categories are greys, so the tick carries the on state
                   rather than the colour, and the category's own icon stays put. */}
               {on ? (
-                <Ionicons name="checkmark-circle" size={13} color={t.color} style={s.typeTick} />
+                <Icon name="checkmark-circle" size={13} color={t.color} style={s.typeTick} />
               ) : null}
-              <Ionicons name={t.icon} size={17} color={on ? t.color : color.textDim} />
+              <SessionGlyph kind={k} size={20} color={on ? undefined : color.textDim} />
               <Text style={[s.typeLabel, on && { color: color.chalk }]} numberOfLines={2}>
                 {t.label}
               </Text>
@@ -382,7 +379,7 @@ export default function Schedule() {
           onPress={() => setWhen((d) => new Date(d.getTime() - 864e5))}
           style={({ pressed }) => [s.dayBtn, pressed && { backgroundColor: color.inkHover }]}
         >
-          <Ionicons name="chevron-back" size={18} color={color.chalk} />
+          <Icon name="chevron-back" size={18} color={color.chalk} />
         </Pressable>
         <Text style={s.dayText}>
           {when.toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' })}
@@ -393,7 +390,7 @@ export default function Schedule() {
           onPress={() => setWhen((d) => new Date(d.getTime() + 864e5))}
           style={({ pressed }) => [s.dayBtn, pressed && { backgroundColor: color.inkHover }]}
         >
-          <Ionicons name="chevron-forward" size={18} color={color.chalk} />
+          <Icon name="chevron-forward" size={18} color={color.chalk} />
         </Pressable>
       </View>
 
@@ -694,7 +691,7 @@ const s = StyleSheet.create({
     backgroundColor: semantic.surfaceInput,
     borderWidth: 1,
     borderColor: semantic.borderStrong,
-    borderRadius: radius.input,
+    borderRadius: radius.input, borderCurve: 'continuous',
     color: color.chalk,
     fontSize: 16,
     minHeight: 48,
@@ -720,18 +717,18 @@ const s = StyleSheet.create({
   pillText: { fontSize: 13, fontWeight: '700', color: color.textBody },
 
   tpl: {
+    overflow: 'hidden',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 7,
     minHeight: 44,
     maxWidth: 220,
     paddingHorizontal: 12,
-    borderRadius: radius.card,
+    borderRadius: radius.card, borderCurve: 'continuous',
     borderWidth: 1,
     borderColor: semantic.borderStrong,
     backgroundColor: semantic.surfaceCard,
   },
-  tplOn: { borderColor: color.redHot },
   tplName: { fontSize: 13.5, fontWeight: '700', color: color.chalk, flexShrink: 1 },
   tplMin: { fontSize: 11.5, color: color.textDim },
 
@@ -747,7 +744,7 @@ const s = StyleSheet.create({
     gap: 4,
     minHeight: 64,
     paddingHorizontal: 4,
-    borderRadius: radius.card,
+    borderRadius: radius.card, borderCurve: 'continuous',
     borderWidth: 1,
     borderColor: semantic.borderStrong,
     backgroundColor: semantic.surfaceInput,
@@ -762,10 +759,10 @@ const s = StyleSheet.create({
     backgroundColor: semantic.surfaceInput,
     borderWidth: 1,
     borderColor: semantic.borderStrong,
-    borderRadius: radius.card,
+    borderRadius: radius.card, borderCurve: 'continuous',
     padding: 3,
   },
-  dayBtn: { width: 48, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: radius.chip },
+  dayBtn: { width: 48, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: radius.chip, borderCurve: 'continuous' },
   dayText: { flex: 1, textAlign: 'center', fontSize: 15, fontWeight: '800', color: color.chalk },
 
   time: {

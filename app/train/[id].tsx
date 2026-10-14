@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Stack, useLocalSearchParams } from 'expo-router';
-import Ionicons from '@expo/vector-icons/Ionicons';
+import { Icon } from '../../src/Icon';
 import * as Haptics from 'expo-haptics';
 import Animated, {
   Easing,
@@ -16,6 +16,8 @@ import { db } from '../../src/firebase';
 import { useSession } from '../../src/session';
 import { blockAmount, logWorkoutDone, savePrefs } from '../../src/data';
 import { Celebrate } from '../../src/Celebrate';
+import { FlowFill } from '../../src/FlowFill';
+import { Surface } from '../../src/Surface';
 import {
   CELEBRATIONS,
   activeCelebration,
@@ -426,7 +428,7 @@ function RepsPanel({
   return (
     <View style={s.clock}>
       <View style={s.clockTop}>
-        <Ionicons
+        <Icon
           name={done ? 'checkmark-circle' : 'repeat-outline'}
           size={13}
           color={done ? color.miamiTeal : color.textFaint}
@@ -458,7 +460,8 @@ function BlockRow({
   onDone: () => void;
 }) {
   return (
-    <View style={[s.row, current && s.rowOn, done && { opacity: 0.6 }]}>
+    <Surface style={[s.row, done && { opacity: 0.6 }]}>
+      {current ? <FlowFill tint={color.fastRed} /> : null}
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={
@@ -481,13 +484,13 @@ function BlockRow({
         hitSlop={8}
         style={({ pressed }) => [s.check, done && s.checkOn, pressed && !done && { borderColor: color.redHot }]}
       >
-        <Ionicons
+        <Icon
           name={done ? 'checkmark-sharp' : 'ellipse-outline'}
           size={done ? 20 : 18}
           color={done ? color.bone : color.textFaint}
         />
       </Pressable>
-    </View>
+    </Surface>
   );
 }
 
@@ -502,7 +505,7 @@ const s = StyleSheet.create({
     backgroundColor: semantic.surfaceCard,
     borderWidth: 1,
     borderColor: semantic.border,
-    borderRadius: radius.cardLg,
+    borderRadius: radius.cardLg, borderCurve: 'continuous',
     padding: 18,
     alignItems: 'center',
   },
@@ -526,6 +529,7 @@ const s = StyleSheet.create({
 
   eyebrow: { ...type.eyebrow, marginTop: 24, marginBottom: 8 },
   row: {
+    overflow: 'hidden',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
@@ -534,12 +538,11 @@ const s = StyleSheet.create({
     // A block row is something you press, so it takes the stronger outline the rest
     // of the app gives its controls. `npm run contrast` is the reason that matters.
     borderColor: semantic.borderStrong,
-    borderRadius: radius.card,
+    borderRadius: radius.card, borderCurve: 'continuous',
     padding: 13,
     marginBottom: 8,
     minHeight: 60,
   },
-  rowOn: { borderColor: color.fastRed },
   rowName: { fontSize: 15, fontWeight: '700', color: color.chalk, marginBottom: 2 },
   struck: { textDecorationLine: 'line-through', color: color.textDim },
   check: {
